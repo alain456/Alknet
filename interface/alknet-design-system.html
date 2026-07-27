@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlkNet — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --green-900:#14231C;
+    --green-700:#1F4D3D;
+    --green-500:#2F6B54;
+    --green-100:#DCE8E1;
+    --green-50:#EEF3EF;
+    --gold-600:#C98A2E;
+    --gold-100:#F5E6CB;
+    --gold-50:#FBF3E3;
+    --clay-600:#A64B2A;
+    --clay-100:#F2DED4;
+    --paper:#F4F5F0;
+    --surface:#FFFFFF;
+    --ink:#1C2620;
+    --ink-muted:#5C6660;
+    --ink-faint:#8A928C;
+    --border:#DDE1D8;
+    --success:#2F7A4F;
+    --error:#B23A2E;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+    --radius-sm:6px;
+    --radius-md:10px;
+    --radius-lg:18px;
+    --shadow-sm: 0 1px 2px rgba(20,35,28,0.06), 0 1px 1px rgba(20,35,28,0.04);
+    --shadow-md: 0 4px 14px rgba(20,35,28,0.08), 0 2px 4px rgba(20,35,28,0.05);
+    --shadow-lg: 0 16px 40px rgba(20,35,28,0.14), 0 4px 12px rgba(20,35,28,0.06);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{font-family:var(--font-display); font-weight:600; margin:0; color:var(--green-900);}
+  p{margin:0;}
+  a{color:inherit;}
+  code{font-family:var(--font-mono);}
+
+  /* ---------- Layout shell ---------- */
+  .shell{display:flex; min-height:100vh;}
+  .toc{
+    width:236px; flex-shrink:0; position:sticky; top:0; height:100vh;
+    background:var(--green-900); color:#EAF0EC; padding:28px 20px;
+    display:flex; flex-direction:column; gap:2px; overflow-y:auto;
+  }
+  .toc-brand{display:flex; align-items:center; gap:10px; margin-bottom:28px;}
+  .toc-brand span{font-family:var(--font-display); font-weight:700; font-size:19px; letter-spacing:0.2px; color:#fff;}
+  .toc a{
+    color:#B9C6BF; text-decoration:none; font-size:13.5px; padding:8px 10px;
+    border-radius:7px; transition:background .15s, color .15s;
+  }
+  .toc a:hover{background:rgba(255,255,255,0.06); color:#fff;}
+  .toc .toc-label{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em; color:#6E7E75;
+    margin:18px 0 4px 10px; font-weight:600;
+  }
+  .main{flex:1; min-width:0; padding:48px clamp(24px,5vw,72px) 120px;}
+  section{margin-bottom:88px; scroll-margin-top:28px;}
+  .section-head{margin-bottom:28px; max-width:640px;}
+  .eyebrow{
+    font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--clay-600); margin-bottom:8px; display:block; font-weight:500;
+  }
+  .section-head h2{font-size:32px; margin-bottom:10px;}
+  .section-head p{color:var(--ink-muted); font-size:15px;}
+  .swatch-grid, .comp-grid{display:grid; gap:20px;}
+
+  /* ---------- Hero ---------- */
+  .hero{
+    background:var(--green-900); color:#fff; border-radius:24px; padding:56px 48px;
+    margin-bottom:56px; position:relative; overflow:hidden;
+  }
+  .hero::before{
+    content:''; position:absolute; right:-60px; top:-60px; width:320px; height:320px;
+    border:1.5px dashed rgba(201,138,46,0.35); border-radius:50%;
+  }
+  .hero::after{
+    content:''; position:absolute; right:20px; top:20px; width:200px; height:200px;
+    border:1px solid rgba(201,138,46,0.25); border-radius:50%;
+  }
+  .hero h1{color:#fff; font-size:clamp(32px,4vw,46px); max-width:640px; position:relative; z-index:1;}
+  .hero p{color:#C7D3CC; font-size:16px; max-width:520px; margin-top:14px; position:relative; z-index:1;}
+  .hero .tag{
+    display:inline-block; font-family:var(--font-mono); font-size:11.5px; letter-spacing:0.08em;
+    text-transform:uppercase; background:rgba(201,138,46,0.16); color:var(--gold-100);
+    border:1px solid rgba(201,138,46,0.4); padding:6px 12px; border-radius:20px; margin-bottom:20px;
+  }
+
+  /* ---------- Logo ---------- */
+  .logo-showcase{display:flex; gap:20px; flex-wrap:wrap;}
+  .logo-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    padding:32px; flex:1; min-width:240px; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:16px; box-shadow:var(--shadow-sm);
+  }
+  .logo-card.dark{background:var(--green-900);}
+  .logo-mark{width:52px; height:52px;}
+  .logo-lockup{display:flex; align-items:center; gap:12px;}
+  .logo-word{font-family:var(--font-display); font-weight:700; font-size:26px; color:var(--green-900); letter-spacing:-0.2px;}
+  .logo-card.dark .logo-word{color:#fff;}
+  .logo-caption{font-size:12px; color:var(--ink-faint); font-family:var(--font-mono);}
+
+  /* ---------- Color swatches ---------- */
+  .swatch-grid{grid-template-columns:repeat(auto-fill, minmax(190px,1fr));}
+  .swatch{border-radius:var(--radius-md); overflow:hidden; border:1px solid var(--border); background:var(--surface); box-shadow:var(--shadow-sm);}
+  .swatch-color{height:88px;}
+  .swatch-info{padding:12px 14px;}
+  .swatch-name{font-size:13.5px; font-weight:600;}
+  .swatch-hex{font-family:var(--font-mono); font-size:12px; color:var(--ink-muted); margin-top:2px;}
+  .swatch-use{font-size:11.5px; color:var(--ink-faint); margin-top:6px;}
+
+  /* ---------- Typography ---------- */
+  .type-row{
+    display:flex; align-items:baseline; gap:24px; padding:20px 0; border-bottom:1px solid var(--border);
+    flex-wrap:wrap;
+  }
+  .type-row:last-child{border-bottom:none;}
+  .type-meta{width:150px; flex-shrink:0; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-faint); line-height:1.6;}
+  .type-sample-display{font-family:var(--font-display); font-weight:600;}
+  .type-sample-body{font-family:var(--font-body);}
+  .type-sample-mono{font-family:var(--font-mono);}
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    font-family:var(--font-body); font-weight:600; font-size:14px; border-radius:var(--radius-sm);
+    padding:11px 20px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+    transition:transform .08s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--green-700); color:#fff;}
+  .btn-primary:hover{background:var(--green-900);}
+  .btn-secondary{background:var(--gold-600); color:#2A1D08;}
+  .btn-secondary:hover{background:#B57A24;}
+  .btn-ghost{background:transparent; color:var(--green-700); border:1.5px solid var(--border);}
+  .btn-ghost:hover{border-color:var(--green-700); background:var(--green-50);}
+  .btn-danger{background:transparent; color:var(--error); border:1.5px solid var(--clay-100);}
+  .btn-danger:hover{background:var(--clay-100);}
+  .btn-sm{padding:7px 14px; font-size:12.5px;}
+  .btn-lg{padding:14px 26px; font-size:15px;}
+  .btn:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+
+  /* ---------- Cards ---------- */
+  .card-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr)); gap:20px;}
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg);
+    overflow:hidden; box-shadow:var(--shadow-sm); transition:box-shadow .2s, transform .2s;
+  }
+  .card:hover{box-shadow:var(--shadow-md); transform:translateY(-2px);}
+  .card-media{height:130px; background:linear-gradient(135deg, var(--green-100), var(--gold-100)); position:relative;}
+  .card-body{padding:18px;}
+  .card-eyebrow{font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.06em;}
+  .card-title{font-family:var(--font-display); font-weight:600; font-size:18px; margin:6px 0 4px;}
+  .card-desc{font-size:13px; color:var(--ink-muted); line-height:1.5;}
+  .card-footer{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-top:1px solid var(--border);}
+  .card-price{font-family:var(--font-mono); font-weight:500; font-size:14px; color:var(--green-700);}
+  .avatar{width:36px; height:36px; border-radius:50%; background:var(--green-700); color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; font-family:var(--font-display); flex-shrink:0;}
+
+  /* ---------- Forms ---------- */
+  .form-demo{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:28px; max-width:460px; box-shadow:var(--shadow-sm);}
+  .field{margin-bottom:18px;}
+  .field label{display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:var(--green-900);}
+  .field .hint{font-size:11.5px; color:var(--ink-faint); margin-top:5px;}
+  .input, .select, .textarea{
+    width:100%; font-family:var(--font-body); font-size:14px; padding:10px 13px;
+    border:1.5px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--ink);
+    outline:none; transition:border-color .15s, box-shadow .15s;
+  }
+  .input:focus, .select:focus, .textarea:focus{border-color:var(--green-700); box-shadow:0 0 0 3px var(--green-100);}
+  .textarea{resize:vertical; min-height:80px;}
+  .input-error{border-color:var(--error);}
+  .error-text{font-size:11.5px; color:var(--error); margin-top:5px;}
+  .checkbox-row, .radio-row{display:flex; align-items:center; gap:9px; margin-bottom:10px; font-size:13.5px;}
+  .search-bar{display:flex; align-items:center; gap:10px; background:var(--surface); border:1.5px solid var(--border); border-radius:30px; padding:10px 16px; max-width:420px;}
+  .search-bar input{border:none; outline:none; flex:1; font-family:var(--font-body); font-size:14px; background:transparent;}
+
+  /* ---------- Icons ---------- */
+  .icon-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr)); gap:14px;}
+  .icon-tile{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md);
+    display:flex; flex-direction:column; align-items:center; gap:8px; padding:16px 8px;
+  }
+  .icon-tile svg{width:22px; height:22px; stroke:var(--green-700);}
+  .icon-tile span{font-size:10.5px; color:var(--ink-faint); font-family:var(--font-mono);}
+
+  /* ---------- Tables ---------- */
+  .table-wrap{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-sm);}
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  thead th{
+    text-align:left; font-family:var(--font-mono); font-size:11px; text-transform:uppercase; letter-spacing:0.05em;
+    color:var(--ink-faint); background:var(--green-50); padding:12px 18px; font-weight:600;
+  }
+  tbody td{padding:14px 18px; border-top:1px solid var(--border);}
+  tbody tr:hover{background:var(--gold-50);}
+  .cell-price{font-family:var(--font-mono);}
+
+  /* ---------- Badges ---------- */
+  .badge{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600;
+    padding:4px 10px; border-radius:20px; font-family:var(--font-body);
+  }
+  .badge-verified{background:var(--green-100); color:var(--green-700);}
+  .badge-premium{background:var(--gold-100); color:#7A5314;}
+  .badge-new{background:var(--clay-100); color:var(--clay-600);}
+  .badge-outline{background:transparent; border:1.3px solid var(--border); color:var(--ink-muted);}
+  .badge-row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+  .seal{
+    width:64px; height:64px; border-radius:50%; border:2px solid var(--green-700); position:relative;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .seal::before{content:''; position:absolute; inset:5px; border:1px dashed var(--green-700); border-radius:50%; opacity:0.5;}
+  .seal svg{width:22px; height:22px; stroke:var(--green-700);}
+
+  /* ---------- Modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(20,35,28,0.55); display:none; align-items:center; justify-content:center;
+    z-index:100; padding:20px;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--surface); border-radius:var(--radius-lg); max-width:400px; width:100%; padding:26px; box-shadow:var(--shadow-lg);}
+  .modal h3{font-size:19px; margin-bottom:8px;}
+  .modal p{color:var(--ink-muted); font-size:13.5px; margin-bottom:20px;}
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end;}
+
+  /* ---------- Menus ---------- */
+  .menu-demo-row{display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start;}
+  .tab-menu{display:flex; gap:4px; background:var(--green-50); padding:4px; border-radius:10px; width:fit-content;}
+  .tab-item{padding:8px 16px; font-size:13px; font-weight:600; border-radius:7px; cursor:pointer; color:var(--ink-muted);}
+  .tab-item.active{background:var(--surface); color:var(--green-700); box-shadow:var(--shadow-sm);}
+  .dropdown{position:relative; width:fit-content;}
+  .dropdown-menu{
+    position:absolute; top:calc(100% + 6px); left:0; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-md); box-shadow:var(--shadow-md); min-width:180px; padding:6px; z-index:10;
+  }
+  .dropdown-item{padding:9px 12px; font-size:13px; border-radius:6px; cursor:pointer; display:flex; align-items:center; gap:8px;}
+  .dropdown-item:hover{background:var(--green-50);}
+  .dropdown-divider{height:1px; background:var(--border); margin:5px 0;}
+
+  /* ---------- Layout wireframes ---------- */
+  .wireframe{border:1.5px dashed var(--border); border-radius:var(--radius-lg); padding:16px; background:var(--surface);}
+  .wf-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+  .wf-block{background:var(--green-50); border:1px solid var(--border); border-radius:8px; height:70px; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint);}
+  .wf-dash{display:grid; grid-template-columns:180px 1fr; gap:10px;}
+  .wf-dash .wf-block{height:150px;}
+
+  ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-thumb{background:#3a4c43; border-radius:8px;}
+
+  @media (max-width: 860px){
+    .shell{flex-direction:column;}
+    .toc{position:relative; width:100%; height:auto; flex-direction:row; overflow-x:auto; padding:16px;}
+    .toc a{white-space:nowrap;}
+    .toc-label{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="toc">
+    <div class="toc-brand">
+      <svg width="26" height="26" viewBox="0 0 40 40" fill="none"><path d="M20 3L35 11V29L20 37L5 29V11L20 3Z" stroke="#C98A2E" stroke-width="2"/><circle cx="20" cy="20" r="6" fill="#C98A2E"/></svg>
+      <span>AlkNet</span>
+    </div>
+    <span class="toc-label">Fondations</span>
+    <a href="#logo">Logo</a>
+    <a href="#colors">Palette de couleurs</a>
+    <a href="#type">Typographie</a>
+    <span class="toc-label">Composants</span>
+    <a href="#buttons">Boutons</a>
+    <a href="#cards">Cartes</a>
+    <a href="#forms">Formulaires</a>
+    <a href="#icons">Icônes</a>
+    <a href="#tables">Tableaux</a>
+    <a href="#badges">Badges</a>
+    <a href="#modals">Modales</a>
+    <a href="#menus">Menus</a>
+    <span class="toc-label">Structure</span>
+    <a href="#layouts">Layouts</a>
+  </nav>
+
+  <main class="main">
+    <div class="hero">
+      <span class="tag">Design System · v1.0</span>
+      <h1>Un seul système. Chaque écran d'AlkNet en hérite.</h1>
+      <p>Cette page réunit toutes les briques visuelles d'AlkNet — logo, couleurs, typographie et composants. Chaque page de la plateforme (recherche, profil vendeur, tableau de bord, abonnement) se construit à partir de ces éléments, jamais à côté.</p>
+    </div>
+
+    <!-- LOGO -->
+    <section id="logo">
+      <div class="section-head">
+        <span class="eyebrow">01 · Identité</span>
+        <h2>Logo</h2>
+        <p>Le sceau hexagonal évoque le tampon de confiance et le nœud du réseau — deux idées au cœur d'AlkNet : la vérification et la mise en relation.</p>
+      </div>
+      <div class="logo-showcase">
+        <div class="logo-card">
+          <svg class="logo-mark" viewBox="0 0 40 40" fill="none"><path d="M20 3L35 11V29L20 37L5 29V11L20 3Z" stroke="#1F4D3D" stroke-width="2.2"/><circle cx="20" cy="20" r="6" fill="#C98A2E"/></svg>
+          <span class="logo-caption">Symbole seul</span>
+        </div>
+        <div class="logo-card">
+          <div class="logo-lockup">
+            <svg class="logo-mark" viewBox="0 0 40 40" fill="none"><path d="M20 3L35 11V29L20 37L5 29V11L20 3Z" stroke="#1F4D3D" stroke-width="2.2"/><circle cx="20" cy="20" r="6" fill="#C98A2E"/></svg>
+            <span class="logo-word">AlkNet</span>
+          </div>
+          <span class="logo-caption">Lockup horizontal — usage principal</span>
+        </div>
+        <div class="logo-card dark">
+          <div class="logo-lockup">
+            <svg class="logo-mark" viewBox="0 0 40 40" fill="none"><path d="M20 3L35 11V29L20 37L5 29V11L20 3Z" stroke="#C98A2E" stroke-width="2.2"/><circle cx="20" cy="20" r="6" fill="#C98A2E"/></svg>
+            <span class="logo-word">AlkNet</span>
+          </div>
+          <span class="logo-caption" style="color:#7E8C84;">Sur fond sombre</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLORS -->
+    <section id="colors">
+      <div class="section-head">
+        <span class="eyebrow">02 · Fondations</span>
+        <h2>Palette de couleurs</h2>
+        <p>Vert Feuille porte la confiance et l'identité de marque. Or Marché signale la valeur commerciale. Terre Cuite est réservée aux actions et alertes — jamais décorative.</p>
+      </div>
+      <div class="swatch-grid">
+        <div class="swatch"><div class="swatch-color" style="background:#1F4D3D"></div><div class="swatch-info"><div class="swatch-name">Vert Feuille</div><div class="swatch-hex">#1F4D3D</div><div class="swatch-use">Marque, navigation, boutons primaires</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#14231C"></div><div class="swatch-info"><div class="swatch-name">Vert Nuit</div><div class="swatch-hex">#14231C</div><div class="swatch-use">Texte des titres, fonds sombres</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#C98A2E"></div><div class="swatch-info"><div class="swatch-name">Or Marché</div><div class="swatch-hex">#C98A2E</div><div class="swatch-use">Prix, mise en avant, badge premium</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#A64B2A"></div><div class="swatch-info"><div class="swatch-name">Terre Cuite</div><div class="swatch-hex">#A64B2A</div><div class="swatch-use">Accent d'action, alertes légères</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#F4F5F0; border-bottom:1px solid #DDE1D8;"></div><div class="swatch-info"><div class="swatch-name">Papier Sauge</div><div class="swatch-hex">#F4F5F0</div><div class="swatch-use">Fond général de l'application</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#DCE8E1"></div><div class="swatch-info"><div class="swatch-name">Vert Tendre</div><div class="swatch-hex">#DCE8E1</div><div class="swatch-use">Fonds de section, états survolés</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#2F7A4F"></div><div class="swatch-info"><div class="swatch-name">Succès</div><div class="swatch-hex">#2F7A4F</div><div class="swatch-use">Confirmations, statuts positifs</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#B23A2E"></div><div class="swatch-info"><div class="swatch-name">Erreur</div><div class="swatch-hex">#B23A2E</div><div class="swatch-use">Erreurs de formulaire, suppression</div></div></div>
+      </div>
+    </section>
+
+    <!-- TYPOGRAPHY -->
+    <section id="type">
+      <div class="section-head">
+        <span class="eyebrow">03 · Fondations</span>
+        <h2>Typographie</h2>
+        <p>Fraunces porte le caractère artisanal de la marque sur les titres. Inter assure la lisibilité du contenu. IBM Plex Mono distingue les prix et données chiffrées.</p>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Display / Fraunces 700<br>32–46px</div>
+        <div class="type-sample-display" style="font-size:clamp(28px,4vw,44px); font-weight:700;">Trouvez un vendeur près de chez vous</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Heading / Fraunces 600<br>22–28px</div>
+        <div class="type-sample-display" style="font-size:24px;">Producteurs vérifiés cette semaine</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Body / Inter 400<br>15–16px</div>
+        <div class="type-sample-body" style="font-size:15.5px; max-width:480px;">AlkNet met en relation les vendeurs, cultivateurs et prestataires de service avec des clients partout au pays.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Caption / Inter 500<br>12–13px</div>
+        <div class="type-sample-body" style="font-size:12.5px; color:var(--ink-muted); font-weight:500;">Membre depuis mars 2024 · Gitega</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">Mono / IBM Plex Mono<br>13–14px</div>
+        <div class="type-sample-mono" style="font-size:13.5px;">15 000 BIF / mois</div>
+      </div>
+    </section>
+
+    <!-- BUTTONS -->
+    <section id="buttons">
+      <div class="section-head">
+        <span class="eyebrow">04 · Composant</span>
+        <h2>Boutons</h2>
+        <p>Un seul bouton primaire par écran. Le bouton doré est réservé aux actions commerciales (s'abonner, booster un profil).</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary">Créer mon profil</button>
+        <button class="btn btn-secondary">S'abonner</button>
+        <button class="btn btn-ghost">En savoir plus</button>
+        <button class="btn btn-danger">Supprimer</button>
+        <button class="btn btn-primary" disabled>Indisponible</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary btn-sm">Petit</button>
+        <button class="btn btn-primary">Normal</button>
+        <button class="btn btn-primary btn-lg">Grand</button>
+      </div>
+    </section>
+
+    <!-- CARDS -->
+    <section id="cards">
+      <div class="section-head">
+        <span class="eyebrow">05 · Composant</span>
+        <h2>Cartes</h2>
+        <p>La carte est l'unité de base de la marketplace — un vendeur, un produit ou un service tient toujours dans une carte.</p>
+      </div>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-media"></div>
+          <div class="card-body">
+            <span class="card-eyebrow">Agriculture</span>
+            <div class="card-title">Bananes plantain</div>
+            <p class="card-desc">Ferme Nduwimana · Gitega — récolte fraîche chaque semaine.</p>
+          </div>
+          <div class="card-footer">
+            <span class="card-price">2 500 BIF / kg</span>
+            <span class="badge badge-verified">Vérifié</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-media"></div>
+          <div class="card-body">
+            <span class="card-eyebrow">Service</span>
+            <div class="card-title">Électricien à domicile</div>
+            <p class="card-desc">J. Bizimana · Bujumbura — installations et dépannage.</p>
+          </div>
+          <div class="card-footer">
+            <span class="card-price">Sur devis</span>
+            <span class="badge badge-premium">Premium</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="display:flex; gap:12px; align-items:flex-start; padding-top:20px;">
+            <div class="avatar">MI</div>
+            <div>
+              <div class="card-title" style="font-size:15px; margin:0;">Marie Irakoze</div>
+              <p class="card-desc">Couturière · 4.9 ★ (32 avis)</p>
+            </div>
+          </div>
+          <div class="card-footer">
+            <span class="badge badge-new">Nouveau</span>
+            <button class="btn btn-ghost btn-sm">Contacter</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORMS -->
+    <section id="forms">
+      <div class="section-head">
+        <span class="eyebrow">06 · Composant</span>
+        <h2>Formulaires</h2>
+        <p>Champs larges, labels toujours visibles, message d'erreur explicite sous le champ concerné.</p>
+      </div>
+      <div class="search-bar" style="margin-bottom:24px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A928C" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        <input type="text" placeholder="Rechercher un produit, un service, un vendeur...">
+      </div>
+      <div class="form-demo">
+        <div class="field">
+          <label>Nom du profil</label>
+          <input class="input" type="text" placeholder="Ex : Ferme Nduwimana">
+        </div>
+        <div class="field">
+          <label>Catégorie</label>
+          <select class="select"><option>Agriculture</option><option>Service</option><option>Artisanat</option></select>
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <textarea class="textarea" placeholder="Décrivez votre activité en quelques mots"></textarea>
+        </div>
+        <div class="field">
+          <label>Numéro de téléphone</label>
+          <input class="input input-error" type="text" value="+257 7">
+          <div class="error-text">Ce numéro doit contenir 8 chiffres après l'indicatif.</div>
+        </div>
+        <div class="checkbox-row"><input type="checkbox" checked> J'accepte les conditions d'utilisation</div>
+        <div class="radio-row"><input type="radio" name="plan" checked> Abonnement mensuel</div>
+        <div class="radio-row"><input type="radio" name="plan"> Abonnement annuel</div>
+        <button class="btn btn-primary" style="width:100%; justify-content:center;">Publier mon profil</button>
+      </div>
+    </section>
+
+    <!-- ICONS -->
+    <section id="icons">
+      <div class="section-head">
+        <span class="eyebrow">07 · Composant</span>
+        <h2>Icônes</h2>
+        <p>Trait fin (1.8px), coins arrondis, cohérents avec la géométrie du logo. Un pictogramme par catégorie de la marketplace.</p>
+      </div>
+      <div class="icon-grid">
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 22C12 22 5 16 5 10a7 7 0 0114 0c0 6-7 12-7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Lieu</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 2l2.5 5 5.5.8-4 3.9.9 5.4L12 14.8 7.1 17l.9-5.4-4-3.9L9.5 7z"/></svg><span>Avis</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 4h16v13H7l-3 3z"/></svg><span>Message</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M20 7L9 18l-5-5"/></svg><span>Vérifié</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 3h18v6H3zM3 15h18v6H3z"/></svg><span>Catégorie</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><span>Recherche</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 21V9l8-6 8 6v12H4z"/><path d="M9 21v-6h6v6"/></svg><span>Ferme</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M8 6V4h8v2"/></svg><span>Outils</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M3 10h18M6 6h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2z"/></svg><span>Abonnement</span></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 20v-6M6 20v-10M18 20v-4"/></svg><span>Stats</span></div>
+      </div>
+    </section>
+
+    <!-- TABLES -->
+    <section id="tables">
+      <div class="section-head">
+        <span class="eyebrow">08 · Composant</span>
+        <h2>Tableaux</h2>
+        <p>Utilisés pour le tableau de bord vendeur : historique de contacts, transactions, abonnements.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Vendeur</th><th>Catégorie</th><th>Statut</th><th>Abonnement</th><th>Prix</th></tr></thead>
+          <tbody>
+            <tr><td>Ferme Nduwimana</td><td>Agriculture</td><td><span class="badge badge-verified">Vérifié</span></td><td>Premium</td><td class="cell-price">20 000 BIF</td></tr>
+            <tr><td>J. Bizimana Électricité</td><td>Service</td><td><span class="badge badge-verified">Vérifié</span></td><td>Standard</td><td class="cell-price">10 000 BIF</td></tr>
+            <tr><td>Atelier Marie Irakoze</td><td>Artisanat</td><td><span class="badge badge-new">Nouveau</span></td><td>Gratuit</td><td class="cell-price">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- BADGES -->
+    <section id="badges">
+      <div class="section-head">
+        <span class="eyebrow">09 · Composant</span>
+        <h2>Badges</h2>
+        <p>Le sceau circulaire est la signature visuelle d'AlkNet : il rend la vérification tangible, comme un cachet officiel.</p>
+      </div>
+      <div class="badge-row">
+        <span class="badge badge-verified">✓ Vérifié</span>
+        <span class="badge badge-premium">★ Premium</span>
+        <span class="badge badge-new">Nouveau</span>
+        <span class="badge badge-outline">Agriculture</span>
+        <span class="badge badge-outline">Service</span>
+      </div>
+      <div class="seal" style="margin-top:20px;"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M20 7L9 18l-5-5"/></svg></div>
+    </section>
+
+    <!-- MODALS -->
+    <section id="modals">
+      <div class="section-head">
+        <span class="eyebrow">10 · Composant</span>
+        <h2>Modales</h2>
+        <p>Réservées aux décisions engageantes : confirmer un abonnement, supprimer un profil, signaler un contenu.</p>
+      </div>
+      <button class="btn btn-primary" onclick="document.getElementById('demoModal').classList.add('open')">Ouvrir un exemple de modale</button>
+      <div class="modal-overlay" id="demoModal">
+        <div class="modal">
+          <h3>Confirmer l'abonnement Premium</h3>
+          <p>Votre profil sera mis en avant pendant 30 jours pour 20 000 BIF. Le paiement est prélevé immédiatement.</p>
+          <div class="modal-actions">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('demoModal').classList.remove('open')">Annuler</button>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('demoModal').classList.remove('open')">Confirmer</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MENUS -->
+    <section id="menus">
+      <div class="section-head">
+        <span class="eyebrow">11 · Composant</span>
+        <h2>Menus</h2>
+        <p>Onglets pour naviguer entre les vues d'un même contexte ; menu déroulant pour les actions secondaires.</p>
+      </div>
+      <div class="menu-demo-row">
+        <div>
+          <div class="tab-menu">
+            <div class="tab-item active">Tous</div>
+            <div class="tab-item">Agriculture</div>
+            <div class="tab-item">Services</div>
+            <div class="tab-item">Artisanat</div>
+          </div>
+        </div>
+        <div class="dropdown">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('demoDropdown').classList.toggle('open')" style="display:none;"></button>
+          <button class="btn btn-ghost btn-sm" id="dropdownTrigger" onclick="document.getElementById('demoDropdown').style.display = document.getElementById('demoDropdown').style.display==='block'?'none':'block'">Actions du profil ▾</button>
+          <div class="dropdown-menu" id="demoDropdown" style="display:none;">
+            <div class="dropdown-item">Modifier le profil</div>
+            <div class="dropdown-item">Booster ma visibilité</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" style="color:var(--error);">Supprimer le profil</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LAYOUTS -->
+    <section id="layouts">
+      <div class="section-head">
+        <span class="eyebrow">12 · Structure</span>
+        <h2>Layouts</h2>
+        <p>Deux gabarits couvrent la majorité des écrans : la grille marketplace (recherche, résultats) et le tableau de bord (vendeur connecté).</p>
+      </div>
+      <p style="font-size:12.5px; font-family:var(--font-mono); color:var(--ink-faint); margin-bottom:10px;">Grille marketplace — page de recherche</p>
+      <div class="wireframe" style="margin-bottom:24px;">
+        <div class="wf-grid">
+          <div class="wf-block">Carte vendeur</div>
+          <div class="wf-block">Carte vendeur</div>
+          <div class="wf-block">Carte vendeur</div>
+          <div class="wf-block">Carte vendeur</div>
+          <div class="wf-block">Carte vendeur</div>
+          <div class="wf-block">Carte vendeur</div>
+        </div>
+      </div>
+      <p style="font-size:12.5px; font-family:var(--font-mono); color:var(--ink-faint); margin-bottom:10px;">Tableau de bord — vendeur connecté</p>
+      <div class="wireframe">
+        <div class="wf-dash">
+          <div class="wf-block">Menu latéral</div>
+          <div class="wf-block">Contenu (stats, tableau, formulaire)</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

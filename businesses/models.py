@@ -10,6 +10,7 @@ class Business(models.Model):
     category = models.ForeignKey(BusinessCategory, on_delete=models.SET_NULL, null=True, related_name='businesses')
     
     name = models.CharField(max_length=255)
+    logo = models.CharField(max_length=255, blank=True, help_text="URL du logo")
     description = models.TextField(blank=True)
     address = models.CharField(max_length=255, blank=True)
     phone = models.CharField(max_length=50, blank=True)

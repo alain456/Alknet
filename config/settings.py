@@ -52,6 +52,9 @@ INSTALLED_APPS = [
     'profiles',
     'service_categories',
     'services',
+    'product_categories',
+    'products',
+    'offers',
 ]
 
 MIDDLEWARE = [
