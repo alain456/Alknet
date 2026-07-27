@@ -1,0 +1,418 @@
+Très bonne idée. **Avant de coder, il faut définir la hiérarchie du système.** C'est ce que font les architectes logiciels.
+
+Pour AlkNet, je vois **3 niveaux de hiérarchie** :
+
+---
+
+# Niveau 1 : La Plateforme (AlkNet)
+
+C'est le niveau le plus élevé.
+
+```text
+AlkNet Platform
+        │
+        ▼
+Gestion de tout le système
+```
+
+Il contient :
+
+* Authentification
+* IA
+* Paiements
+* Abonnements
+* Notifications
+* Recherche
+* Paramètres
+
+---
+
+# Niveau 2 : Les acteurs
+
+Tous les utilisateurs appartiennent à la plateforme.
+
+```text
+                     Utilisateur
+                           │
+     ┌─────────────────────┼──────────────────────┐
+     │                     │                      │
+ Particulier         Professionnel          Entreprise
+```
+
+L'Entreprise est ensuite spécialisée :
+
+```text
+Entreprise
+      │
+ ┌────┼────┬───────┬────────┬─────────┐
+ │    │    │       │        │
+Restaurant Hôtel Clinique Boutique Garage ...
+```
+
+👉 Un **restaurant n'est pas un utilisateur différent**, c'est une **entreprise** de catégorie "Restaurant".
+
+---
+
+# Niveau 3 : Les services proposés
+
+Chaque entreprise ou professionnel peut publier des services.
+
+```text
+Utilisateur
+      │
+      ▼
+Entreprise / Professionnel
+      │
+      ▼
+Service
+```
+
+Exemple :
+
+Entreprise → Restaurant
+
+↓
+
+Publie :
+
+* Livraison
+* Réservation de table
+* Traiteur
+
+---
+
+Professionnel → Architecte
+
+↓
+
+Publie :
+
+* Plan de maison
+* Devis
+* Consultation
+
+---
+
+# Niveau 4 : Les interactions des clients
+
+Le client interagit avec les services.
+
+```text
+Client
+   │
+   ├── Recherche
+   ├── Favoris
+   ├── Réservation
+   ├── Commande
+   ├── Paiement
+   ├── Avis
+   └── Message
+```
+
+---
+
+# Vue globale
+
+```text
+                   ALKNET
+                      │
+      ┌───────────────┴───────────────┐
+      │                               │
+   Administration                 Utilisateurs
+      │                               │
+      │               ┌───────────────┼───────────────┐
+      │               │               │               │
+      │          Client       Professionnel     Entreprise
+      │                                           │
+      │                                  ┌────────┴────────┐
+      │                                  │                 │
+      │                             Employés         Catégorie
+      │                                  │                 │
+      │                                  │      ┌──────────┼──────────┐
+      │                                  │      │          │          │
+      │                                  │ Restaurant   Hôtel   Clinique ...
+      │                                  │
+      └──────────────────────────────────┼─────────────────────────────┐
+                                         │                             │
+                                         ▼                             ▼
+                                     Services                      Produits
+                                         │                             │
+                           ┌─────────────┼──────────────┐              │
+                           │             │              │              │
+                       Réservation   Commande     Candidature          │
+                           │             │              │              │
+                           └─────────────┴──────────────┴──────────────┘
+                                         │
+                                         ▼
+                                     Paiement
+                                         │
+                                         ▼
+                                Avis • Messages • Notifications
+```
+
+---
+
+# Ce qui déclenche quoi ?
+
+Voici l'ordre logique.
+
+### 1️⃣ Inscription
+
+```text
+Visiteur
+      │
+      ▼
+Créer un compte
+```
+
+---
+
+### 2️⃣ Choisir son type de compte
+
+Par exemple :
+
+* Client
+* Professionnel
+* Entreprise
+
+```text
+Utilisateur
+
+↓
+
+Choisit son type
+```
+
+---
+
+### 3️⃣ Si c'est une entreprise
+
+Le système demande :
+
+```text
+Créer une entreprise
+
+↓
+
+Choisir une catégorie
+
+↓
+
+Restaurant
+
+ou
+
+Hôtel
+
+ou
+
+Clinique
+
+...
+```
+
+À ce stade, l'entreprise existe.
+
+---
+
+### 4️⃣ Ensuite
+
+L'entreprise peut publier :
+
+```text
+Entreprise
+
+↓
+
+Services
+
+Produits
+
+Offres
+
+Employés
+```
+
+---
+
+### 5️⃣ Le client
+
+Recherche :
+
+```text
+Recherche
+
+↓
+
+Entreprise
+
+↓
+
+Service
+
+↓
+
+Réservation
+
+↓
+
+Paiement
+
+↓
+
+Avis
+```
+
+---
+
+# Hiérarchie des modules
+
+Je construirais le backend dans cet ordre :
+
+```text
+1. Accounts
+        │
+2. Profiles
+        │
+3. Roles & Permissions
+        │
+4. Subscription
+        │
+5. Business
+        │
+6. Business Category
+        │
+7. Employees
+        │
+8. Services
+        │
+9. Products
+       │
+10. Offers
+       │
+11. Applications
+       │
+12. Orders
+       │
+13. Bookings
+       │
+14. Payments
+       │
+15. Reviews
+       │
+16. Messages
+       │
+17. Notifications
+       │
+18. AI
+       │
+19. Dashboard
+```
+
+# 🎯 Une amélioration que je te propose
+
+Je ne créerais **pas** les rôles "Restaurant Owner", "Hotel Owner", "Farmer", etc.
+
+Je garderais seulement **4 types principaux d'utilisateurs** :
+
+* 👑 **Super Admin** : gère toute la plateforme.
+* 👤 **Customer** : recherche, commande, réserve, achète.
+* 👨‍💼 **Professional** : propose ses compétences (médecin, architecte, développeur, avocat, etc.).
+* 🏢 **Business Owner** : crée et gère une ou plusieurs entreprises.
+
+Ensuite, c'est **la catégorie de l'entreprise** qui détermine son métier :
+
+* Restaurant
+* Hôtel
+* Clinique
+* Pharmacie
+* Boutique
+* Garage
+* Université
+* ONG
+* Coopérative
+* etc.
+
+Cette approche rend la base de données plus simple, le code plus maintenable et l'ajout de nouveaux secteurs beaucoup plus facile à l'avenir. Par exemple, si demain tu veux ajouter les salons de coiffure ou les agences de voyage, tu ajoutes simplement une nouvelle catégorie d'entreprise, sans modifier tout le système d'authentification ni créer de nouveaux rôles. C'est une architecture très utilisée dans les plateformes SaaS évolutives.
+
+
+# Analyse d'Architecture et Feuille de Route d'AlkNet
+
+Suite à l'analyse du document `logique.txt`, voici une synthèse de la structure du projet, de l'état d'avancement actuel, et des étapes à suivre pour finaliser la plateforme AlkNet de manière robuste et évolutive.
+
+---
+
+## 1. L'Amélioration Cruciale : Simplification des Rôles (Refactoring)
+
+Le point le plus important du document est la proposition de **réduire les rôles à 4 types principaux**. Actuellement, notre code (notamment dans `accounts/models.py` ou la gestion des permissions) inclut des rôles spécifiques comme `RESTAURANT_OWNER`, `HOTEL_OWNER`, `MERCHANT`, `FARMER`. 
+
+> [!WARNING]
+> **Dette technique imminente**
+> Conserver un rôle par métier va rendre le système lourd. Si on ajoute 50 métiers demain, on devra modifier l'authentification et les permissions 50 fois.
+
+**Action requise :**
+Il faut basculer vers le modèle proposé :
+1. **Super Admin** (Plateforme)
+2. **Customer** (Client)
+3. **Professional** (Indépendant)
+4. **Business Owner** (Propriétaire d'entreprise)
+
+Le métier exact (Restaurant, Hôtel, etc.) sera **uniquement défini par la `BusinessCategory`** (Catégorie d'entreprise) liée au Business, et non par le compte de l'utilisateur.
+
+---
+
+## 2. État des Lieux des Modules (Hiérarchie)
+
+D'après la hiérarchie en 19 points du fichier `logique.txt`, voici où nous en sommes :
+
+| Module | État | Observations |
+| :--- | :--- | :--- |
+| **1. Accounts** | ✅ Avancé | Login/Register fonctionnels. Refonte des rôles à prévoir. |
+| **2. Profiles** | ✅ En place | Modèle de base existant. |
+| **3. Roles & Permissions**| ⚠️ À revoir | Doit être simplifié (voir point 1). |
+| **4. Subscription** | ❌ À faire | Modélisation des abonnements pour les Pro/Business. |
+| **5. Business** | ✅ Avancé | Création et listing côté API et Admin en place. |
+| **6. Business Category** | ✅ En place | Déjà opérationnel. |
+| **7. Employees** | ❌ À faire | Système d'invitation d'employés dans une entreprise. |
+| **8. Services** | ✅ Avancé | Création et listing (côté public et admin) en place. |
+| **9. Products** | ✅ Avancé | Création et listing (côté public et admin) en place. |
+| **10. Offers** | ⏳ Partiel | Application créée, à connecter au Dashboard Business. |
+| **11. Applications** | ❌ À faire | (Candidatures pour les offres d'emploi). |
+| **12. Orders** | ❌ À faire | (Commandes de produits). |
+| **13. Bookings** | ❌ À faire | (Réservations de services). |
+| **14. Payments** | ❌ À faire | Intégration passerelle (Mobile Money/Stripe). |
+| **15. Reviews** | ❌ À faire | (Avis clients). |
+| **16. Messages** | ❌ À faire | Chat interne Acheteur/Vendeur. |
+| **17. Notifications** | ❌ À faire | Alertes temps réel. |
+| **18. AI** | ❌ À faire | Intégration IA pour la recherche ou recommandations. |
+| **19. Dashboard** | ⏳ En cours | Super Admin Dashboard ✅ / Business Dashboard ⏳. |
+
+---
+
+## 3. Les Étapes d'Implémentation (La "Roadmap")
+
+Pour coder proprement sans tout casser, voici les étapes logiques et séquentielles que nous devrions suivre :
+
+### Étape 1 : Le Grand Nettoyage (Refactoring)
+- Modifier les choix de rôles dans le modèle `User` (Garder seulement les 4 rôles majeurs).
+- Mettre à jour les middlewares et permissions (ex: `CanManageProducts`, `CanCreateService` dans `views.py`) pour qu'ils vérifient `role == 'BUSINESS_OWNER'` au lieu d'une longue liste de rôles.
+- S'assurer que le Dashboard Super Admin fonctionne toujours après cette modification.
+
+### Étape 2 : Le Business Dashboard (Le coeur des vendeurs)
+- Créer l'interface permettant à un `BUSINESS_OWNER` de se connecter et de voir ses statistiques.
+- Créer l'interface permettant d'ajouter des **Employés** (`Module 7`).
+- Connecter les formulaires de création de **Produits**, **Services** et **Offres** à ce Dashboard spécifique (pour que les commerçants puissent remplir leur catalogue).
+
+### Étape 3 : Le Côté Client (Recherche & Interactions)
+- Créer la logique de recherche globale pour le `Customer` (trouver une entreprise par catégorie, un service ou un produit).
+- Développer le module **Commandes (Orders)** pour les produits.
+- Développer le module **Réservations (Bookings)** pour les services.
+
+### Étape 4 : L'Écosystème Avancé
+- Déployer le module de **Paiements**.
+- Déployer le système d'**Avis (Reviews)** (qui ne peut exister que si une commande ou réservation est validée).
+- Mettre en place les **Messages** et **Notifications**.
+
+### Étape 5 : Monétisation et IA
+- Créer le module d'**Abonnements (Subscriptions)** pour bloquer certaines fonctionnalités du Business Dashboard si le vendeur n'a pas payé.
+- Intégrer les fonctionnalités **IA** (Module 18).

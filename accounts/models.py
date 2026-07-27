@@ -30,16 +30,11 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = (
         ('SUPER_ADMIN', 'Super Admin'),
-        ('MODERATOR', 'Moderator'),
-        ('BUSINESS_OWNER', 'Business Owner'),
-        ('PROFESSIONAL', 'Professional'),
-        ('MERCHANT', 'Merchant'),
-        ('FARMER', 'Farmer'),
-        ('RESTAURANT_OWNER', 'Restaurant Owner'),
-        ('HOTEL_OWNER', 'Hotel Owner'),
         ('CUSTOMER', 'Customer'),
-        ('EMPLOYEE', 'Employee'),
+        ('PROFESSIONAL', 'Professional'),
+        ('BUSINESS_OWNER', 'Business Owner'),
     )
+
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True, db_index=True)

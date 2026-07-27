@@ -25,7 +25,20 @@ class Business(models.Model):
 
     class Meta:
         verbose_name_plural = "Businesses"
+    def __str__(self):
+        return self.name
+
+class BusinessEmployee(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='employments')
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='employees')
+    position = models.CharField(max_length=100, default='Staff')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('user', 'business')
         ordering = ['-created_at']
 
     def __str__(self):
-        return self.name
+        return f"{self.user.email} - {self.business.name} ({self.position})"

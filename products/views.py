@@ -1,13 +1,13 @@
 from rest_framework import generics, permissions
 from rest_framework.exceptions import PermissionDenied
 from .models import Product
-from .serializers import ProductSerializer, AdminProductSerializer
+from .serializers import ProductSerializer
 
 class CanManageProducts(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        allowed = ['BUSINESS_OWNER', 'RESTAURANT_OWNER', 'HOTEL_OWNER', 'MERCHANT', 'FARMER', 'SUPER_ADMIN']
+        allowed = ['BUSINESS_OWNER', 'SUPER_ADMIN']
         return request.user.role in allowed
 
 class ProductListView(generics.ListAPIView):
@@ -36,7 +36,9 @@ class MyBusinessProductListView(generics.ListCreateAPIView):
         else:
             raise PermissionDenied("Vous n'êtes pas le propriétaire de cette entreprise.")
 
+from .serializers import AdminProductSerializer
+
 class AdminProductListView(generics.ListAPIView):
     queryset = Product.objects.all().order_by('-created_at')
     serializer_class = AdminProductSerializer
-    permission_classes = [permissions.AllowAny] # Use AllowAny temporarily for testing
+    permission_classes = [permissions.AllowAny]

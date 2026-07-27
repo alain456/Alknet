@@ -13,11 +13,18 @@ class ServiceSerializer(serializers.ModelSerializer):
         return data
 
 class AdminServiceSerializer(serializers.ModelSerializer):
-    business_name = serializers.CharField(source='business.name', read_only=True, default=None)
-    professional_email = serializers.CharField(source='professional.email', read_only=True, default=None)
+    provider_name = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True, default="N/A")
 
     class Meta:
         model = Service
         fields = '__all__'
         read_only_fields = ('id', 'professional', 'rating', 'reviews_count', 'created_at', 'updated_at')
+        
+    def get_provider_name(self, obj):
+        if obj.business:
+            return obj.business.name
+        if obj.professional:
+            return f"{obj.professional.first_name} {obj.professional.last_name}".strip() or obj.professional.email
+        return "Unknown"
+

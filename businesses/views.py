@@ -10,7 +10,7 @@ class CanCreateBusiness(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        allowed_roles = ['BUSINESS_OWNER', 'RESTAURANT_OWNER', 'HOTEL_OWNER', 'MERCHANT', 'FARMER', 'SUPER_ADMIN']
+        allowed_roles = ['BUSINESS_OWNER', 'SUPER_ADMIN']
         return request.user.role in allowed_roles
 
 class BusinessListView(generics.ListAPIView):
@@ -39,3 +39,22 @@ class AdminBusinessListView(generics.ListAPIView):
     queryset = Business.objects.all().order_by('-created_at')
     serializer_class = AdminBusinessSerializer
     permission_classes = [AllowAny] # Use AllowAny temporarily for testing
+
+from .models import BusinessEmployee
+from .serializers import BusinessEmployeeSerializer
+
+class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
+    serializer_class = BusinessEmployeeSerializer
+    permission_classes = [AllowAny] # Use AllowAny temporarily for testing
+
+    def get_queryset(self):
+        # Pour simplifier, on prend le premier business de l'utilisateur. En production, on passerait le business_id dans l'URL.
+        business = self.request.user.businesses.first()
+        if business:
+            return BusinessEmployee.objects.filter(business=business).order_by('-created_at')
+        return BusinessEmployee.objects.none()
+
+    def perform_create(self, serializer):
+        business = self.request.user.businesses.first()
+        if business:
+            serializer.save(business=business)
