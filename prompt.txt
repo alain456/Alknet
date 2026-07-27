@@ -1,0 +1,479 @@
+# Prompt pour Cursor - Backend Django (AlkNet)
+
+You are a Senior Software Architect, Senior Django Developer, PostgreSQL Database Architect, and SaaS System Designer.
+
+Your mission is to build a production-ready backend for a project called **AlkNet**.
+
+## About AlkNet
+
+AlkNet is an AI-powered Multi-Service SaaS Platform that connects citizens, professionals, businesses, restaurants, hotels, merchants, farmers, organizations, and customers within one ecosystem.
+
+The project will first launch in Burundi before expanding to East Africa and later across Africa.
+
+The backend must be scalable, modular, secure, maintainable, and ready for thousands of users.
+
+---
+
+# Tech Stack
+
+Backend:
+
+* Python 3.13+
+* Django 5+
+* Django REST Framework
+* PostgreSQL
+* JWT Authentication (SimpleJWT)
+* Redis
+* Celery
+* Docker
+* Gunicorn
+* Nginx
+
+Documentation
+
+* Swagger/OpenAPI
+* drf-spectacular
+
+Testing
+
+* Pytest
+* Factory Boy
+
+File Storage
+
+* Local Storage (development)
+* Cloudflare R2 or Amazon S3 (production)
+
+---
+
+# Development Principles
+
+Follow:
+
+* SOLID Principles
+* DRY
+* KISS
+* Clean Architecture
+* Repository Pattern where appropriate
+* Service Layer
+* Modular Django Apps
+* Scalable SaaS Design
+
+Write production-quality code.
+
+---
+
+# Project Structure
+
+Create a modular Django project.
+
+Apps:
+
+accounts
+profiles
+roles
+permissions
+businesses
+business_categories
+services
+service_categories
+products
+product_categories
+offers
+applications
+orders
+bookings
+payments
+subscriptions
+notifications
+messages
+reviews
+favorites
+recommendations
+advertisements
+ai
+analytics
+dashboard
+common
+
+Each app must contain:
+
+models.py
+
+serializers.py
+
+views.py
+
+permissions.py
+
+urls.py
+
+services.py
+
+selectors.py
+
+tests/
+
+admin.py
+
+signals.py (if needed)
+
+---
+
+# Authentication
+
+Create a CustomUser model.
+
+The user can be:
+
+* Super Admin
+* Moderator
+* Business Owner
+* Professional
+* Merchant
+* Farmer
+* Restaurant Owner
+* Hotel Owner
+* Customer
+* Employee
+
+Authentication:
+
+* Register
+* Login
+* Logout
+* Refresh Token
+* Password Reset
+* Email Verification
+
+---
+
+# SaaS Features
+
+Implement:
+
+Subscription Plans
+
+Free
+
+Standard
+
+Business
+
+Enterprise
+
+Each subscription controls platform permissions.
+
+---
+
+# Business Module
+
+Businesses can be:
+
+Restaurant
+
+Hotel
+
+Clinic
+
+Shop
+
+NGO
+
+Company
+
+Garage
+
+School
+
+Pharmacy
+
+Construction Company
+
+etc.
+
+A business belongs to a Business Category.
+
+One user can own multiple businesses.
+
+Each business has employees.
+
+---
+
+# Service Module
+
+A business or professional can publish services.
+
+Each service belongs to a category.
+
+Services support:
+
+Images
+
+Location
+
+Price
+
+Availability
+
+Rating
+
+Reviews
+
+Tags
+
+Status
+
+---
+
+# Product Module
+
+Businesses can publish products.
+
+Products support:
+
+Images
+
+Price
+
+Stock
+
+Discount
+
+Category
+
+Variants
+
+---
+
+# Offer Module
+
+Businesses can publish opportunities.
+
+Professionals can apply.
+
+Applications include:
+
+Message
+
+CV
+
+Attachments
+
+Status
+
+---
+
+# Booking Module
+
+Support:
+
+Hotels
+
+Restaurants
+
+Appointments
+
+Bookings
+
+Availability
+
+Calendar
+
+---
+
+# Orders
+
+Support:
+
+Products
+
+Restaurant Orders
+
+Future delivery integration
+
+---
+
+# Payments
+
+Design the system to support:
+
+Lumicash
+
+EcoCash
+
+Bank Transfer
+
+Stripe
+
+PayPal (future)
+
+Keep the architecture provider-independent.
+
+---
+
+# Reviews
+
+Users can rate:
+
+Businesses
+
+Services
+
+Products
+
+Professionals
+
+Restaurants
+
+Hotels
+
+---
+
+# AI Module
+
+Prepare an AI app.
+
+Do not hardcode OpenAI.
+
+Create an abstraction layer.
+
+Future providers:
+
+OpenAI
+
+Gemini
+
+DeepSeek
+
+Claude
+
+Local LLM
+
+Capabilities:
+
+Improve descriptions
+
+Generate professional proposals
+
+Recommendations
+
+Chat Assistant
+
+Translation
+
+Summarization
+
+---
+
+# Recommendation Engine
+
+Implement a recommendation architecture based on:
+
+Category
+
+Location
+
+Tags
+
+Popularity
+
+User interests
+
+Search history
+
+Orders
+
+Ratings
+
+Business type
+
+This module must be independent.
+
+---
+
+# Security
+
+JWT Authentication
+
+Role Based Access Control
+
+Permissions
+
+Rate Limiting
+
+Input Validation
+
+CORS
+
+CSRF Protection
+
+Audit Logs
+
+Soft Delete
+
+---
+
+# PostgreSQL
+
+Design normalized tables.
+
+Use indexes.
+
+Use UUID primary keys where appropriate.
+
+Use proper Foreign Keys.
+
+Implement created_at and updated_at on all entities.
+
+---
+
+# API
+
+Build REST APIs.
+
+Follow REST naming conventions.
+
+Version all endpoints:
+
+/api/v1/
+
+Generate Swagger documentation.
+
+---
+
+# Code Quality
+
+Write clean code.
+
+Document every class.
+
+Document every API.
+
+Use typing.
+
+Use docstrings.
+
+Avoid duplicated code.
+
+---
+
+# Development Strategy
+
+Do NOT generate the entire backend at once.
+
+Work module by module.
+
+Wait for confirmation before moving to the next module.
+
+Start with:
+
+1. Project initialization
+2. Django settings
+3. PostgreSQL configuration
+4. Docker configuration
+5. Custom User model
+6. Authentication
+7. Roles and Permissions
+
+Only after these modules are completed should you continue with the next ones.
