@@ -260,3 +260,41 @@ src/
 ```
 
 Ainsi, tu n'auras **qu'une seule application React**, mais **quatre layouts principaux**. Les rôles et permissions reçus du backend décideront quelles pages, quels menus et quelles actions sont visibles. C'est une architecture propre, évolutive et utilisée par de nombreuses plateformes SaaS professionnelles (CRM, ERP, marketplaces et outils de gestion).
+
+Listed directory Alknet
+Viewed docker-compose.yml:1-29
+Viewed Dockerfile:1-22
+
+
+
+### Comment lancer le backend avec Docker :
+
+Pour lancer ton backend (la base de données PostgreSQL + le serveur Django), il te suffit d'ouvrir un terminal, de te placer à la racine de ton projet (`/home/gushaka/Gushaka/Alain_project/Alknet`) et d'utiliser la commande suivante :
+
+```bash
+docker compose up
+```
+*(ou `docker-compose up` si tu as une ancienne version de Docker)*
+
+**Que va faire cette commande ?**
+1. Elle va construire l'image Python pour ton serveur web (installer les dépendances de `requirements.txt` via le `Dockerfile`).
+2. Elle va démarrer la base de données PostgreSQL.
+3. Une fois la base prête, elle va exécuter la commande de démarrage de Django (`python manage.py runserver 0.0.0.0:8000`).
+
+**Options utiles :**
+- Si tu veux que le serveur tourne en arrière-plan sans bloquer ton terminal, ajoute le flag `-d` (detached) :
+  ```bash
+  docker compose up -d
+  ```
+- Si tu as besoin d'exécuter des commandes Django dans ton conteneur (par exemple pour appliquer des migrations), tu peux utiliser :
+  ```bash
+  docker compose exec web python manage.py migrate
+  ```
+- Pour créer un superutilisateur (admin) :
+  ```bash
+  docker compose exec web python manage.py createsuperuser
+  ```
+- Pour arrêter proprement le backend :
+  ```bash
+  docker compose down
+  ```
