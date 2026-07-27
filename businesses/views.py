@@ -1,7 +1,7 @@
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, BasePermission
 from .models import Business
-from .serializers import BusinessSerializer
+from .serializers import BusinessSerializer, AdminBusinessSerializer
 
 class CanCreateBusiness(BasePermission):
     """
@@ -34,3 +34,8 @@ class MyBusinessListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         # Assigne automatiquement l'utilisateur connecté comme propriétaire
         serializer.save(owner=self.request.user)
+
+class AdminBusinessListView(generics.ListAPIView):
+    queryset = Business.objects.all().order_by('-created_at')
+    serializer_class = AdminBusinessSerializer
+    permission_classes = [AllowAny] # Use AllowAny temporarily for testing

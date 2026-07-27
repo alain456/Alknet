@@ -13,30 +13,30 @@ export default function DataSummaryCard({
   const isNeutral = trend === 'neutral';
 
   return (
-    <div className="bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 rounded-lg p-5 flex flex-col transition-all hover:border-gray-300 dark:hover:border-gray-700">
-      <h3 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{title}</h3>
+    <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-[10px] p-5 flex flex-col transition-all hover:shadow-md dark:hover:border-gold-600/30">
+      <h3 className="text-[13px] font-semibold text-ink-muted dark:text-green-100/70 mb-1">{title}</h3>
       <div className="flex items-baseline justify-between mt-1">
-        <span className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
+        <span className="text-2xl font-mono font-medium tracking-tight text-green-900 dark:text-white">
           {value}
         </span>
         
         {trend && (
           <div className="flex items-center gap-1">
-            <span className={`flex items-center text-xs font-medium ${
-              isPositive ? 'text-emerald-600 dark:text-emerald-500' : 
-              isNegative ? 'text-red-600 dark:text-red-500' : 
-              'text-gray-500 dark:text-gray-400'
+            <span className={`flex items-center text-[12px] font-medium ${
+              isPositive ? 'text-success dark:text-[#3E9F6A]' : 
+              isNegative ? 'text-error dark:text-[#E56353]' : 
+              'text-ink-faint dark:text-green-100/50'
             }`}>
-              {isPositive && <TrendingUp className="w-3 h-3 mr-1" />}
-              {isNegative && <TrendingDown className="w-3 h-3 mr-1" />}
-              {isNeutral && <Minus className="w-3 h-3 mr-1" />}
+              {isPositive && <TrendingUp className="w-3.5 h-3.5 mr-1" strokeWidth={2} />}
+              {isNegative && <TrendingDown className="w-3.5 h-3.5 mr-1" strokeWidth={2} />}
+              {isNeutral && <Minus className="w-3.5 h-3.5 mr-1" strokeWidth={2} />}
               {trendValue}
             </span>
           </div>
         )}
       </div>
       {trendLabel && (
-        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
+        <p className="text-[11.5px] text-ink-faint dark:text-green-100/40 mt-2">
           {trendLabel}
         </p>
       )}

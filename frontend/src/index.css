@@ -1,14 +1,69 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @theme {
-  --color-primary: #0F766E;
-  --color-secondary: #14B8A6;
-  --color-accent: #F59E0B;
+  /* Typography */
+  --font-display: "Fraunces", serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  /* Colors */
+  --color-green-900: #14231C;
+  --color-green-700: #1F4D3D;
+  --color-green-500: #2F6B54;
+  --color-green-100: #DCE8E1;
+  --color-green-50: #EEF3EF;
+
+  --color-gold-600: #C98A2E;
+  --color-gold-100: #F5E6CB;
+  --color-gold-50: #FBF3E3;
+
+  --color-clay-600: #A64B2A;
+  --color-clay-100: #F2DED4;
+
+  --color-paper: #F4F5F0;
+  --color-surface: #FFFFFF;
+
+  --color-ink: #1C2620;
+  --color-ink-muted: #5C6660;
+  --color-ink-faint: #8A928C;
+
+  --color-border: #DDE1D8;
+
+  --color-success: #2F7A4F;
+  --color-error: #B23A2E;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(20, 35, 28, 0.06), 0 1px 1px rgba(20, 35, 28, 0.04);
+  --shadow-md: 0 4px 14px rgba(20, 35, 28, 0.08), 0 2px 4px rgba(20, 35, 28, 0.05);
+  --shadow-lg: 0 16px 40px rgba(20, 35, 28, 0.14), 0 4px 12px rgba(20, 35, 28, 0.06);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 18px;
 }
 
-body {
-  background-color: var(--color-white, #fff);
-  color: var(--color-gray-900, #111827);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  body {
+    @apply bg-paper text-ink font-body;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Map the dark mode to Green 900 instead of black */
+  .dark body {
+    @apply bg-green-900 text-white;
+  }
+}
+
+/* Custom Scrollbar for the dark theme based on Green 900 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-green-100 dark:bg-green-700 rounded-full;
 }

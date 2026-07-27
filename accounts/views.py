@@ -26,3 +26,13 @@ class ProfileView(APIView):
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
+
+from rest_framework import generics
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+class AdminUserListView(generics.ListAPIView):
+    queryset = User.objects.all().order_by('-created_at')
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny] # Use AllowAny temporarily for easy frontend testing

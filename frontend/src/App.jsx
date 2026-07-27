@@ -14,6 +14,8 @@ import BusinessLayout from './layouts/BusinessLayout';
 import BusinessDashboardPage from './business/BusinessDashboardPage';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboardPage from './admin/AdminDashboardPage';
+import AdminUsersPage from './admin/AdminUsersPage';
+import AdminBusinessesPage from './admin/AdminBusinessesPage';
 
 function App() {
   return (
@@ -41,6 +43,8 @@ function App() {
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboardPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="businesses" element={<AdminBusinessesPage />} />
         </Route>
 
         <Route path="*" element={<div className="p-20 text-center text-2xl font-bold">404 - Page Not Found</div>} />

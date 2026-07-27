@@ -1,68 +1,98 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import DataSummaryCard from './components/DataSummaryCard';
 import AdminChartCard from './components/AdminChartCard';
 
 export default function AdminDashboardPage() {
-  const recentActivity = [
-    { id: 1, action: "New Business Registered", target: "TechNova Solutions", user: "system", time: "2 mins ago", status: "success" },
-    { id: 2, action: "Subscription Upgraded", target: "Pro Plan (Monthly)", user: "j.doe@example.com", time: "15 mins ago", status: "success" },
-    { id: 3, action: "Failed Payment", target: "Invoice #INV-2026-009", user: "billing_system", time: "1 hour ago", status: "error" },
-    { id: 4, action: "User Account Locked", target: "Suspicious Activity", user: "security_bot", time: "3 hours ago", status: "warning" },
-    { id: 5, action: "Platform Update Deployed", target: "v2.4.1", user: "admin", time: "5 hours ago", status: "info" },
-  ];
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const activeSubscriptions = [
-    { id: "SUB-001", business: "Global Logistics", plan: "Enterprise", amount: "$499.00", status: "Active", renewed: "Today" },
-    { id: "SUB-002", business: "Creative Studio", plan: "Pro", amount: "$99.00", status: "Active", renewed: "Yesterday" },
-    { id: "SUB-003", business: "Local Cafe", plan: "Starter", amount: "$29.00", status: "Past Due", renewed: "3 days ago" },
-    { id: "SUB-004", business: "Tech Innovators", plan: "Pro", amount: "$99.00", status: "Active", renewed: "Last week" },
-  ];
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/analytics/dashboard-stats/');
+        if (!response.ok) {
+          throw new Error('Failed to fetch data');
+        }
+        const result = await response.json();
+        setData(result);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-700"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-4 bg-red-50 text-error rounded-md border border-error/20">
+        <h3 className="font-semibold">Erreur de chargement</h3>
+        <p className="text-sm">{error}</p>
+      </div>
+    );
+  }
+
+  // Fallbacks if data is somehow missing
+  const metrics = data?.metrics || {};
+  const recentActivity = data?.recent_activity || [];
+  const activeSubscriptions = data?.active_subscriptions || [];
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
+    <div className="space-y-8 max-w-350 mx-auto">
       
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">Platform Overview</h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Real-time metrics and system health.</p>
+          <h1 className="text-3xl font-display font-semibold text-green-900 dark:text-white tracking-tight">Vue d'ensemble</h1>
+          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">Métriques vitales et activité en temps réel.</p>
         </div>
-        <div className="flex gap-2">
-          <button className="px-3 py-1.5 text-xs font-medium bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-            Download Report
+        <div className="flex gap-3">
+          <button className="px-4 py-2 text-[14px] font-semibold bg-surface dark:bg-transparent border-[1.5px] border-border dark:border-white/20 text-green-700 dark:text-green-100 rounded-md hover:bg-green-50 dark:hover:bg-white/5 transition-colors shadow-sm">
+            Exporter
           </button>
-          <button className="px-3 py-1.5 text-xs font-medium bg-black dark:bg-white text-white dark:text-black rounded hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors">
-            View Analytics
+          <button className="px-4 py-2 text-[14px] font-semibold bg-green-700 text-white rounded-md hover:bg-green-900 transition-colors shadow-sm">
+            Voir Analytics
           </button>
         </div>
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <DataSummaryCard 
-          title="Total Active Users" 
-          value="124,592" 
+          title="Utilisateurs Actifs" 
+          value={metrics.total_active_users?.toLocaleString() || "0"} 
           trend="up" 
           trendValue="+12.5%" 
         />
         <DataSummaryCard 
-          title="Registered Businesses" 
-          value="8,405" 
+          title="Entreprises" 
+          value={metrics.registered_businesses?.toLocaleString() || "0"} 
           trend="up" 
           trendValue="+4.1%" 
         />
         <DataSummaryCard 
-          title="Monthly Recurring Revenue" 
-          value="$842,500" 
+          title="Revenu Mensuel (BIF)" 
+          value={metrics.monthly_revenue ? `${(metrics.monthly_revenue / 1000000).toFixed(1)}M` : "0"} 
           trend="up" 
           trendValue="+8.2%" 
         />
         <DataSummaryCard 
-          title="System Error Rate" 
-          value="0.012%" 
+          title="Taux d'erreur API" 
+          value={metrics.error_rate ? `${metrics.error_rate}%` : "0%"} 
           trend="down" 
           trendValue="-2.4%" 
-          trendLabel="vs last week"
+          trendLabel="vs semaine dernière"
         />
       </div>
 
@@ -70,15 +100,15 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <AdminChartCard 
-            title="Revenue Growth" 
-            subtitle="Monthly recurring revenue over the last 12 months"
+            title="Croissance des Revenus" 
+            subtitle="Revenus récurrents sur les 12 derniers mois"
           >
-            {/* Minimalist fake chart (CSS only) */}
-            <div className="absolute inset-x-0 bottom-0 h-32 flex items-end gap-2 p-2">
+            {/* Minimalist fake chart */}
+            <div className="absolute inset-x-0 bottom-0 h-40 flex items-end gap-2 p-2">
               {[40, 45, 55, 50, 60, 75, 70, 85, 90, 85, 95, 100].map((h, i) => (
-                <div key={i} className="flex-1 bg-gray-200 dark:bg-gray-800 rounded-t-sm hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors relative group" style={{ height: `${h}%` }}>
-                  <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-black dark:bg-white text-white dark:text-black text-[10px] py-1 px-2 rounded pointer-events-none whitespace-nowrap transition-opacity">
-                    ${(h * 8).toFixed(1)}k
+                <div key={i} className="flex-1 bg-green-100 dark:bg-green-700/50 rounded-t-[4px] hover:bg-gold-600 dark:hover:bg-gold-600 transition-colors relative group" style={{ height: `${h}%` }}>
+                  <div className="opacity-0 group-hover:opacity-100 absolute -top-10 left-1/2 -translate-x-1/2 bg-green-900 dark:bg-white text-white dark:text-green-900 text-[11px] font-mono py-1.5 px-2.5 rounded shadow-sm pointer-events-none whitespace-nowrap transition-opacity">
+                    {(h * 0.8).toFixed(1)}M
                   </div>
                 </div>
               ))}
@@ -87,26 +117,26 @@ export default function AdminDashboardPage() {
         </div>
         <div>
           <AdminChartCard 
-            title="User Acquisition" 
-            subtitle="Traffic sources distribution"
+            title="Acquisition" 
+            subtitle="Distribution des sources de trafic"
           >
-             <div className="absolute inset-0 flex flex-col justify-center gap-3 p-4">
+             <div className="absolute inset-0 flex flex-col justify-center gap-4 p-4">
                 <div className="w-full">
-                  <div className="flex justify-between text-xs mb-1 text-gray-500 dark:text-gray-400"><span>Organic Search</span> <span>55%</span></div>
-                  <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-black dark:bg-white w-[55%]"></div>
+                  <div className="flex justify-between text-[13px] mb-1.5 text-ink-muted dark:text-green-100/70"><span>Recherche Organique</span> <span className="font-mono text-green-900 dark:text-white">55%</span></div>
+                  <div className="h-2 w-full bg-paper dark:bg-black/30 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-700 dark:bg-green-500 w-[55%]"></div>
                   </div>
                 </div>
                 <div className="w-full">
-                  <div className="flex justify-between text-xs mb-1 text-gray-500 dark:text-gray-400"><span>Direct</span> <span>30%</span></div>
-                  <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-gray-400 dark:bg-gray-500 w-[30%]"></div>
+                  <div className="flex justify-between text-[13px] mb-1.5 text-ink-muted dark:text-green-100/70"><span>Direct</span> <span className="font-mono text-green-900 dark:text-white">30%</span></div>
+                  <div className="h-2 w-full bg-paper dark:bg-black/30 rounded-full overflow-hidden">
+                    <div className="h-full bg-gold-600 w-[30%]"></div>
                   </div>
                 </div>
                 <div className="w-full">
-                  <div className="flex justify-between text-xs mb-1 text-gray-500 dark:text-gray-400"><span>Referral</span> <span>15%</span></div>
-                  <div className="h-1.5 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-gray-300 dark:bg-gray-700 w-[15%]"></div>
+                  <div className="flex justify-between text-[13px] mb-1.5 text-ink-muted dark:text-green-100/70"><span>Référence</span> <span className="font-mono text-green-900 dark:text-white">15%</span></div>
+                  <div className="h-2 w-full bg-paper dark:bg-black/30 rounded-full overflow-hidden">
+                    <div className="h-full bg-clay-600 w-[15%]"></div>
                   </div>
                 </div>
              </div>
@@ -118,57 +148,59 @@ export default function AdminDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Recent Activity */}
-        <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-[#0a0a0a] overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white">Recent System Activity</h3>
-            <button className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">View All</button>
+        <div className="border border-border dark:border-white/10 rounded-lg bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-border dark:border-white/10 flex justify-between items-center">
+            <h3 className="text-[15px] font-semibold text-green-900 dark:text-white">Activité Récente</h3>
+            <button className="text-[13px] font-medium text-green-700 hover:text-green-900 dark:text-green-100/70 dark:hover:text-white transition-colors">Tout voir</button>
           </div>
-          <div className="divide-y divide-gray-100 dark:divide-gray-800/50">
+          <div className="divide-y divide-border dark:divide-white/10">
             {recentActivity.map((log) => (
-              <div key={log.id} className="p-4 flex items-start gap-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors">
+              <div key={log.id} className="p-4 flex items-start gap-4 hover:bg-green-50 dark:hover:bg-white/5 transition-colors">
                 <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                  log.status === 'success' ? 'bg-emerald-500' : 
-                  log.status === 'error' ? 'bg-red-500' : 
-                  log.status === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
+                  log.status === 'success' ? 'bg-success' : 
+                  log.status === 'error' ? 'bg-error' : 
+                  log.status === 'warning' ? 'bg-gold-600' : 'bg-green-500'
                 }`} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{log.action}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{log.target} • {log.user}</p>
+                  <p className="text-[14px] font-semibold text-ink dark:text-white truncate">{log.action}</p>
+                  <p className="text-[13px] text-ink-muted dark:text-green-100/60 truncate mt-0.5">{log.target} • {log.user}</p>
                 </div>
-                <div className="text-xs text-gray-400 whitespace-nowrap">{log.time}</div>
+                <div className="text-[12px] text-ink-faint dark:text-green-100/40 whitespace-nowrap">{log.time}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Active Subscriptions */}
-        <div className="border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-[#0a0a0a] overflow-hidden flex flex-col">
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white">Active Subscriptions</h3>
-            <button className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors">View All</button>
+        <div className="border border-border dark:border-white/10 rounded-lg bg-surface dark:bg-[#1A2E25] overflow-hidden flex flex-col shadow-sm">
+          <div className="px-5 py-4 border-b border-border dark:border-white/10 flex justify-between items-center">
+            <h3 className="text-[15px] font-semibold text-green-900 dark:text-white">Derniers Abonnements</h3>
+            <button className="text-[13px] font-medium text-green-700 hover:text-green-900 dark:text-green-100/70 dark:hover:text-white transition-colors">Tout voir</button>
           </div>
           <div className="overflow-x-auto flex-1">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-800/50 text-xs text-gray-500 dark:text-gray-400">
-                  <th className="px-4 py-3 font-medium">Business</th>
-                  <th className="px-4 py-3 font-medium">Plan</th>
-                  <th className="px-4 py-3 font-medium text-right">Amount</th>
-                  <th className="px-4 py-3 font-medium text-right">Status</th>
+                <tr className="border-b border-border dark:border-white/10 text-[11px] text-ink-faint dark:text-green-100/50 uppercase tracking-[0.05em] bg-paper dark:bg-black/10">
+                  <th className="px-5 py-3 font-semibold">Entreprise</th>
+                  <th className="px-5 py-3 font-semibold">Plan</th>
+                  <th className="px-5 py-3 font-semibold text-right">Montant</th>
+                  <th className="px-5 py-3 font-semibold text-right">Statut</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800/50">
+              <tbody className="divide-y divide-border dark:divide-white/10">
                 {activeSubscriptions.map((sub) => (
-                  <tr key={sub.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors text-sm">
-                    <td className="px-4 py-3 text-gray-900 dark:text-white font-medium">{sub.business}</td>
-                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{sub.plan}</td>
-                    <td className="px-4 py-3 text-right text-gray-900 dark:text-white">{sub.amount}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${
+                  <tr key={sub.id} className="hover:bg-green-50 dark:hover:bg-white/5 transition-colors text-[13.5px]">
+                    <td className="px-5 py-3.5 text-ink dark:text-white font-medium">{sub.business}</td>
+                    <td className="px-5 py-3.5 text-ink-muted dark:text-green-100/70">{sub.plan}</td>
+                    <td className="px-5 py-3.5 text-right font-mono text-green-900 dark:text-white">{sub.amount}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold ${
                         sub.status === 'Active' 
-                          ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' 
-                          : 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20'
+                          ? 'bg-green-100 text-green-700 dark:bg-success/20 dark:text-green-100' 
+                          : 'bg-clay-100 text-clay-600 dark:bg-error/20 dark:text-red-200'
                       }`}>
+                        {sub.status === 'Active' && <span className="w-1.5 h-1.5 rounded-full bg-success"></span>}
+                        {sub.status === 'Past Due' && <span className="w-1.5 h-1.5 rounded-full bg-error"></span>}
                         {sub.status}
                       </span>
                     </td>
