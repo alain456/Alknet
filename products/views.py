@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from rest_framework.exceptions import PermissionDenied
 from .models import Product
-from .serializers import ProductSerializer
+from .serializers import ProductSerializer, AdminProductSerializer
 
 class CanManageProducts(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -35,3 +35,8 @@ class MyBusinessProductListView(generics.ListCreateAPIView):
             serializer.save()
         else:
             raise PermissionDenied("Vous n'êtes pas le propriétaire de cette entreprise.")
+
+class AdminProductListView(generics.ListAPIView):
+    queryset = Product.objects.all().order_by('-created_at')
+    serializer_class = AdminProductSerializer
+    permission_classes = [permissions.AllowAny] # Use AllowAny temporarily for testing

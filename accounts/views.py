@@ -36,3 +36,7 @@ class AdminUserListView(generics.ListAPIView):
     queryset = User.objects.all().order_by('-created_at')
     serializer_class = UserSerializer
     permission_classes = [AllowAny] # Use AllowAny temporarily for easy frontend testing
+class AdminProfessionalListView(generics.ListAPIView):
+    queryset = User.objects.filter(role='PROFESSIONAL').order_by('-created_at')
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny] # Use AllowAny temporarily for easy frontend testing

@@ -1,7 +1,7 @@
 from rest_framework import generics, permissions
 from rest_framework.exceptions import PermissionDenied
 from .models import Service
-from .serializers import ServiceSerializer
+from .serializers import ServiceSerializer, AdminServiceSerializer
 
 class CanCreateService(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -40,3 +40,8 @@ class MyServiceListView(generics.ListCreateAPIView):
                 serializer.save()
             else:
                 raise PermissionDenied("Vous n'êtes pas le propriétaire de cette entreprise.")
+
+class AdminServiceListView(generics.ListAPIView):
+    queryset = Service.objects.all().order_by('-created_at')
+    serializer_class = AdminServiceSerializer
+    permission_classes = [permissions.AllowAny] # Use AllowAny temporarily for testing
