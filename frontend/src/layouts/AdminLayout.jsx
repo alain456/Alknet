@@ -111,7 +111,7 @@ export default function AdminLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-green-900 dark:text-white truncate">Super Admin</p>
-              <p className="text-[11px] text-ink-faint dark:text-green-100/50 truncate font-mono">admin@alknet.com</p>
+              <p className="text-[11px] text-ink-faint dark:text-green-100/50 truncate font-mono">admin@Ndangira.com</p>
             </div>
             <button className="text-clay-600 hover:text-clay-600/80 dark:text-clay-100 transition-colors cursor-pointer shrink-0">
               <LogOut className="w-4 h-4" />

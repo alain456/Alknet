@@ -7,31 +7,35 @@
   --font-body: "Inter", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
 
-  /* Colors */
+  /* Colors - Ndangira Design System */
+  --color-primary: #1F4D3D;
+  --color-secondary: #14231C;
+  --color-accent: #C98A2E;
+  --color-clay: #A64B2A;
+  --color-paper: #F4F5F0;
+  --color-surface: #FAFAFA;
+  --color-ink: #1C2620;
+  --color-ink-muted: #5C6660;
+  --color-ink-faint: #8A928C;
+  --color-border: #DDE1D8;
+  --color-success: #2F7A4F;
+  --color-error: #B23A2E;
+
+  /* Additional green shades for gradients */
   --color-green-900: #14231C;
   --color-green-700: #1F4D3D;
   --color-green-500: #2F6B54;
   --color-green-100: #DCE8E1;
   --color-green-50: #EEF3EF;
 
+  /* Additional gold shades */
   --color-gold-600: #C98A2E;
   --color-gold-100: #F5E6CB;
   --color-gold-50: #FBF3E3;
 
+  /* Additional clay shades */
   --color-clay-600: #A64B2A;
   --color-clay-100: #F2DED4;
-
-  --color-paper: #F4F5F0;
-  --color-surface: #FFFFFF;
-
-  --color-ink: #1C2620;
-  --color-ink-muted: #5C6660;
-  --color-ink-faint: #8A928C;
-
-  --color-border: #DDE1D8;
-
-  --color-success: #2F7A4F;
-  --color-error: #B23A2E;
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(20, 35, 28, 0.06), 0 1px 1px rgba(20, 35, 28, 0.04);

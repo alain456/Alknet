@@ -7,9 +7,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#0F766E',
-        secondary: '#14B8A6',
-        accent: '#F59E0B',
+        primary: '#1F4D3D',
+        secondary: '#14231C',
+        accent: '#C98A2E',
+        clay: '#A64B2A',
+        paper: '#F4F5F0',
+        surface: '#FAFAFA',
+        ink: '#1C2620',
+        'ink-muted': '#5C6660',
+        'ink-faint': '#8A928C',
+        border: '#DDE1D8',
+        success: '#2F7A4F',
+        error: '#B23A2E',
       },
     },
   },

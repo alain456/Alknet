@@ -1,15 +1,15 @@
 Très bonne idée. **Avant de coder, il faut définir la hiérarchie du système.** C'est ce que font les architectes logiciels.
 
-Pour AlkNet, je vois **3 niveaux de hiérarchie** :
+Pour Ndangira, je vois **3 niveaux de hiérarchie** :
 
 ---
 
-# Niveau 1 : La Plateforme (AlkNet)
+# Niveau 1 : La Plateforme (Ndangira)
 
 C'est le niveau le plus élevé.
 
 ```text
-AlkNet Platform
+Ndangira Platform
         │
         ▼
 Gestion de tout le système
@@ -114,7 +114,7 @@ Client
 # Vue globale
 
 ```text
-                   ALKNET
+                   NDANGIRA
                       │
       ┌───────────────┴───────────────┐
       │                               │
@@ -336,9 +336,9 @@ Ensuite, c'est **la catégorie de l'entreprise** qui détermine son métier :
 Cette approche rend la base de données plus simple, le code plus maintenable et l'ajout de nouveaux secteurs beaucoup plus facile à l'avenir. Par exemple, si demain tu veux ajouter les salons de coiffure ou les agences de voyage, tu ajoutes simplement une nouvelle catégorie d'entreprise, sans modifier tout le système d'authentification ni créer de nouveaux rôles. C'est une architecture très utilisée dans les plateformes SaaS évolutives.
 
 
-# Analyse d'Architecture et Feuille de Route d'AlkNet
+# Analyse d'Architecture et Feuille de Route d'Ndangira
 
-Suite à l'analyse du document `logique.txt`, voici une synthèse de la structure du projet, de l'état d'avancement actuel, et des étapes à suivre pour finaliser la plateforme AlkNet de manière robuste et évolutive.
+Suite à l'analyse du document `logique.txt`, voici une synthèse de la structure du projet, de l'état d'avancement actuel, et des étapes à suivre pour finaliser la plateforme Ndangira de manière robuste et évolutive.
 
 ---
 
@@ -416,3 +416,30 @@ Pour coder proprement sans tout casser, voici les étapes logiques et séquentie
 ### Étape 5 : Monétisation et IA
 - Créer le module d'**Abonnements (Subscriptions)** pour bloquer certaines fonctionnalités du Business Dashboard si le vendeur n'a pas payé.
 - Intégrer les fonctionnalités **IA** (Module 18).
+
+
+
+Commandes utiles
+Arrêter les services:
+
+
+
+bash
+# Backend (Ctrl+C dans le terminal)
+# Frontend (Ctrl+C dans le terminal)
+# Base de données
+docker compose down
+Redémarrer le backend:
+
+
+
+bash
+source venv/bin/activate
+python manage.py runserver 0.0.0.0:8000
+Redémarrer le frontend:
+
+
+
+bash
+cd frontend
+npm run dev

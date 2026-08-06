@@ -23,7 +23,7 @@ export default function RegisterPage() {
     <div className="w-full">
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Create an account</h2>
-        <p className="text-gray-500 dark:text-gray-400">Join AlkNet today and explore endless possibilities.</p>
+        <p className="text-gray-500 dark:text-gray-400">Join Ndangira today and explore endless possibilities.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">

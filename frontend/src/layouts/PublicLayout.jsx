@@ -10,7 +10,7 @@ export default function PublicLayout() {
             <div className="w-8 h-8 rounded-full border-2 border-primary flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-accent"></div>
             </div>
-            <span className="font-bold text-xl text-primary">AlkNet</span>
+            <span className="font-bold text-xl text-primary">Ndangira</span>
           </Link>
           <nav className="hidden md:flex gap-6">
             <Link to="/" className="text-gray-600 hover:text-primary font-medium">Home</Link>
@@ -32,7 +32,7 @@ export default function PublicLayout() {
       <footer className="bg-gray-50 border-t border-gray-200 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-2 md:grid-cols-4 gap-8">
           <div>
-            <span className="font-bold text-xl text-primary mb-4 block">AlkNet</span>
+            <span className="font-bold text-xl text-primary mb-4 block">Ndangira</span>
             <p className="text-sm text-gray-500">Everything you need, in one platform. Connecting Burundi to the world.</p>
           </div>
           <div>

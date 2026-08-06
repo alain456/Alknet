@@ -51,7 +51,7 @@ export default function DashboardLayout() {
             <div className="w-8 h-8 rounded-full border-2 border-primary flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-accent"></div>
             </div>
-            <span className="font-bold text-xl text-primary dark:text-white">AlkNet</span>
+            <span className="font-bold text-xl text-primary dark:text-white">Ndangira</span>
           </Link>
           <button onClick={closeSidebar} className="lg:hidden text-gray-500 hover:text-gray-900 dark:hover:text-white cursor-pointer">
             <X className="w-5 h-5" />

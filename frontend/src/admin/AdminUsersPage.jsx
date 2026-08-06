@@ -55,7 +55,7 @@ export default function AdminUsersPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-display font-semibold text-green-900 dark:text-white tracking-tight">Utilisateurs</h1>
-          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">Gérez tous les comptes de la plateforme AlkNet.</p>
+          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">Gérez tous les comptes de la plateforme Ndangira.</p>
         </div>
         <button className="px-4 py-2 flex items-center gap-2 text-[14px] font-semibold bg-surface dark:bg-transparent border-[1.5px] border-border dark:border-white/20 text-green-700 dark:text-green-100 rounded-md hover:bg-green-50 dark:hover:bg-white/5 transition-colors shadow-sm">
           <Download className="w-4 h-4" /> Exporter CSV

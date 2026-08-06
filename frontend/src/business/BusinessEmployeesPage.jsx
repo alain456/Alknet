@@ -162,7 +162,7 @@ export default function BusinessEmployeesPage() {
                     placeholder="employee@example.com"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">The user must already have an AlkNet account.</p>
+                <p className="text-xs text-gray-500 mt-1">The user must already have an Ndangira account.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position / Role</label>

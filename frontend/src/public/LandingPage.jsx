@@ -145,9 +145,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 7. Why AlkNet? */}
+      {/* 7. Why Ndangira? */}
       <section className="py-24 px-4 max-w-7xl mx-auto text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-16">Why choose AlkNet?</h2>
+        <h2 className="text-3xl font-bold text-gray-900 mb-16">Why choose Ndangira?</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="flex flex-col items-center">
             <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-6">
@@ -183,8 +183,8 @@ export default function LandingPage() {
       {/* 9. Mobile App */}
       <section className="py-20 px-4 bg-primary text-white text-center">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-4xl font-bold mb-6">Take AlkNet everywhere</h2>
-          <p className="text-teal-100 text-lg mb-8">The official AlkNet mobile app is currently under development.</p>
+          <h2 className="text-4xl font-bold mb-6">Take Ndangira everywhere</h2>
+          <p className="text-teal-100 text-lg mb-8">The official Ndangira mobile app is currently under development.</p>
           <div className="inline-block border-2 border-white/20 rounded-full px-8 py-3 font-semibold tracking-wide text-white bg-white/5 backdrop-blur-md">
             COMING SOON
           </div>
