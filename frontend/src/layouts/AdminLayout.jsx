@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Building2, UserCircle, LayoutGrid, Briefcase, 
   Package, ShoppingBag, Calendar, CreditCard, BarChart3, Settings, 
-  Menu, X, Search, Bell, LogOut, ChevronRight,
+  Menu, X, Search, Bell, LogOut, ChevronRight, MapPin,
   Activity, Zap, Repeat, MonitorPlay, FileText, Database
 } from 'lucide-react';
 import Logo from '../shared/components/Logo';
@@ -34,6 +34,7 @@ export default function AdminLayout() {
     { name: 'Businesses', icon: Building2, path: '/admin/businesses' },
     { name: 'Professionals', icon: UserCircle, path: '/admin/professionals' },
     { name: 'Categories', icon: LayoutGrid, path: '/admin/categories' },
+    { name: 'Localisations', icon: MapPin, path: '/admin/locations' },
     { name: 'Services', icon: Briefcase, path: '/admin/services' },
     { name: 'Products', icon: Package, path: '/admin/products' },
   ];

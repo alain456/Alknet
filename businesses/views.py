@@ -16,10 +16,24 @@ class CanCreateBusiness(BasePermission):
 class BusinessListView(generics.ListAPIView):
     """
     Endpoint public pour lister toutes les entreprises validées et actives.
+    Permet le filtrage par localisation (province, commune, quartier).
     """
-    queryset = Business.objects.filter(is_active=True, is_verified=True)
     serializer_class = BusinessSerializer
     permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = Business.objects.filter(is_active=True, is_verified=True)
+        province = self.request.query_params.get('province')
+        commune = self.request.query_params.get('commune')
+        quartier = self.request.query_params.get('quartier')
+
+        if province:
+            queryset = queryset.filter(province__iexact=province.strip())
+        if commune:
+            queryset = queryset.filter(commune__iexact=commune.strip())
+        if quartier:
+            queryset = queryset.filter(quartier__icontains=quartier.strip())
+        return queryset
 
 class MyBusinessListView(generics.ListCreateAPIView):
     """
@@ -121,6 +135,9 @@ class AdminCSVImportView(APIView):
                 email = row.get('email') or row.get('Email')
                 phone = row.get('phone') or row.get('Téléphone') or ''
                 address = row.get('address') or row.get('Adresse') or ''
+                province = row.get('province') or row.get('Province') or 'Bujumbura Mairie'
+                commune = row.get('commune') or row.get('Commune') or ''
+                quartier = row.get('quartier') or row.get('Quartier') or ''
                 sector_name = row.get('sector') or row.get('Secteur_Parent') or ''
                 sub_cats = row.get('sub_categories') or row.get('Sous_Categories') or ''
 
@@ -153,6 +170,9 @@ class AdminCSVImportView(APIView):
                     email=email,
                     phone=phone,
                     address=address,
+                    province=province,
+                    commune=commune,
+                    quartier=quartier,
                     primary_category=primary_cat,
                     is_active=True,
                     is_verified=True,

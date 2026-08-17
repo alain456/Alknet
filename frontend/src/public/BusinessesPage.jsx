@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Star, Filter, Building2, Phone, Mail, Clock, Users } from 'lucide-react';
+import { Search, MapPin, Star, Filter, Building2, Phone, Mail, Clock, Users, Eye } from 'lucide-react';
+import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
 
 export default function BusinessesPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -7,6 +8,8 @@ export default function BusinessesPage() {
   const [selectedCity, setSelectedCity] = useState('All');
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedBusiness, setSelectedBusiness] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const categories = ['All', 'Clinic', 'Restaurant', 'Hotel', 'IT Company', 'Construction', 'Education', 'Retail'];
   const cities = ['All', 'Bujumbura', 'Gitega', 'Bururi', 'Muyinga', 'Rutana', 'Kayanza'];
@@ -175,7 +178,7 @@ export default function BusinessesPage() {
                   <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
                     <div className="flex items-center gap-2 text-gray-500">
                       <MapPin className="w-4 h-4" />
-                      {business.address || 'Burundi'}
+                      {business.full_address || business.address || [business.avenue, business.quartier, business.zone, business.commune, business.province].filter(Boolean).join(', ') || 'Burundi'}
                     </div>
                     <div className="flex items-center gap-2 text-gray-500">
                       <Users className="w-4 h-4" />
@@ -192,11 +195,14 @@ export default function BusinessesPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <button className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg transition">
-                      View Profile
-                    </button>
-                    <button className="flex-1 border border-gray-200 hover:border-primary text-gray-700 hover:text-primary font-medium py-2 px-4 rounded-lg transition">
-                      Contact
+                    <button 
+                      onClick={() => {
+                        setSelectedBusiness(business);
+                        setIsDetailOpen(true);
+                      }}
+                      className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Eye className="w-4 h-4" /> Voir Fiche Complète
                     </button>
                   </div>
                 </div>
@@ -217,6 +223,13 @@ export default function BusinessesPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Fiche Complecte de l'Entreprise */}
+      <BusinessDetailsModal 
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        business={selectedBusiness}
+      />
     </div>
   );
 }

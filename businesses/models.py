@@ -12,9 +12,16 @@ class Business(models.Model):
     categories = models.ManyToManyField(BusinessCategory, related_name='businesses', blank=True)
     
     name = models.CharField(max_length=255)
-    logo = models.CharField(max_length=255, blank=True, help_text="URL du logo")
+    logo = models.TextField(blank=True, help_text="URL ou Image Base64 du logo")
     description = models.TextField(blank=True)
     address = models.CharField(max_length=255, blank=True)
+    province = models.CharField(max_length=100, default='Bujumbura Mairie', help_text="Province du siège")
+    commune = models.CharField(max_length=100, blank=True, help_text="Commune (ex: Mukaza, Ntahangwa, Muha...)")
+    zone = models.CharField(max_length=100, blank=True, help_text="Zone administrative")
+    quartier = models.CharField(max_length=100, blank=True, help_text="Quartier/Colline (ex: Rohero I, Bwiza, Ngagara...)")
+    avenue = models.CharField(max_length=150, blank=True, help_text="Avenue/Rue (Optionnel)")
+    latitude = models.FloatField(null=True, blank=True, help_text="Coordonnée GPS Latitude")
+    longitude = models.FloatField(null=True, blank=True, help_text="Coordonnée GPS Longitude")
     phone = models.CharField(max_length=50, blank=True)
     email = models.EmailField(blank=True)
     website = models.URLField(blank=True)
@@ -37,6 +44,19 @@ class Business(models.Model):
 
     class Meta:
         verbose_name_plural = "Businesses"
+
+    @property
+    def full_address(self):
+        parts = [p for p in [self.address, self.avenue, self.quartier, self.zone, self.commune, self.province] if p]
+        return ", ".join(parts) if parts else "Adresse non renseignée"
+
+    def save(self, *args, **kwargs):
+        if not self.address:
+            hierarchical_parts = [p for p in [self.avenue, self.quartier, self.zone, self.commune, self.province] if p]
+            if hierarchical_parts:
+                self.address = ", ".join(hierarchical_parts)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 

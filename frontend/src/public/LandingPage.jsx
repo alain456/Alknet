@@ -4,14 +4,16 @@ import { Search, Briefcase, MapPin, Star, Building2, Store, Stethoscope, Laptop,
 export default function LandingPage() {
   const [businesses, setBusinesses] = useState([]);
   const [services, setServices] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [businessesRes, servicesRes] = await Promise.all([
+        const [businessesRes, servicesRes, categoriesRes] = await Promise.all([
           fetch('http://localhost:8000/api/v1/businesses/'),
-          fetch('http://localhost:8000/api/v1/services/')
+          fetch('http://localhost:8000/api/v1/services/'),
+          fetch('http://localhost:8000/api/v1/business-categories/')
         ]);
         
         if (businessesRes.ok) {
@@ -22,6 +24,11 @@ export default function LandingPage() {
         if (servicesRes.ok) {
           const sData = await servicesRes.json();
           setServices(sData.slice(0, 4)); // Popular 4
+        }
+
+        if (categoriesRes.ok) {
+          const cData = await categoriesRes.json();
+          setCategories(cData.slice(0, 12)); // Top 12 categories
         }
       } catch (error) {
         console.error('Error fetching landing data:', error);
@@ -73,25 +80,41 @@ export default function LandingPage() {
       <section className="py-20 px-4 max-w-7xl mx-auto">
         <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">Explore Categories</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-          {[
-            { icon: Laptop, name: 'IT' },
-            { icon: Stethoscope, name: 'Health' },
-            { icon: HardHat, name: 'Construction' },
-            { icon: Sprout, name: 'Agriculture' },
-            { icon: Store, name: 'Restaurants' },
-            { icon: Building2, name: 'Hotels' },
-            { icon: Car, name: 'Transport' },
-            { icon: GraduationCap, name: 'Education' },
-            { icon: Heart, name: 'Beauty' },
-            { icon: Gavel, name: 'Legal' },
-            { icon: ShoppingBag, name: 'Shopping' },
-            { icon: Search, name: 'More' },
-          ].map((cat, i) => (
-            <div key={i} className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group">
-              <cat.icon className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
-              <span className="font-medium text-gray-700 group-hover:text-primary">{cat.name}</span>
-            </div>
-          ))}
+          {categories.length > 0 ? (
+            categories.map((cat) => {
+              // Map common category names to icons, fallback to Briefcase
+              const iconMap = {
+                'IT': Laptop, 'Technology': Laptop, 'Informatique': Laptop,
+                'Health': Stethoscope, 'Santé': Stethoscope,
+                'Construction': HardHat, 'Bâtiment': HardHat,
+                'Agriculture': Sprout, 'Agroalimentaire': Sprout,
+                'Restaurants': Store, 'Restauration': Store,
+                'Hotels': Building2, 'Hôtellerie': Building2,
+                'Transport': Car, 'Logistique': Car,
+                'Education': GraduationCap, 'Enseignement': GraduationCap,
+                'Beauty': Heart, 'Beauté': Heart,
+                'Legal': Gavel, 'Droit': Gavel,
+                'Shopping': ShoppingBag, 'Commerce': ShoppingBag
+              };
+              // Match by partial name or use default
+              const IconComp = Object.entries(iconMap).find(([key]) => cat.name.toLowerCase().includes(key.toLowerCase()))?.[1] || Briefcase;
+              
+              return (
+                <div key={cat.id} className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group">
+                  <IconComp className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
+                  <span className="font-medium text-gray-700 group-hover:text-primary text-center leading-tight">{cat.name}</span>
+                </div>
+              );
+            })
+          ) : (
+            // Skeleton loader if categories not loaded yet
+            [1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl bg-white animate-pulse">
+                <div className="w-8 h-8 bg-gray-200 rounded-full mb-3"></div>
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
+              </div>
+            ))
+          )}
         </div>
       </section>
 

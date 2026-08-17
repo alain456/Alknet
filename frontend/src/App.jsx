@@ -36,6 +36,7 @@ import AdminServicesPage from './admin/AdminServicesPage';
 import AdminProductsPage from './admin/AdminProductsPage';
 import AdminOrdersPage from './admin/AdminOrdersPage';
 import AdminPaymentsPage from './admin/AdminPaymentsPage';
+import AdminLocationsPage from './admin/AdminLocationsPage';
 import AdminSettingsPage from './admin/AdminSettingsPage';
 
 function App() {
@@ -89,6 +90,7 @@ function App() {
               <Route path="businesses" element={<AdminBusinessesPage />} />
               <Route path="professionals" element={<AdminProfessionalsPage />} />
               <Route path="categories" element={<AdminCategoriesPage />} />
+              <Route path="locations" element={<AdminLocationsPage />} />
               <Route path="services" element={<AdminServicesPage />} />
               <Route path="products" element={<AdminProductsPage />} />
               <Route path="orders" element={<AdminOrdersPage />} />

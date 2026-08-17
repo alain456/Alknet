@@ -54,3 +54,8 @@ class AdminProfessionalListView(generics.ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
 
+class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = User.objects.all()
+    from .serializers import AdminUserUpdateSerializer
+    serializer_class = AdminUserUpdateSerializer
+    permission_classes = [AllowAny] # Temporary for easy frontend testing

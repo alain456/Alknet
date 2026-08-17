@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, MoreHorizontal, UserCheck, UserX, Mail, Shield, Plus } from 'lucide-react';
+import { Search, Filter, Download, MoreHorizontal, UserCheck, UserX, Mail, Shield, Plus, Edit2, Trash2, Power } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function AdminUsersPage() {
@@ -9,38 +9,25 @@ export default function AdminUsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     email: '',
     password: '',
     phone_number: '',
-    role: 'PROFESSIONAL'
+    role: 'PROFESSIONAL',
+    is_active: true
   });
   const [submitError, setSubmitError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/v1/accounts/admin/users/', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (!response.ok) throw new Error('Failed to fetch users');
-        const data = await response.json();
-        setUsers(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
+    if (token) {
+      fetchUsers();
+    }
   }, [token]);
 
   const fetchUsers = async () => {
@@ -50,6 +37,10 @@ export default function AdminUsersPage() {
           'Authorization': `Bearer ${token}`
         }
       });
+      if (response.status === 401) {
+        logout();
+        return;
+      }
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
       setUsers(data);
@@ -60,31 +51,88 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleCreateUser = async (e) => {
+  const handleFormSubmit = async (e) => {
     e.preventDefault();
     setSubmitError(null);
     setIsSubmitting(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/accounts/admin/users/create/', {
-        method: 'POST',
+      const url = editingUser 
+        ? `http://localhost:8000/api/v1/accounts/admin/users/${editingUser.id}/`
+        : 'http://localhost:8000/api/v1/accounts/admin/users/create/';
+      const method = editingUser ? 'PATCH' : 'POST';
+
+      const payload = { ...formData };
+      if (editingUser && !payload.password) {
+        delete payload.password; // Don't send empty password when updating
+      }
+
+      const response = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(JSON.stringify(errData));
       }
       setIsModalOpen(false);
-      setFormData({ first_name: '', last_name: '', email: '', password: '', phone_number: '', role: 'PROFESSIONAL' });
+      setEditingUser(null);
+      setFormData({ first_name: '', last_name: '', email: '', password: '', phone_number: '', role: 'PROFESSIONAL', is_active: true });
       fetchUsers();
     } catch (err) {
       setSubmitError(err.message);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDeleteUser = async (id) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) return;
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/accounts/admin/users/${id}/`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error("Erreur lors de la suppression");
+      fetchUsers();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const handleToggleStatus = async (user) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir ${user.is_active ? 'suspendre' : 'activer'} cet utilisateur ?`)) return;
+    try {
+      const response = await fetch(`http://localhost:8000/api/v1/accounts/admin/users/${user.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ is_active: !user.is_active })
+      });
+      if (!response.ok) throw new Error("Erreur lors du changement de statut");
+      fetchUsers();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  const openEditModal = (user) => {
+    setEditingUser(user);
+    setFormData({
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      email: user.email || '',
+      password: '',
+      phone_number: user.phone_number || '',
+      role: user.role || 'PROFESSIONAL',
+      is_active: user.is_active !== undefined ? user.is_active : true
+    });
+    setIsModalOpen(true);
   };
 
   const getRoleBadgeStyle = (role) => {
@@ -230,9 +278,29 @@ export default function AdminUsersPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="p-1.5 text-ink-faint hover:text-green-900 dark:text-green-100/40 dark:hover:text-white transition-colors rounded-md hover:bg-paper dark:hover:bg-white/10 opacity-0 group-hover:opacity-100">
-                          <MoreHorizontal className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => openEditModal(user)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                            title="Modifier"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleToggleStatus(user)}
+                            className={`p-1.5 rounded-md transition-colors ${user.is_active ? 'text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/30' : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30'}`}
+                            title={user.is_active ? 'Suspendre' : 'Activer'}
+                          >
+                            <Power className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -260,12 +328,14 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-surface dark:bg-[#1A2E25] rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-border dark:border-white/10">
             <div className="px-6 py-4 border-b border-border dark:border-white/10 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-green-900 dark:text-white">Créer un nouveau compte Pro/Business</h3>
+              <h3 className="text-lg font-bold text-green-900 dark:text-white">
+                {editingUser ? 'Modifier l\'utilisateur' : 'Créer un nouveau compte Pro/Business'}
+              </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-ink-muted hover:text-ink dark:hover:text-white">
                 &times;
               </button>
             </div>
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
               {submitError && (
                 <div className="p-3 bg-red-50 text-red-600 rounded-md text-sm border border-red-100">
                   Erreur: {submitError}
@@ -295,18 +365,19 @@ export default function AdminUsersPage() {
                 <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Email</label>
                 <input 
                   type="email" required
+                  disabled={!!editingUser}
                   value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                  className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700 disabled:opacity-50"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Mot de passe provisoire</label>
                 <input 
-                  type="text" required
+                  type="text" required={!editingUser}
                   value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
                   className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
-                  placeholder="Minimum 8 caractères"
+                  placeholder={editingUser ? "Laisser vide pour ne pas modifier" : "Minimum 8 caractères"}
                 />
                 <p className="text-xs text-ink-faint mt-1">À communiquer manuellement à l'utilisateur.</p>
               </div>
@@ -328,9 +399,26 @@ export default function AdminUsersPage() {
                   >
                     <option value="PROFESSIONAL">Professionnel / Indépendant</option>
                     <option value="BUSINESS_OWNER">Propriétaire d'Entreprise</option>
+                    <option value="MERCHANT">Commerçant</option>
+                    <option value="SUPER_ADMIN">Super Administrateur</option>
+                    <option value="MODERATOR">Modérateur</option>
                   </select>
                 </div>
               </div>
+
+              {editingUser && (
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer mt-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_active}
+                      onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                      className="w-4 h-4 text-green-700 rounded focus:ring-green-700"
+                    />
+                    <span className="text-sm text-ink dark:text-green-100/80 font-medium">Compte Actif (Autoriser la connexion)</span>
+                  </label>
+                </div>
+              )}
 
               <div className="pt-4 flex items-center gap-3 justify-end">
                 <button 
@@ -344,7 +432,7 @@ export default function AdminUsersPage() {
                   disabled={isSubmitting}
                   className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white font-medium rounded-md transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? 'Création...' : 'Créer le compte'}
+                  {isSubmitting ? 'Enregistrement...' : (editingUser ? 'Sauvegarder' : 'Créer le compte')}
                 </button>
               </div>
             </form>

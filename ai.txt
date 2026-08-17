@@ -1,0 +1,1080 @@
+Oui. Pour AlkNet, je te conseille de donner à Cursor un **prompt d'architecture IA**, et non pas simplement « ajoute de l'IA ». Le prompt doit préciser **ce que l'IA fait, ce qu'elle ne doit pas faire, comment elle communique avec Django et comment elle évoluera**.
+
+Voici un prompt que tu peux directement donner à Cursor :
+
+# ALKNET — MODULE IA INTELLIGENT
+
+Tu es un architecte logiciel senior spécialisé en IA, Django, systèmes de recommandation, NLP, recherche sémantique et plateformes SaaS.
+
+Je développe **AlkNet**, une plateforme numérique multiservices SaaS qui commence au Burundi et qui a pour objectif de s'étendre progressivement à d'autres pays africains.
+
+AlkNet met en relation :
+
+* Clients
+* Professionnels
+* Entreprises
+* Commerçants
+* Agriculteurs
+* Restaurants
+* Hôtels
+* Médecins
+* Architectes
+* Ingénieurs civils
+* Développeurs
+* Avocats
+* Consultants
+* Prestataires de services
+* Acheteurs et vendeurs
+
+La plateforme permet notamment :
+
+* publier des services ;
+* publier des produits ;
+* rechercher des services ;
+* rechercher des entreprises ;
+* publier des offres ;
+* candidater ;
+* commander des produits ;
+* réserver des services, restaurants et hôtels ;
+* communiquer avec les utilisateurs ;
+* laisser des avis ;
+* gérer des abonnements ;
+* effectuer des paiements.
+
+Le backend principal est développé avec :
+
+* Django
+* Django REST Framework
+* PostgreSQL
+* Redis
+* Celery
+
+Le frontend est développé avec React.
+
+Une application mobile Flutter pourra être ajoutée ultérieurement.
+
+---
+
+# 1. OBJECTIF DU MODULE IA
+
+L'objectif du module IA est de rendre AlkNet intelligent.
+
+L'IA doit pouvoir comprendre les besoins des utilisateurs, analyser les données de la plateforme et proposer automatiquement les services, entreprises, professionnels, produits et opportunités les plus pertinents.
+
+L'IA ne doit pas remplacer le backend Django.
+
+Django reste responsable :
+
+* de l'authentification ;
+* des permissions ;
+* des règles métier ;
+* des transactions ;
+* des commandes ;
+* des réservations ;
+* des paiements ;
+* de la persistance des données.
+
+Le module IA doit être un service spécialisé qui communique avec Django via des API.
+
+Architecture souhaitée :
+
+React / Flutter
+↓
+Django REST API
+↓
+AI Service
+↓
+AI Models / LLM / Embeddings / Recommendation Engine
+↓
+PostgreSQL / Vector Database
+
+---
+
+# 2. ARCHITECTURE IA
+
+Créer un module/service IA séparé.
+
+Structure recommandée :
+
+ai_service/
+│
+├── api/
+│
+├── recommendations/
+│
+├── semantic_search/
+│
+├── assistant/
+│
+├── classification/
+│
+├── content_generation/
+│
+├── moderation/
+│
+├── sentiment_analysis/
+│
+├── embeddings/
+│
+├── ranking/
+│
+├── personalization/
+│
+├── analytics/
+│
+└── core/
+
+Le système doit être modulaire.
+
+Chaque fonctionnalité IA doit pouvoir être développée, testée et remplacée indépendamment.
+
+---
+
+# 3. RECOMMANDATION INTELLIGENTE
+
+Créer un moteur de recommandation inspiré du fonctionnement de plateformes comme LinkedIn, Airbnb et autres marketplaces.
+
+Le système doit recommander :
+
+* professionnels ;
+* entreprises ;
+* services ;
+* produits ;
+* restaurants ;
+* hôtels ;
+* offres ;
+* opportunités.
+
+Le moteur doit prendre en compte :
+
+* historique de recherche ;
+* services consultés ;
+* entreprises consultées ;
+* catégories consultées ;
+* localisation ;
+* favoris ;
+* commandes ;
+* réservations ;
+* candidatures ;
+* interactions ;
+* évaluations ;
+* centres d'intérêt ;
+* popularité ;
+* disponibilité ;
+* abonnement ;
+* similarité sémantique.
+
+Exemple :
+
+Un utilisateur recherche régulièrement :
+
+"architecte"
+
+Le système doit pouvoir recommander :
+
+* architectes ;
+* ingénieurs civils ;
+* entreprises de construction ;
+* bureaux d'études ;
+* fournisseurs de matériaux.
+
+Créer un système de scoring.
+
+Exemple conceptuel :
+
+recommendation_score =
+semantic_similarity
++ category_similarity
++ location_score
++ popularity_score
++ user_interest_score
++ interaction_score
+
+Le système doit permettre de modifier facilement les poids.
+
+---
+
+# 4. RECHERCHE SÉMANTIQUE
+
+Créer une recherche intelligente permettant à l'utilisateur d'exprimer son besoin avec une phrase naturelle.
+
+Exemple :
+
+"Je cherche quelqu'un pour construire une maison de trois chambres à Bujumbura."
+
+L'IA doit comprendre :
+
+Intention :
+construction
+
+Localisation :
+Bujumbura
+
+Besoin :
+construction maison
+
+Services potentiels :
+
+* architecte
+* ingénieur civil
+* entreprise de construction
+* maçon
+* électricien
+* plombier
+
+L'IA doit transformer la requête en représentation sémantique et rechercher les résultats les plus pertinents.
+
+Utiliser des embeddings et une recherche vectorielle.
+
+La recherche doit pouvoir combiner :
+
+* recherche textuelle ;
+* recherche par filtres ;
+* recherche géographique ;
+* recherche vectorielle.
+
+---
+
+# 5. ASSISTANT IA ALKNET
+
+Créer un assistant IA accessible depuis l'application.
+
+Nom :
+
+"AlkNet AI Assistant"
+
+L'utilisateur peut écrire :
+
+"Je veux réserver un hôtel à Bujumbura."
+
+ou :
+
+"Je cherche un restaurant pour une famille de 6 personnes."
+
+ou :
+
+"Je veux trouver un architecte."
+
+L'assistant doit :
+
+1. comprendre l'intention ;
+2. extraire les paramètres ;
+3. interroger les API Django ;
+4. récupérer les données réelles ;
+5. présenter les résultats ;
+6. permettre à l'utilisateur d'effectuer l'action.
+
+IMPORTANT :
+
+L'assistant ne doit jamais inventer :
+
+* une entreprise ;
+* un service ;
+* un produit ;
+* un prix ;
+* une disponibilité ;
+* une réservation ;
+* une commande.
+
+Toutes les informations concernant AlkNet doivent provenir des données réelles du système.
+
+---
+
+# 6. COMPRÉHENSION DES BESOINS
+
+Créer un moteur capable de transformer une demande générale en plusieurs services.
+
+Exemple :
+
+"Je veux organiser un mariage."
+
+L'IA peut identifier :
+
+* salle ;
+* hôtel ;
+* restaurant ;
+* traiteur ;
+* photographe ;
+* décoration ;
+* musique ;
+* transport.
+
+L'IA doit proposer une liste de catégories et services pertinents.
+
+---
+
+# 7. CLASSIFICATION AUTOMATIQUE
+
+Lorsqu'un utilisateur ou une entreprise publie un service, l'IA doit pouvoir proposer automatiquement :
+
+* secteur ;
+* catégorie ;
+* sous-catégorie ;
+* mots-clés ;
+* compétences ;
+* localisation pertinente.
+
+Exemple :
+
+Texte :
+
+"Je suis ingénieur spécialisé dans les infrastructures routières."
+
+Résultat :
+
+Secteur :
+Construction
+
+Catégorie :
+Génie civil
+
+Sous-catégorie :
+Infrastructure routière
+
+Mots-clés :
+
+* routes
+* infrastructures
+* génie civil
+* construction
+
+L'utilisateur doit pouvoir modifier les résultats proposés par l'IA avant publication.
+
+---
+
+# 8. AMÉLIORATION AUTOMATIQUE DES PUBLICATIONS
+
+Lorsqu'un utilisateur rédige une annonce simple :
+
+"Je vends des chaussures homme."
+
+L'IA peut proposer :
+
+Titre amélioré :
+"Vente de chaussures pour hommes"
+
+Description améliorée :
+Créer une description professionnelle sans inventer les caractéristiques du produit.
+
+L'IA peut également proposer :
+
+* catégorie ;
+* mots-clés ;
+* tags ;
+* résumé.
+
+IMPORTANT :
+
+Ne jamais inventer :
+
+* prix ;
+* caractéristiques ;
+* certifications ;
+* garanties ;
+* disponibilité.
+
+---
+
+# 9. GÉNÉRATION DE CONTENU
+
+L'IA peut aider les professionnels et entreprises à :
+
+* améliorer leurs descriptions ;
+* générer des titres ;
+* rédiger des descriptions de services ;
+* créer des réponses aux clients ;
+* résumer leurs activités ;
+* traduire leurs publications.
+
+Prévoir le support de :
+
+* Français
+* Anglais
+* Kirundi
+* Swahili
+
+Le système doit être conçu pour ajouter d'autres langues ultérieurement.
+
+---
+
+# 10. ANALYSE DES AVIS
+
+Analyser les avis utilisateurs.
+
+Extraire :
+
+* sentiment ;
+* points positifs ;
+* points négatifs ;
+* thèmes récurrents ;
+* problèmes fréquents.
+
+Exemple :
+
+100 avis sur un restaurant.
+
+L'IA peut produire :
+
+Qualité de nourriture :
+92%
+
+Accueil :
+84%
+
+Rapidité :
+61%
+
+Prix :
+78%
+
+Problème principal :
+Temps d'attente.
+
+---
+
+# 11. MODÉRATION INTELLIGENTE
+
+Créer un système de détection de :
+
+* spam ;
+* contenu offensant ;
+* fraude potentielle ;
+* publicité abusive ;
+* contenu trompeur ;
+* annonces suspectes.
+
+Le système doit attribuer un niveau de risque :
+
+LOW
+MEDIUM
+HIGH
+
+Pour les cas sensibles :
+
+IA
+↓
+Signalement
+↓
+Modérateur humain
+↓
+Décision finale
+
+Ne jamais laisser l'IA supprimer automatiquement un compte important sans possibilité de contrôle humain.
+
+---
+
+# 12. DÉTECTION DE FRAUDE
+
+Créer un système permettant de détecter les comportements inhabituels.
+
+Exemples :
+
+* création massive de comptes ;
+* publications excessives ;
+* activité inhabituelle ;
+* commandes suspectes ;
+* comportements répétitifs ;
+* avis artificiels.
+
+Créer un score de risque.
+
+Exemple :
+
+risk_score = 0 → risque faible
+
+risk_score = 50 → surveillance
+
+risk_score = 90 → vérification humaine
+
+---
+
+# 13. MATCHING CLIENT ↔ PROFESSIONNEL
+
+Créer un moteur de matching.
+
+Exemple :
+
+Client :
+
+"Je cherche un architecte spécialisé dans les maisons modernes."
+
+Le système compare :
+
+* compétences ;
+* expériences ;
+* localisation ;
+* services ;
+* historique ;
+* disponibilité ;
+* évaluations.
+
+Puis produit :
+
+Match 95%
+Match 89%
+Match 84%
+
+Le système doit expliquer pourquoi un professionnel est recommandé.
+
+---
+
+# 14. MATCHING ENTREPRISE ↔ CANDIDAT
+
+Pour les offres d'emploi ou missions.
+
+Une entreprise publie :
+
+"Nous cherchons un développeur Django avec 2 ans d'expérience."
+
+L'IA peut analyser :
+
+* compétences demandées ;
+* expérience ;
+* localisation ;
+* profil du candidat.
+
+Puis proposer des candidats pertinents.
+
+IMPORTANT :
+
+Le système ne doit pas prendre automatiquement une décision de recrutement.
+
+Il doit uniquement fournir une aide au classement et à la recherche.
+
+---
+
+# 15. RECOMMANDATIONS POUR LES ENTREPRISES
+
+Créer un système permettant à l'IA d'analyser les performances d'une entreprise.
+
+Exemple :
+
+Restaurant :
+
+* commandes ;
+* clients ;
+* avis ;
+* produits populaires ;
+* heures de pointe.
+
+L'IA peut produire :
+
+"Votre service le plus demandé est X."
+
+"Les commandes augmentent le vendredi."
+
+"Les clients mentionnent régulièrement le temps d'attente."
+
+Les recommandations doivent être basées sur les données disponibles.
+
+---
+
+# 16. RECOMMANDATIONS AGRICOLES
+
+Pour les cultivateurs et coopératives.
+
+L'IA peut analyser :
+
+* produits disponibles ;
+* demande ;
+* historique des ventes ;
+* localisation ;
+* saisonnalité.
+
+Exemple :
+
+Un cultivateur publie :
+
+"500 kg de haricots disponibles."
+
+Le système peut identifier :
+
+* acheteurs potentiels ;
+* entreprises intéressées ;
+* restaurants ;
+* grossistes ;
+* coopératives.
+
+Le système doit présenter ces résultats comme des recommandations et non comme des garanties de vente.
+
+---
+
+# 17. SYSTÈME DE PROFIL INTELLIGENT
+
+Construire progressivement un profil d'intérêt utilisateur.
+
+Exemple :
+
+Utilisateur X :
+
+Technologie : 80%
+Construction : 60%
+Commerce : 20%
+Restaurants : 10%
+
+Le profil doit évoluer avec les interactions de l'utilisateur.
+
+Utiliser ces informations uniquement pour améliorer les recommandations.
+
+---
+
+# 18. PERSONNALISATION DU FEED
+
+La page d'accueil après connexion doit être personnalisée.
+
+Exemple :
+
+"Recommandé pour vous"
+
+"Près de vous"
+
+"Parce que vous avez consulté..."
+
+"Services similaires"
+
+"Entreprises populaires"
+
+"Nouveaux services dans votre secteur"
+
+---
+
+# 19. RAG / BASE DE CONNAISSANCES
+
+Préparer une architecture RAG pour permettre à l'assistant IA d'utiliser :
+
+* documentation AlkNet ;
+* règles de la plateforme ;
+* FAQ ;
+* conditions d'utilisation ;
+* informations publiques des entreprises ;
+* informations publiques des services.
+
+L'assistant doit pouvoir répondre à :
+
+"Comment fonctionne AlkNet ?"
+
+"Comment créer une entreprise ?"
+
+"Comment fonctionne l'abonnement Business ?"
+
+"Comment publier un service ?"
+
+Le système doit citer ou utiliser les données internes disponibles lorsqu'elles sont nécessaires.
+
+---
+
+# 20. ARCHITECTURE DES DONNÉES IA
+
+Prévoir des données telles que :
+
+AIInteraction
+UserEmbedding
+ServiceEmbedding
+BusinessEmbedding
+ProductEmbedding
+Recommendation
+RecommendationEvent
+SearchQuery
+UserInterest
+ContentAnalysis
+ModerationResult
+RiskScore
+
+Ne pas créer des tables inutiles.
+
+Analyser d'abord les relations avec les modèles Django existants.
+
+---
+
+# 21. VECTOR DATABASE
+
+Prévoir une solution de recherche vectorielle.
+
+Priorité :
+
+PostgreSQL + pgvector
+
+Ne pas ajouter une base vectorielle externe si PostgreSQL + pgvector suffit pour la première version.
+
+Les embeddings peuvent être créés pour :
+
+* services ;
+* entreprises ;
+* produits ;
+* profils professionnels ;
+* offres.
+
+---
+
+# 22. CACHE ET TÂCHES ASYNCHRONES
+
+Utiliser Redis + Celery pour les opérations coûteuses :
+
+* génération d'embeddings ;
+* analyse de contenu ;
+* analyse des avis ;
+* génération de recommandations ;
+* traitement de gros volumes de données.
+
+Ne pas bloquer les requêtes HTTP normales avec des opérations IA longues.
+
+---
+
+# 23. API IA
+
+Créer des endpoints propres.
+
+Exemples :
+
+POST /api/ai/search/
+
+POST /api/ai/recommendations/
+
+POST /api/ai/assistant/
+
+POST /api/ai/classify/
+
+POST /api/ai/improve-content/
+
+POST /api/ai/analyze-review/
+
+POST /api/ai/moderate/
+
+POST /api/ai/match/
+
+Les endpoints doivent être sécurisés avec JWT et permissions Django.
+
+---
+
+# 24. EXIGENCE IMPORTANTE : NE PAS DÉPENDRE D'UNE SEULE IA
+
+Créer une couche d'abstraction :
+
+AIProvider
+
+afin de pouvoir utiliser ou remplacer facilement :
+
+* OpenAI
+* Google Gemini
+* Anthropic
+* modèles Hugging Face
+* modèles locaux
+
+Le reste de l'application ne doit pas dépendre directement d'un fournisseur spécifique.
+
+---
+
+# 25. COÛTS
+
+L'architecture doit être pensée pour réduire les coûts.
+
+Ne pas appeler un LLM pour chaque action.
+
+Utiliser :
+
+* cache ;
+* embeddings réutilisables ;
+* règles classiques ;
+* PostgreSQL ;
+* pgvector ;
+* Redis ;
+* modèles légers lorsque possible.
+
+Utiliser un LLM uniquement lorsqu'il apporte une réelle valeur.
+
+---
+
+# 26. SÉCURITÉ ET CONFIDENTIALITÉ
+
+Ne jamais envoyer inutilement des données privées à un modèle externe.
+
+Ne pas exposer :
+
+* mots de passe ;
+* tokens ;
+* informations bancaires ;
+* données privées ;
+* informations sensibles.
+
+L'IA doit respecter les permissions de l'utilisateur.
+
+Un utilisateur ne doit jamais pouvoir demander à l'assistant :
+
+"Donne-moi les informations privées de cet autre utilisateur."
+
+L'assistant doit respecter les règles de Django.
+
+---
+
+# 27. OBSERVABILITÉ
+
+Enregistrer :
+
+* temps de réponse ;
+* erreurs ;
+* coût estimé ;
+* modèle utilisé ;
+* type de requête ;
+* succès/échec ;
+* feedback utilisateur.
+
+Créer des métriques pour mesurer la qualité des recommandations.
+
+---
+
+# 28. FEEDBACK LOOP
+
+Ajouter :
+
+👍 Pertinent
+
+👎 Pas pertinent
+
+"Pourquoi cette recommandation ?"
+
+Le système doit utiliser ces feedbacks pour améliorer progressivement les recommandations.
+
+---
+
+# 29. ROADMAP IA
+
+Ne pas implémenter toutes les fonctionnalités immédiatement.
+
+PHASE 1 — MVP
+
+Implémenter :
+
+1. Recherche sémantique
+2. Classification des services
+3. Recommandations simples
+4. Assistant AlkNet
+5. Amélioration des publications
+
+PHASE 2
+
+Ajouter :
+
+6. Matching professionnel/client
+7. Analyse des avis
+8. Personnalisation du feed
+9. Modération intelligente
+
+PHASE 3
+
+Ajouter :
+
+10. Détection de fraude
+11. Matching entreprise/candidat
+12. Intelligence business
+13. Recommandations agricoles
+
+PHASE 4
+
+Ajouter :
+
+14. RAG avancé
+15. Modèles personnalisés
+16. Recommandations avancées
+17. Analytics prédictifs
+
+---
+
+# 30. RÈGLE D'ARCHITECTURE PRINCIPALE
+
+L'IA doit être un composant intelligent d'AlkNet, mais elle ne doit jamais devenir le cœur du système.
+
+Architecture :
+
+Frontend
+↓
+Django API
+↓
+Business Logic
+↓
+PostgreSQL
+
+et parallèlement :
+
+Django
+↓
+AI Service
+↓
+LLM / Embeddings / Recommendation Engine
+
+L'IA fournit des recommandations et des analyses.
+
+Django décide et exécute les opérations métier.
+
+---
+
+# OBJECTIF FINAL
+
+Construire une plateforme AlkNet capable de dire :
+
+"Je comprends ce que vous recherchez."
+
+"Voici les services pertinents."
+
+"Voici les professionnels qui correspondent le mieux."
+
+"Voici les entreprises proches de vous."
+
+"Voici les produits qui peuvent vous intéresser."
+
+"Voici des services similaires."
+
+"Voici pourquoi je vous recommande ces résultats."
+
+L'objectif est que l'IA rende AlkNet progressivement plus personnalisée et intelligente à mesure que la plateforme acquiert des utilisateurs et des données.
+Oui 👍. Pour AlkNet, tu peux très bien utiliser Google Gemini comme modèle principal. Et je te conseille même de commencer avec Gemini plutôt que de construire ton propre modèle.
+
+Mais il faut distinguer Gemini et les autres composants IA :
+
+                    ALKNET
+                       │
+                Django REST API
+                       │
+              ┌────────┴────────┐
+              │                 │
+         Business Logic      AI Service
+                                │
+                           Google Gemini
+                                │
+             ┌──────────────────┼─────────────────┐
+             │                  │                 │
+        Compréhension       Génération       Analyse
+             │                  │                 │
+             └──────────────────┼─────────────────┘
+                                │
+                         PostgreSQL
+                          + pgvector
+Gemini pourra s'occuper notamment de :
+🧠 comprendre les demandes des utilisateurs ;
+🔎 transformer une recherche naturelle en critères de recherche ;
+💬 alimenter l'assistant AlkNet ;
+✍️ améliorer les descriptions ;
+🏷️ classifier automatiquement les services ;
+🌍 traduire Français ↔ Anglais ↔ Kirundi ↔ Swahili ;
+⭐ analyser les avis ;
+🛡️ aider à la modération ;
+🤝 aider au matching client/professionnel ;
+📊 analyser certaines données et générer des explications.
+Mais attention à une chose importante
+
+Gemini ne doit pas être responsable de tout.
+
+Par exemple, pour :
+
+« Trouve-moi les restaurants à Bujumbura qui proposent des commandes. »
+
+Gemini doit comprendre la demande :
+
+intent = restaurant_search
+location = Bujumbura
+action = order
+
+Puis Django interroge PostgreSQL.
+
+Utilisateur
+    ↓
+Gemini
+    ↓
+Compréhension de la demande
+    ↓
+Django API
+    ↓
+PostgreSQL
+    ↓
+Restaurants réels
+    ↓
+Gemini
+    ↓
+Réponse utilisateur
+
+Ainsi Gemini ne va jamais inventer un restaurant.
+
+Pour les recommandations
+
+Je ne ferais pas :
+
+Utilisateur
+   ↓
+Gemini
+   ↓
+"Je pense que cette entreprise est intéressante"
+
+Je ferais plutôt :
+
+PostgreSQL
+    ↓
+Recherche / filtres
+    ↓
+pgvector
+    ↓
+Score de pertinence
+    ↓
+Gemini si nécessaire
+    ↓
+Présentation personnalisée
+
+C'est beaucoup plus fiable et moins coûteux.
+
+🧠 Et pour les embeddings ?
+
+C'est important pour ta fonctionnalité :
+
+« Les services similaires »
+
+Tu peux utiliser un modèle d'embedding compatible avec l'écosystème Gemini, stocker les vecteurs dans PostgreSQL + pgvector, puis faire de la recherche de similarité.
+
+Par exemple :
+
+"Construction de maisons modernes"
+              ↓
+           Embedding
+              ↓
+        pgvector
+              ↓
+ ┌────────────┼─────────────┐
+ ↓            ↓             ↓
+Architecte  Génie civil   Construction
+🔥 Le stack IA que je choisirais pour AlkNet
+
+Pour ton projet actuel :
+
+Frontend
+React
+   │
+   ▼
+Django REST Framework
+   │
+   ├───────────────┐
+   │               │
+   ▼               ▼
+PostgreSQL       AI Service
+   │               │
+   │               ▼
+   │          Google Gemini
+   │
+   ▼
+pgvector
+
+Et :
+
+Redis
+  +
+Celery
+
+pour les traitements IA qui prennent du temps.
+
+Une chose que je modifierais dans le prompt précédent
+
+Au lieu de dire à Cursor :
+
+« Utiliser OpenAI / Gemini / Anthropic... »
+
+dis-lui clairement :
+
+« Google Gemini est le fournisseur LLM principal d'AlkNet. Utiliser l'API Gemini et concevoir une couche d'abstraction permettant éventuellement de changer de fournisseur dans le futur. »
+
+C'est préférable parce que tu veux construire AlkNet autour de Gemini, tout en évitant de verrouiller toute ton architecture sur un seul fournisseur.

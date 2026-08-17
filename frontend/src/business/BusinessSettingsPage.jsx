@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Building2, MapPin, Phone, Globe, Save, Star } from 'lucide-react';
+import { Settings, Building2, MapPin, Phone, Globe, Save, Star, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import SectorSpecificFields from '../shared/components/SectorSpecificFields';
+import LocationSelector from '../shared/components/LocationSelector';
 
 export default function BusinessSettingsPage() {
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [formData, setFormData] = useState({
     businessName: 'Pharmacie moderne & Hôpital Isoko',
+    logo: '',
     description: 'Services de santé, vente de médicaments de gros & détail, et hébergements.',
     primary_category: '',
     category_ids: [],
     extra_attributes: {},
-    address: 'Avenue du Commerce, Bujumbura',
+    province: 'Bujumbura Mairie',
+    commune: 'Mukaza',
+    quartier: 'Rohero I',
+    latitude: '-3.3822',
+    longitude: '29.3644',
+    address: 'Avenue du Commerce, N° 45',
     phone: '+257 79 000 111',
     website: 'https://isokohub.com',
     status: 'Active'
@@ -91,6 +98,67 @@ export default function BusinessSettingsPage() {
               <Building2 className="w-5 h-5 text-gray-400" />
               Informations Générales
             </h2>
+
+            {/* Logo / Image de l'entreprise avec Aperçu Intégré */}
+            <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3 mb-6">
+              <label className="block text-sm font-bold text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                <Upload className="w-4 h-4 text-green-700 dark:text-green-400" /> Logo & Image de l'Entreprise
+              </label>
+              
+              <div className="flex items-center gap-5">
+                {/* Visual Preview Box */}
+                <div className="w-20 h-20 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-700 dark:text-green-300 font-bold text-3xl shrink-0 overflow-hidden shadow-inner relative">
+                  {formData.logo ? (
+                    <img src={formData.logo} alt="Aperçu Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="uppercase">{formData.businessName ? formData.businessName[0] : 'E'}</span>
+                  )}
+                </div>
+
+                {/* Actions & File Input */}
+                <div className="flex-1 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white rounded-md text-sm font-semibold cursor-pointer transition flex items-center gap-1.5 shadow-sm">
+                      <Upload className="w-4 h-4" /> Téléverser une Image...
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setFormData(prev => ({ ...prev, logo: reader.result }));
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {formData.logo && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, logo: '' }))}
+                        className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-300 text-sm font-semibold rounded-md transition"
+                      >
+                        Effacer le logo
+                      </button>
+                    )}
+                  </div>
+
+                  <input 
+                    type="url"
+                    placeholder="Ou coller directement l'URL d'une image (ex: https://.../logo.png)"
+                    value={formData.logo}
+                    onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-700 transition"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Nom de l'Entreprise</label>
@@ -200,17 +268,23 @@ export default function BusinessSettingsPage() {
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-2">
               <MapPin className="w-5 h-5 text-gray-400" />
-              Contact & Emplacement
+              Contact & Emplacement Geographique
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Adresse Physique</label>
-                <input 
-                  type="text" name="address"
-                  value={formData.address} onChange={handleChange}
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-green-700 outline-none transition"
-                />
-              </div>
+            
+            <div className="space-y-6">
+              <LocationSelector 
+                province={formData.province}
+                commune={formData.commune}
+                zone={formData.zone}
+                quartier={formData.quartier}
+                avenue={formData.avenue}
+                address={formData.address}
+                latitude={formData.latitude}
+                longitude={formData.longitude}
+                onChange={(loc) => setFormData({...formData, ...loc})}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Téléphone Professionnel</label>
                 <div className="relative">
@@ -235,6 +309,7 @@ export default function BusinessSettingsPage() {
               </div>
             </div>
           </div>
+        </div>
 
           <div className="pt-4 flex justify-end">
             <button 

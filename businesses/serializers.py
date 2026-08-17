@@ -8,6 +8,7 @@ class BusinessSerializer(serializers.ModelSerializer):
     primary_category_name = serializers.CharField(source='primary_category.name', read_only=True, default="Non spécifiée")
     category_name = serializers.CharField(source='primary_category.name', read_only=True, default="Non spécifiée")
     categories_detail = BusinessCategorySerializer(source='categories', many=True, read_only=True)
+    full_address = serializers.ReadOnlyField()
     category_ids = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False
     )
@@ -31,6 +32,7 @@ class AdminBusinessSerializer(serializers.ModelSerializer):
     primary_category_name = serializers.CharField(source='primary_category.name', read_only=True, default="Non spécifiée")
     category_name = serializers.CharField(source='primary_category.name', read_only=True, default="Non spécifiée")
     categories_detail = BusinessCategorySerializer(source='categories', many=True, read_only=True)
+    full_address = serializers.ReadOnlyField()
     category_ids = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False
     )

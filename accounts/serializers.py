@@ -41,6 +41,24 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
         user = create_user(**validated_data)
         return user
 
+class AdminUserUpdateSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=False, validators=[validate_password])
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES, required=False)
+
+    class Meta:
+        model = User
+        fields = ('email', 'password', 'first_name', 'last_name', 'phone_number', 'role', 'is_active')
+        read_only_fields = ('email',)
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
+
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):

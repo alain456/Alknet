@@ -105,9 +105,12 @@ export default function AdminCategoriesPage() {
     }
   };
 
+  const [formError, setFormError] = useState(null);
+
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setFormError(null);
     try {
       const payload = {
         name: formData.name,
@@ -148,7 +151,7 @@ export default function AdminCategoriesPage() {
       setFormData({ name: '', slug: '', description: '', icon: 'Building2', parent: '' });
       fetchCategories();
     } catch (err) {
-      alert(`Erreur : ${err.message}`);
+      setFormError(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -539,6 +542,12 @@ export default function AdminCategoriesPage() {
 
             <form onSubmit={handleFormSubmit} className="space-y-4">
               
+              {formError && (
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-400 text-sm font-semibold rounded-lg">
+                  {formError}
+                </div>
+              )}
+
               {!isCreatingSectorOnly && (
                 <div>
                   <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Rattacher au Secteur Parent *</label>

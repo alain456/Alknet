@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, CheckCircle2, Clock, Mail, Building2, Pill, Stethoscope, Hotel, LayoutGrid, Plus, X, Phone, Globe, Tag, ChevronDown, ChevronRight, MoreHorizontal, Edit, Trash2, Power, Star, ShieldCheck, Utensils, Bed, Sparkles, FileSpreadsheet, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Search, Filter, Download, CheckCircle2, Clock, Mail, Building2, Pill, Stethoscope, Hotel, LayoutGrid, Plus, X, Phone, Globe, Tag, ChevronDown, ChevronRight, MoreHorizontal, Edit, Trash2, Power, Star, ShieldCheck, Utensils, Bed, Sparkles, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Upload } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import SectorSpecificFields from '../shared/components/SectorSpecificFields';
+import LocationSelector from '../shared/components/LocationSelector';
+import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
 import SectorAnalyticsWidget from './SectorAnalyticsWidget';
 import BusinessCSVImporter from './BusinessCSVImporter';
 import AdminModerationModal from './AdminModerationModal';
@@ -18,6 +20,8 @@ export default function AdminBusinessesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCSVOpen, setIsCSVOpen] = useState(false);
   const [isModerationOpen, setIsModerationOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedDetailBusiness, setSelectedDetailBusiness] = useState(null);
   
   const [editingBusiness, setEditingBusiness] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -25,10 +29,16 @@ export default function AdminBusinessesPage() {
 
   const [formData, setFormData] = useState({
     name: '',
+    logo: '',
     owner_email_input: '',
     phone: '',
     email: '',
     address: '',
+    province: 'Bujumbura Mairie',
+    commune: 'Mukaza',
+    quartier: 'Rohero I',
+    latitude: '',
+    longitude: '',
     website: '',
     description: '',
     is_active: true,
@@ -83,10 +93,16 @@ export default function AdminBusinessesPage() {
     const defaultPrimary = categories.length > 0 ? categories[0].id : '';
     setFormData({
       name: '',
+      logo: '',
       owner_email_input: '',
       phone: '',
       email: '',
       address: '',
+      province: 'Bujumbura Mairie',
+      commune: 'Mukaza',
+      quartier: 'Rohero I',
+      latitude: '',
+      longitude: '',
       website: '',
       description: '',
       is_active: true,
@@ -105,10 +121,16 @@ export default function AdminBusinessesPage() {
 
     setFormData({
       name: business.name || '',
+      logo: business.logo || '',
       owner_email_input: business.owner_email || '',
       phone: business.phone || '',
       email: business.email || '',
       address: business.address || '',
+      province: business.province || 'Bujumbura Mairie',
+      commune: business.commune || '',
+      quartier: business.quartier || '',
+      latitude: business.latitude || '',
+      longitude: business.longitude || '',
       website: business.website || '',
       description: business.description || '',
       is_active: business.is_active !== undefined ? business.is_active : true,
@@ -346,8 +368,8 @@ export default function AdminBusinessesPage() {
                               {business.name}
                             </div>
                             <div className="text-[12.5px] text-ink-muted dark:text-green-100/60">
-                              {business.address || 'Adresse non renseignée'}
-                            </div>
+                               {business.full_address || business.address || [business.avenue, business.quartier, business.zone, business.commune, business.province].filter(Boolean).join(', ') || 'Adresse non renseignée'}
+                             </div>
                           </div>
                         </div>
                       </td>
@@ -414,6 +436,16 @@ export default function AdminBusinessesPage() {
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button 
+                            onClick={() => {
+                              setSelectedDetailBusiness(business);
+                              setIsDetailModalOpen(true);
+                            }}
+                            title="Voir toutes les informations complètes"
+                            className="p-1.5 text-ink-faint hover:text-blue-600 dark:text-green-100/60 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-white/10"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button 
                             onClick={() => handleToggleActiveStatus(business)}
                             title={business.is_active ? "Suspendre l'entreprise" : "Activer l'entreprise"}
                             className="p-1.5 text-ink-faint hover:text-gold-600 dark:text-green-100/60 dark:hover:text-gold-400 rounded-md hover:bg-paper dark:hover:bg-white/10"
@@ -454,6 +486,14 @@ export default function AdminBusinessesPage() {
         )}
       </div>
 
+      {/* Modal Détails Complets de l'Entreprise */}
+      <BusinessDetailsModal 
+        isOpen={isDetailModalOpen}
+        onClose={() => setIsDetailModalOpen(false)}
+        business={selectedDetailBusiness}
+        categories={categories}
+      />
+
       {/* Modal Import CSV / Excel */}
       <BusinessCSVImporter 
         isOpen={isCSVOpen}
@@ -485,13 +525,74 @@ export default function AdminBusinessesPage() {
             </div>
 
             <form onSubmit={handleFormSubmit} className="space-y-4">
+              
+              {/* Logo / Image de l'entreprise avec Aperçu Intégré */}
+              <div className="bg-paper dark:bg-black/20 p-3.5 rounded-xl border border-border dark:border-white/10 space-y-2">
+                <label className="block text-xs font-bold text-green-900 dark:text-green-100 flex items-center gap-1.5">
+                  <Upload className="w-4 h-4 text-gold-600" /> Logo & Image de l'Entreprise
+                </label>
+                
+                <div className="flex items-center gap-4">
+                  {/* Visual Preview Box */}
+                  <div className="w-16 h-16 rounded-xl bg-gold-500/20 border border-gold-500/40 flex items-center justify-center text-gold-700 dark:text-gold-300 font-bold text-2xl shrink-0 overflow-hidden shadow-inner relative">
+                    {formData.logo ? (
+                      <img src={formData.logo} alt="Aperçu Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="uppercase">{formData.name ? formData.name[0] : 'E'}</span>
+                    )}
+                  </div>
+
+                  {/* Actions & File Input */}
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white rounded-md text-xs font-semibold cursor-pointer transition flex items-center gap-1.5 shadow-2xs">
+                        <Upload className="w-3.5 h-3.5" /> Téléverser une Image...
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setFormData(prev => ({ ...prev, logo: reader.result }));
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {formData.logo && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, logo: '' }))}
+                          className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 text-xs font-semibold rounded-md transition"
+                        >
+                          Effacer le logo
+                        </button>
+                      )}
+                    </div>
+
+                    <input 
+                      type="url"
+                      placeholder="Ou coller directement l'URL d'une image (ex: https://.../logo.png)"
+                      value={formData.logo}
+                      onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
+                      className="w-full px-2.5 py-1 text-xs bg-surface dark:bg-black/40 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Nom de l'entreprise *</label>
                   <input 
                     type="text" 
                     required
-                    placeholder="Ex: Pharmacie du Progrès..."
+                    placeholder="Nom de l'entreprise"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
@@ -499,12 +600,12 @@ export default function AdminBusinessesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">E-mail du Propriétaire *</label>
+                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">E-mail de l'entreprise*</label>
                   <input 
                     type="email" 
                     required
                     disabled={!!editingBusiness}
-                    placeholder="ex: owner@isokohub.com"
+                    placeholder="ex: Entreprise@isokohub.com"
                     value={formData.owner_email_input}
                     onChange={(e) => setFormData({...formData, owner_email_input: e.target.value})}
                     className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700 disabled:opacity-60"
@@ -538,6 +639,19 @@ export default function AdminBusinessesPage() {
                 categories={categories}
                 attributes={formData.extra_attributes}
                 onChange={(updatedAttrs) => setFormData({...formData, extra_attributes: updatedAttrs})}
+              />
+
+              {/* Mandatory Location Selector (Province, Commune, Quartier, GPS) */}
+              <LocationSelector 
+                province={formData.province}
+                commune={formData.commune}
+                zone={formData.zone}
+                quartier={formData.quartier}
+                avenue={formData.avenue}
+                address={formData.address}
+                latitude={formData.latitude}
+                longitude={formData.longitude}
+                onChange={(loc) => setFormData({...formData, ...loc})}
               />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

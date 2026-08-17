@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'products',
     'offers',
     'analytics',
+    'locations',
     'corsheaders',
 ]
 
@@ -168,3 +169,6 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
+
+# Allow large payloads (e.g. Base64 images)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
