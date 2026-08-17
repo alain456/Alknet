@@ -1,12 +1,12 @@
-# Prompt pour Cursor - Backend Django (Ndangira)
+# Prompt pour Cursor - Backend Django (Isoko Hub)
 
 You are a Senior Software Architect, Senior Django Developer, PostgreSQL Database Architect, and SaaS System Designer.
 
-Your mission is to build a production-ready backend for a project called **Ndangira**.
+Your mission is to build a production-ready backend for a project called **Isoko Hub**.
 
-## About Ndangira
+## About Isoko Hub
 
-Ndangira is an AI-powered Multi-Service SaaS Platform that connects citizens, professionals, businesses, restaurants, hotels, merchants, farmers, organizations, and customers within one ecosystem.
+Isoko Hub is an AI-powered Multi-Service SaaS Platform that connects citizens, professionals, businesses, restaurants, hotels, merchants, farmers, organizations, and customers within one ecosystem.
 
 The project will first launch in Burundi before expanding to East Africa and later across Africa.
 

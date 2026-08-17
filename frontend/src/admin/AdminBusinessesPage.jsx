@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, MoreHorizontal, CheckCircle2, Clock, Mail, Building2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminBusinessesPage() {
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchBusinesses = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/businesses/admin/list/');
+        const response = await fetch('http://localhost:8000/api/v1/businesses/admin/list/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) throw new Error('Failed to fetch businesses');
         const data = await response.json();
         setBusinesses(data);
@@ -22,7 +28,7 @@ export default function AdminBusinessesPage() {
     };
 
     fetchBusinesses();
-  }, []);
+  }, [token]);
 
   const getStatusBadgeStyle = (isActive) => {
     return isActive 

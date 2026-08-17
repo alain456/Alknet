@@ -1,14 +1,22 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Compass, MessageSquare, Heart, 
   Calendar, ShoppingBag, CreditCard, Bell, User, 
   Crown, Settings, Menu, X, Search, LogOut 
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -51,7 +59,7 @@ export default function DashboardLayout() {
             <div className="w-8 h-8 rounded-full border-2 border-primary flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-accent"></div>
             </div>
-            <span className="font-bold text-xl text-primary dark:text-white">Ndangira</span>
+            <span className="font-bold text-xl text-primary dark:text-white">Isoko Hub</span>
           </Link>
           <button onClick={closeSidebar} className="lg:hidden text-gray-500 hover:text-gray-900 dark:hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
@@ -101,7 +109,10 @@ export default function DashboardLayout() {
         </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-          <button className="flex items-center gap-3 px-3 py-2 w-full rounded-md font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition cursor-pointer">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2 w-full rounded-md font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition cursor-pointer"
+          >
             <LogOut className="w-5 h-5" />
             Log out
           </button>
@@ -135,7 +146,7 @@ export default function DashboardLayout() {
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-accent rounded-full"></span>
             </button>
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm cursor-pointer shadow-sm border-2 border-white dark:border-gray-800">
-              JD
+              {user?.first_name ? user.first_name[0].toUpperCase() : 'U'}
             </div>
           </div>
         </header>

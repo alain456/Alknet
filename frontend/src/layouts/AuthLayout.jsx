@@ -11,7 +11,7 @@ export default function AuthLayout() {
             <div className="w-8 h-8 rounded-full border-2 border-white flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-accent"></div>
             </div>
-            <span className="font-bold text-2xl">Ndangira</span>
+            <span className="font-bold text-2xl">Isoko Hub</span>
           </Link>
           <h1 className="text-4xl lg:text-5xl font-bold leading-tight mb-6">
             Empowering your business and career in Africa.
@@ -26,7 +26,7 @@ export default function AuthLayout() {
         <div className="absolute -top-24 -right-24 w-96 h-96 bg-secondary rounded-full mix-blend-multiply filter blur-3xl opacity-30"></div>
         
         <div className="relative z-10 text-sm text-teal-200">
-          © {new Date().getFullYear()} Ndangira. All rights reserved.
+          © {new Date().getFullYear()} Isoko Hub. All rights reserved.
         </div>
       </div>
 
@@ -38,7 +38,7 @@ export default function AuthLayout() {
             <div className="w-8 h-8 rounded-full border-2 border-primary dark:border-white flex items-center justify-center">
               <div className="w-2 h-2 rounded-full bg-accent"></div>
             </div>
-            <span className="font-bold text-2xl text-primary dark:text-white">Ndangira</span>
+            <span className="font-bold text-2xl text-primary dark:text-white">Isoko Hub</span>
           </Link>
           
           <Outlet />

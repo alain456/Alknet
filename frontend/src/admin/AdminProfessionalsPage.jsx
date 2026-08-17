@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, MoreHorizontal, UserCheck, UserX, Mail, Briefcase } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminProfessionalsPage() {
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchProfessionals = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/accounts/admin/professionals/');
+        const response = await fetch('http://localhost:8000/api/v1/accounts/admin/professionals/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) throw new Error('Failed to fetch professionals');
         const data = await response.json();
         setProfessionals(data);
@@ -22,7 +28,7 @@ export default function AdminProfessionalsPage() {
     };
 
     fetchProfessionals();
-  }, []);
+  }, [token]);
 
   const getRoleBadgeStyle = () => {
     // Professionals always get the gold badge as defined in our design system

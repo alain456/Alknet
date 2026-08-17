@@ -73,7 +73,7 @@ export default function UserDashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ServiceCard 
                 title="Professional Web Development"
-                provider="Ndangira Tech Solutions"
+                provider="Isoko Hub Tech Solutions"
                 rating="4.9"
                 reviews="128"
                 price="$500"
@@ -133,7 +133,7 @@ export default function UserDashboardPage() {
               <div className="space-y-6">
                 {[
                   { title: 'Payment successful', desc: 'Paid $150 to Creative Studio', time: '2 hours ago', icon: Wallet, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
-                  { title: 'Booking confirmed', desc: 'Consultation with Ndangira Tech', time: 'Yesterday', icon: CalendarCheck, color: 'text-primary', bg: 'bg-primary/10 dark:bg-teal-900/30' },
+                  { title: 'Booking confirmed', desc: 'Consultation with Isoko Hub Tech', time: 'Yesterday', icon: CalendarCheck, color: 'text-primary', bg: 'bg-primary/10 dark:bg-teal-900/30' },
                   { title: 'New message', desc: 'From John (Web Developer)', time: '2 days ago', icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
                 ].map((act, i) => (
                   <div key={i} className="flex relative">

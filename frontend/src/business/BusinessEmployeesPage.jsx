@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Mail, Shield, UserX } from 'lucide-react';
 import DataGrid from '../admin/components/DataGrid';
+import { useAuth } from '../context/AuthContext';
 
 export default function BusinessEmployeesPage() {
   const [employees, setEmployees] = useState([]);
@@ -11,14 +12,19 @@ export default function BusinessEmployeesPage() {
   const [newEmail, setNewEmail] = useState('');
   const [newPosition, setNewPosition] = useState('Staff');
   const [submitError, setSubmitError] = useState(null);
+  const { token } = useAuth();
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [token]);
 
   const fetchEmployees = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/businesses/my-business/employees/');
+      const response = await fetch('http://localhost:8000/api/v1/businesses/my-business/employees/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch employees');
       const data = await response.json();
       setEmployees(data);
@@ -36,7 +42,8 @@ export default function BusinessEmployeesPage() {
       const response = await fetch('http://localhost:8000/api/v1/businesses/my-business/employees/', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ email: newEmail, position: newPosition })
       });
@@ -162,7 +169,7 @@ export default function BusinessEmployeesPage() {
                     placeholder="employee@example.com"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">The user must already have an Ndangira account.</p>
+                <p className="text-xs text-gray-500 mt-1">The user must already have an Isoko Hub account.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position / Role</label>

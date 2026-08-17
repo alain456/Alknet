@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, MoreHorizontal, Package, Tag, Building2, CheckCircle2, XCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/products/admin/list/');
+        const response = await fetch('http://localhost:8000/api/v1/products/admin/list/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) throw new Error('Failed to fetch products');
         const data = await response.json();
         setProducts(data);
@@ -22,7 +28,7 @@ export default function AdminProductsPage() {
     };
 
     fetchProducts();
-  }, []);
+  }, [token]);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 

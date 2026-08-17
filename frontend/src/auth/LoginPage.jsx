@@ -1,16 +1,37 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import SocialLogins from '../shared/components/SocialLogins';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1500);
+
+    try {
+      const loggedUser = await login(email, password);
+      setIsLoading(false);
+      
+      // Role-based redirection
+      if (loggedUser.role === 'SUPER_ADMIN') {
+        navigate('/admin');
+      } else if (loggedUser.role === 'BUSINESS_OWNER') {
+        navigate('/business');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setError(err.message || 'Unable to sign in. Please check your credentials.');
+    }
   };
 
   return (
@@ -19,6 +40,12 @@ export default function LoginPage() {
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Welcome back</h2>
         <p className="text-gray-500 dark:text-gray-400">Please enter your details to sign in.</p>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-600 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -58,7 +85,7 @@ export default function LoginPage() {
         <button 
           type="submit" 
           disabled={isLoading}
-          className="w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? (
             <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -80,3 +107,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

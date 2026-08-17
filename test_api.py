@@ -14,7 +14,7 @@ def print_response(title, response):
 
 def main():
     # 1. Inscription d'un Propriétaire d'Entreprise
-    owner_email = f"owner_{random.randint(1000,9999)}@ndangira.com"
+    owner_email = f"owner_{random.randint(1000,9999)}@isokohub.com"
     res = requests.post(f"{BASE_URL}/accounts/register/", data={
         "email": owner_email,
         "password": "SuperStrongPassw0rd!2026",
@@ -23,7 +23,7 @@ def main():
     print_response("Register Business Owner", res)
 
     # 2. Inscription d'un Professionnel (Candidat)
-    prof_email = f"prof_{random.randint(1000,9999)}@ndangira.com"
+    prof_email = f"prof_{random.randint(1000,9999)}@isokohub.com"
     res = requests.post(f"{BASE_URL}/accounts/register/", data={
         "email": prof_email,
         "password": "SuperStrongPassw0rd!2026",
@@ -48,7 +48,7 @@ def main():
 
     # 4. Création d'une Entreprise par le propriétaire
     business_data = {
-        "name": "Ndangira Tech Solutions",
+        "name": "Isoko Hub Tech Solutions",
         "description": "Développement logiciel",
     }
     if category_id:

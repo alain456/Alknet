@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import DataSummaryCard from './components/DataSummaryCard';
 import AdminChartCard from './components/AdminChartCard';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/analytics/dashboard-stats/');
+        const response = await fetch('http://localhost:8000/api/v1/analytics/dashboard-stats/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch data');
         }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Plus, Clock } from 'lucide-react';
 import DataGrid from '../admin/components/DataGrid';
+import { useAuth } from '../context/AuthContext';
 
 export default function BusinessServicesPage() {
   const [services, setServices] = useState([]);
@@ -15,14 +16,19 @@ export default function BusinessServicesPage() {
     duration_minutes: 60
   });
   const [submitError, setSubmitError] = useState(null);
+  const { token } = useAuth();
 
   useEffect(() => {
     fetchServices();
-  }, []);
+  }, [token]);
 
   const fetchServices = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/services/me/');
+      const response = await fetch('http://localhost:8000/api/v1/services/me/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch services');
       const data = await response.json();
       setServices(data);
@@ -40,7 +46,8 @@ export default function BusinessServicesPage() {
       const response = await fetch('http://localhost:8000/api/v1/services/me/', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData)
       });

@@ -1,16 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, MoreHorizontal, UserCheck, UserX, Mail, Shield } from 'lucide-react';
+import { Search, Filter, Download, MoreHorizontal, UserCheck, UserX, Mail, Shield, Plus } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    password: '',
+    phone_number: '',
+    role: 'PROFESSIONAL'
+  });
+  const [submitError, setSubmitError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/accounts/admin/users/');
+        const response = await fetch('http://localhost:8000/api/v1/accounts/admin/users/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) throw new Error('Failed to fetch users');
         const data = await response.json();
         setUsers(data);
@@ -22,7 +41,51 @@ export default function AdminUsersPage() {
     };
 
     fetchUsers();
-  }, []);
+  }, [token]);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/accounts/admin/users/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch users');
+      const data = await response.json();
+      setUsers(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/accounts/admin/users/create/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(formData)
+      });
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(JSON.stringify(errData));
+      }
+      setIsModalOpen(false);
+      setFormData({ first_name: '', last_name: '', email: '', password: '', phone_number: '', role: 'PROFESSIONAL' });
+      fetchUsers();
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const getRoleBadgeStyle = (role) => {
     switch(role) {
@@ -55,11 +118,19 @@ export default function AdminUsersPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-display font-semibold text-green-900 dark:text-white tracking-tight">Utilisateurs</h1>
-          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">Gérez tous les comptes de la plateforme Ndangira.</p>
+          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">Gérez tous les comptes de la plateforme Isoko Hub.</p>
         </div>
-        <button className="px-4 py-2 flex items-center gap-2 text-[14px] font-semibold bg-surface dark:bg-transparent border-[1.5px] border-border dark:border-white/20 text-green-700 dark:text-green-100 rounded-md hover:bg-green-50 dark:hover:bg-white/5 transition-colors shadow-sm">
-          <Download className="w-4 h-4" /> Exporter CSV
-        </button>
+        <div className="flex items-center gap-3">
+          <button className="px-4 py-2 flex items-center gap-2 text-[14px] font-semibold bg-surface dark:bg-transparent border-[1.5px] border-border dark:border-white/20 text-green-700 dark:text-green-100 rounded-md hover:bg-green-50 dark:hover:bg-white/5 transition-colors shadow-sm">
+            <Download className="w-4 h-4" /> Exporter CSV
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2 flex items-center gap-2 text-[14px] font-semibold bg-green-700 hover:bg-green-800 text-white rounded-md transition-colors shadow-sm cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Créer un Utilisateur
+          </button>
+        </div>
       </div>
 
       {/* Table Container */}
@@ -184,6 +255,102 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface dark:bg-[#1A2E25] rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-border dark:border-white/10">
+            <div className="px-6 py-4 border-b border-border dark:border-white/10 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-green-900 dark:text-white">Créer un nouveau compte Pro/Business</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-ink-muted hover:text-ink dark:hover:text-white">
+                &times;
+              </button>
+            </div>
+            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+              {submitError && (
+                <div className="p-3 bg-red-50 text-red-600 rounded-md text-sm border border-red-100">
+                  Erreur: {submitError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Prénom</label>
+                  <input 
+                    type="text" required
+                    value={formData.first_name} onChange={(e) => setFormData({...formData, first_name: e.target.value})}
+                    className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Nom</label>
+                  <input 
+                    type="text" required
+                    value={formData.last_name} onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+                    className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Email</label>
+                <input 
+                  type="email" required
+                  value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Mot de passe provisoire</label>
+                <input 
+                  type="text" required
+                  value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                  placeholder="Minimum 8 caractères"
+                />
+                <p className="text-xs text-ink-faint mt-1">À communiquer manuellement à l'utilisateur.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Téléphone</label>
+                  <input 
+                    type="text"
+                    value={formData.phone_number} onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
+                    className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink dark:text-green-100/80 mb-1">Rôle</label>
+                  <select 
+                    value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    className="w-full px-3 py-2 bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white outline-none focus:border-green-700"
+                  >
+                    <option value="PROFESSIONAL">Professionnel / Indépendant</option>
+                    <option value="BUSINESS_OWNER">Propriétaire d'Entreprise</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center gap-3 justify-end">
+                <button 
+                  type="button" onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-ink hover:bg-paper dark:hover:bg-white/5 font-medium rounded-md transition"
+                >
+                  Annuler
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white font-medium rounded-md transition shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? 'Création...' : 'Créer le compte'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

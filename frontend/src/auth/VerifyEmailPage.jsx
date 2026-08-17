@@ -39,7 +39,7 @@ export default function VerifyEmailPage() {
           </div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Email Verified!</h2>
           <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-sm mx-auto">
-            Your account is now fully active. Welcome to the Ndangira community!
+            Your account is now fully active. Welcome to the Isoko Hub community!
           </p>
           <Link to="/login" className="inline-block w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition cursor-pointer">
             Continue to Login

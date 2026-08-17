@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Plus, Calendar, Megaphone } from 'lucide-react';
 import DataGrid from '../admin/components/DataGrid';
+import { useAuth } from '../context/AuthContext';
 
 export default function BusinessOffersPage() {
   const [offers, setOffers] = useState([]);
@@ -15,14 +16,19 @@ export default function BusinessOffersPage() {
     valid_until: ''
   });
   const [submitError, setSubmitError] = useState(null);
+  const { token } = useAuth();
 
   useEffect(() => {
     fetchOffers();
-  }, []);
+  }, [token]);
 
   const fetchOffers = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/offers/my-business/');
+      const response = await fetch('http://localhost:8000/api/v1/offers/my-business/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch offers');
       const data = await response.json();
       setOffers(data);
@@ -40,7 +46,8 @@ export default function BusinessOffersPage() {
       const response = await fetch('http://localhost:8000/api/v1/offers/my-business/', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData)
       });

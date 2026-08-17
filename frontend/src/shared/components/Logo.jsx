@@ -16,7 +16,7 @@ export default function Logo({ className = "", isDark = false }) {
         <circle cx="20" cy="20" r="6" fill="#C98A2E"/>
       </svg>
       <span className={`font-display font-bold text-xl tracking-tight ${textColorClass}`}>
-        Ndangira
+        Isoko Hub
       </span>
     </div>
   );

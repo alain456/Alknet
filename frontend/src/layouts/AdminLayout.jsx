@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, Building2, UserCircle, LayoutGrid, Briefcase, 
   Package, ShoppingBag, Calendar, CreditCard, BarChart3, Settings, 
@@ -7,10 +7,26 @@ import {
   Activity, Zap, Repeat, MonitorPlay, FileText, Database
 } from 'lucide-react';
 import Logo from '../shared/components/Logo';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const getInitials = () => {
+    if (user?.first_name || user?.last_name) {
+      return `${(user.first_name[0] || '').toUpperCase()}${(user.last_name[0] || '').toUpperCase()}`;
+    }
+    return 'SA';
+  };
+
 
   const platformNavItems = [
     { name: 'Overview', icon: LayoutDashboard, path: '/admin' },
@@ -107,13 +123,21 @@ export default function AdminLayout() {
         <div className="p-4 border-t border-border dark:border-white/10 shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 text-sm text-ink-muted dark:text-green-100/70">
             <div className="w-8 h-8 rounded-full bg-green-700 text-white flex items-center justify-center shrink-0 font-display font-semibold text-[13px]">
-              SA
+              {getInitials()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-green-900 dark:text-white truncate">Super Admin</p>
-              <p className="text-[11px] text-ink-faint dark:text-green-100/50 truncate font-mono">admin@Ndangira.com</p>
+              <p className="text-[13px] font-semibold text-green-900 dark:text-white truncate">
+                {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'Super Admin'}
+              </p>
+              <p className="text-[11px] text-ink-faint dark:text-green-100/50 truncate font-mono">
+                {user?.email || 'admin@alknet.com'}
+              </p>
             </div>
-            <button className="text-clay-600 hover:text-clay-600/80 dark:text-clay-100 transition-colors cursor-pointer shrink-0">
+            <button 
+              onClick={handleLogout}
+              title="Logout"
+              className="text-clay-600 hover:text-clay-600/80 dark:text-clay-100 transition-colors cursor-pointer shrink-0 p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10"
+            >
               <LogOut className="w-4 h-4" />
             </button>
           </div>

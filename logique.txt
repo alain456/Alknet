@@ -1,15 +1,15 @@
 Très bonne idée. **Avant de coder, il faut définir la hiérarchie du système.** C'est ce que font les architectes logiciels.
 
-Pour Ndangira, je vois **3 niveaux de hiérarchie** :
+Pour Isoko Hub, je vois **3 niveaux de hiérarchie** :
 
 ---
 
-# Niveau 1 : La Plateforme (Ndangira)
+# Niveau 1 : La Plateforme (Isoko Hub)
 
 C'est le niveau le plus élevé.
 
 ```text
-Ndangira Platform
+Isoko Hub Platform
         │
         ▼
 Gestion de tout le système
@@ -114,7 +114,7 @@ Client
 # Vue globale
 
 ```text
-                   NDANGIRA
+                   ISOKO HUB
                       │
       ┌───────────────┴───────────────┐
       │                               │
@@ -336,9 +336,9 @@ Ensuite, c'est **la catégorie de l'entreprise** qui détermine son métier :
 Cette approche rend la base de données plus simple, le code plus maintenable et l'ajout de nouveaux secteurs beaucoup plus facile à l'avenir. Par exemple, si demain tu veux ajouter les salons de coiffure ou les agences de voyage, tu ajoutes simplement une nouvelle catégorie d'entreprise, sans modifier tout le système d'authentification ni créer de nouveaux rôles. C'est une architecture très utilisée dans les plateformes SaaS évolutives.
 
 
-# Analyse d'Architecture et Feuille de Route d'Ndangira
+# Analyse d'Architecture et Feuille de Route d'Isoko Hub
 
-Suite à l'analyse du document `logique.txt`, voici une synthèse de la structure du projet, de l'état d'avancement actuel, et des étapes à suivre pour finaliser la plateforme Ndangira de manière robuste et évolutive.
+Suite à l'analyse du document `logique.txt`, voici une synthèse de la structure du projet, de l'état d'avancement actuel, et des étapes à suivre pour finaliser la plateforme Isoko Hub de manière robuste et évolutive.
 
 ---
 
@@ -419,27 +419,121 @@ Pour coder proprement sans tout casser, voici les étapes logiques et séquentie
 
 
 
-Commandes utiles
-Arrêter les services:
+📋 Les commandes essentielles que tu utiliseras tous les jours
+# Démarrer (première fois ou après modification du Dockerfile)
+docker compose up --build
 
+# Démarrer (usage quotidien)
+docker compose up
 
-
-bash
-# Backend (Ctrl+C dans le terminal)
-# Frontend (Ctrl+C dans le terminal)
-# Base de données
+# Arrêter complètement
 docker compose down
-Redémarrer le backend:
+
+# Mettre en pause
+docker compose stop
+
+# Reprendre après stop
+docker compose start
+
+# Voir les logs
+docker compose logs -f
+
+Mon conseil
+
+Pendant le développement d'AlkNet, ton cycle quotidien sera souvent :
+
+Ouvrir ton projet.
+
+Lancer :
+
+docker compose up
+Développer ton code.
+
+Quand tu as terminé :
+
+docker compose down
+
+✅ Utilisateur admin créé avec succès !
+
+Voici les informations de connexion :
+
+Email : admin@alknet.com
+Mot de passe : Admin123!
+docker exec -it alknet-db-1 psql -U postgres -d isoko_hub_db
 
 
+---
 
-bash
-source venv/bin/activate
-python manage.py runserver 0.0.0.0:8000
-Redémarrer le frontend:
+# 🚀 Nouvelle Organisation Globale du Projet (Isoko Hub)
 
+Voici l'organisation complète et structurée du projet pour matérialiser cette nouvelle idée.
 
+## 🗺️ 1. L'Architecture Globale du Système
 
-bash
-cd frontend
-npm run dev
+Le projet va se diviser en trois dépôts de code (repositories) distincts. Ils communiqueront tous via le serveur central.
+
+```text
+                  +-----------------------------------+
+                  |        BACKEND (Django + Docker)  |
+                  |  Base de données unique Postgres  |
+                  +-----------------------------------+
+                                    |
+            +-----------------------+-----------------------+
+            | (Requêtes HTTP / REST API)                    | (Requêtes HTTP / REST API)
+            v                                               v
++-----------------------+                       +-----------------------+
+|     FRONTEND WEB      |                       |  APPLICATION MOBILE   |
+|       (React)         |                       |       (Flutter)       |
++-----------------------+                       +-----------------------+
+| - Super Admin (Django)|                       | - Espace Client       |
+| - Espace Entreprise   |                       | - Espace Agriculteur  |
+| - Espace Professionnel|                       | - Espace Professionnel|
+| - Espace Client (Opt) |                       | - Espace Entreprise   |
++-----------------------+                       +-----------------------+
+```
+
+---
+
+## 📦 2. Organisation du Backend (Django + Docker)
+
+Le backend gère la sécurité, la base de données et distribue les informations au Web et au Mobile via Django REST Framework (DRF).
+
+- **La Base de Données (PostgreSQL)** : Elle contient une table `User` unique avec des rôles (booléens). Les tables `Product` (biens) et `Service` (prestations) y sont reliées.
+- **L'Authentification** : Utilisez des jetons JWT (JSON Web Tokens). Quand le Web ou le Mobile envoie un email/mot de passe, Django valide et renvoie le Token + le rôle de l'utilisateur.
+- **La structure Docker** : Un fichier `docker-compose.yml` à la racine du backend qui lance deux conteneurs : l'application Django et la base de données PostgreSQL. Cela rendra votre déploiement sur un serveur (ex: VPS Linux) extrêmement simple plus tard.
+
+---
+
+## 💻 3. Organisation du Frontend Web (React)
+
+Le site web est conçu en priorité pour les écrans d'ordinateurs. C'est l'espace de gestion lourde.
+
+- **Espace Entreprise** : Tableaux de bord, graphiques de ventes, gestion des stocks, listes d'employés, abonnements.
+- **Espace Professionnel** : Publication des offres de services, gestion des candidatures complexes, édition de profil, calendrier de rendez-vous.
+- **Le cas du Client & de l'Agriculteur** : Sur le web, vous pouvez simplement créer une page vitrine qui explique le concept et affiche des boutons "Télécharger l'application sur le Play Store".
+- **Le Super Admin** : Utilisez directement l'interface d'administration native de Django. Elle est sécurisée, incluse d'office, et vous évite de coder un panneau d'administration de zéro en React.
+
+---
+
+## 📱 4. Organisation de l'Application Mobile Unique (Flutter)
+
+Vous publiez une seule application sur le Play Store. Le code Dart de Flutter va gérer l'affichage de manière dynamique après la connexion.
+
+- **Écran d'accueil commun** : Une seule page de connexion/inscription pour tout le monde.
+- **Le Système de Routage (Role Guard)** : Une fois connecté, le code Flutter lit le rôle reçu de Django :
+  - `role == 'client'` ➡️ Redirection vers l'**Espace Client** (Recherche de produits/services, panier, paiement, suivi de livraison).
+  - `role == 'farmer'` ➡️ Redirection vers l'**Espace Agriculteur** (Interface ultra-simplifiée avec un gros bouton "Publier ma récolte" et choix de la province comme Gitega, Ngozi, etc.).
+  - `role == 'professional'` ➡️ Redirection vers l'**Espace Pro Mobile** (Messagerie instantanée avec les clients, alertes de nouveaux rendez-vous).
+  - `role == 'company'` ➡️ Redirection vers l'**Espace Entreprise Mobile** (Alertes urgentes, validation rapide des commandes, scan de QR codes pour les livraisons).
+
+---
+
+## 📅 5. Plan d'Action pour le Développement (Étape par Étape)
+
+Ne développez pas tout en même temps pour ne pas vous décourager. Suivez cet ordre précis :
+
+1. **Étape 1 (Le Cœur)** : Créez l'environnement Docker avec Django et Postgres. Codez le système d'inscription, de connexion et les profils utilisateurs.
+2. **Étape 2 (L'API Catalogue)** : Créez les routes dans Django pour permettre de publier un produit ou un service, et de les lister.
+3. **Étape 3 (Le premier Frontend - Priorité Mobile)** : Créez l'application Flutter. Codez l'authentification et l'Espace Client / Agriculteur. Connectez-les à l'API Django. À ce stade, vous avez déjà un produit minimal viable (MVP) qui fonctionne sur téléphone.
+4. **Étape 4 (Le second Frontend - Web)** : Créez le site React. Codez l'Espace Entreprise / Professionnel pour leur permettre de gérer leur activité confortablement sur ordinateur.
+

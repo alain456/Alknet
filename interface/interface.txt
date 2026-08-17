@@ -1,6 +1,6 @@
 C'est une excellente question, parce que beaucoup de développeurs créent **une interface différente pour chaque type d'utilisateur**, ce qui devient vite impossible à maintenir.
 
-Pour **Ndangira**, je ne créerais **que 4 interfaces principales**. Ensuite, les menus changent selon le rôle de l'utilisateur.
+Pour **Isoko Hub**, je ne créerais **que 4 interfaces principales**. Ensuite, les menus changent selon le rôle de l'utilisateur.
 
 ---
 
@@ -153,7 +153,7 @@ Le Super Admin voit tout.
 # Architecture des interfaces
 
 ```text
-                   Ndangira
+                  Isoko Hub
 
                       │
         ┌─────────────┴─────────────┐
@@ -241,7 +241,7 @@ Le composant `Dashboard` est le même, mais le contenu change selon les permissi
 
 # Ce que je te recommande
 
-Pour Ndangira, je créerais **un frontend React unique** organisé ainsi :
+Pour Isoko Hub, je créerais **un frontend React unique** organisé ainsi :
 
 ```text
 src/
@@ -261,7 +261,7 @@ src/
 
 Ainsi, tu n'auras **qu'une seule application React**, mais **quatre layouts principaux**. Les rôles et permissions reçus du backend décideront quelles pages, quels menus et quelles actions sont visibles. C'est une architecture propre, évolutive et utilisée par de nombreuses plateformes SaaS professionnelles (CRM, ERP, marketplaces et outils de gestion).
 
-Listed directory Ndangira
+Listed directory Isoko Hub
 Viewed docker-compose.yml:1-29
 Viewed Dockerfile:1-22
 
@@ -269,7 +269,7 @@ Viewed Dockerfile:1-22
 
 ### Comment lancer le backend avec Docker :
 
-Pour lancer ton backend (la base de données PostgreSQL + le serveur Django), il te suffit d'ouvrir un terminal, de te placer à la racine de ton projet (`/home/gushaka/Gushaka/Alain_project/Ndangira`) et d'utiliser la commande suivante :
+Pour lancer ton backend (la base de données PostgreSQL + le serveur Django), il te suffit d'ouvrir un terminal, de te placer à la racine de ton projet (`/home/gushaka/Gushaka/Alain_project/Isoko_Hub`) et d'utiliser la commande suivante :
 
 ```bash
 docker compose up

@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, MoreHorizontal, Briefcase, Tag, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function AdminServicesPage() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { token } = useAuth();
 
   useEffect(() => {
     const fetchServices = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/services/admin/list/');
+        const response = await fetch('http://localhost:8000/api/v1/services/admin/list/', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (!response.ok) throw new Error('Failed to fetch services');
         const data = await response.json();
         setServices(data);
@@ -22,7 +28,7 @@ export default function AdminServicesPage() {
     };
 
     fetchServices();
-  }, []);
+  }, [token]);
 
   const getStatusBadge = (status) => {
     switch (status) {

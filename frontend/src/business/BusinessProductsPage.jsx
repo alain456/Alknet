@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Plus, Image as ImageIcon } from 'lucide-react';
 import DataGrid from '../admin/components/DataGrid';
+import { useAuth } from '../context/AuthContext';
 
 export default function BusinessProductsPage() {
   const [products, setProducts] = useState([]);
@@ -16,14 +17,19 @@ export default function BusinessProductsPage() {
     unit: 'piece'
   });
   const [submitError, setSubmitError] = useState(null);
+  const { token } = useAuth();
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [token]);
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/products/my-business/');
+      const response = await fetch('http://localhost:8000/api/v1/products/my-business/', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!response.ok) throw new Error('Failed to fetch products');
       const data = await response.json();
       setProducts(data);
@@ -41,7 +47,8 @@ export default function BusinessProductsPage() {
       const response = await fetch('http://localhost:8000/api/v1/products/my-business/', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(formData)
       });

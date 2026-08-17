@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Building2, Users, Package, ShoppingBag, 
   Calendar, Tag, FileText, UsersRound, 
@@ -7,10 +7,18 @@ import {
   LayoutDashboard, Menu, X, Search, Bell, LogOut,
   Store
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function BusinessLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const mainNavItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/business' },
@@ -103,7 +111,10 @@ export default function BusinessLayout() {
         </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800 shrink-0">
-          <button className="flex items-center gap-3 px-3 py-2 w-full rounded-md font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition cursor-pointer">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-3 py-2 w-full rounded-md font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition cursor-pointer"
+          >
             <LogOut className="w-5 h-5" />
             Log out
           </button>

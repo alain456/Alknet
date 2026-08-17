@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import SocialLogins from '../shared/components/SocialLogins';
 import PasswordStrength from '../shared/components/PasswordStrength';
+import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -9,22 +10,47 @@ export default function RegisterPage() {
     lastName: '',
     email: '',
     password: '',
-    role: 'CLIENT'
+    role: 'CUSTOMER'
   });
+  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { register } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1500);
+
+    try {
+      const newUser = await register(formData);
+      setIsLoading(false);
+
+      if (newUser.role === 'SUPER_ADMIN') {
+        navigate('/admin');
+      } else if (newUser.role === 'BUSINESS_OWNER') {
+        navigate('/business');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err) {
+      setIsLoading(false);
+      setError(err.message || 'Registration failed. Please check your information.');
+    }
   };
 
   return (
     <div className="w-full">
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Create an account</h2>
-        <p className="text-gray-500 dark:text-gray-400">Join Ndangira today and explore endless possibilities.</p>
+        <p className="text-gray-500 dark:text-gray-400">Join Isoko Hub today and explore endless possibilities.</p>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-600 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
@@ -64,18 +90,6 @@ export default function RegisterPage() {
           />
         </div>
         
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Account Type</label>
-          <select 
-            value={formData.role}
-            onChange={(e) => setFormData({...formData, role: e.target.value})}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
-          >
-            <option value="CLIENT">Client</option>
-            <option value="PROFESSIONAL">Professional / Freelancer</option>
-            <option value="BUSINESS_OWNER">Business Owner</option>
-          </select>
-        </div>
 
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Password</label>
@@ -93,7 +107,7 @@ export default function RegisterPage() {
         <button 
           type="submit" 
           disabled={isLoading}
-          className="w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition flex justify-center items-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          className="w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition flex justify-center items-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
         >
           {isLoading ? (
             <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

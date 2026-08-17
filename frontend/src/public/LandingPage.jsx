@@ -1,7 +1,37 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Briefcase, MapPin, Star, Building2, Store, Stethoscope, Laptop, HardHat, Sprout, Car, GraduationCap, Heart, Gavel, ShoppingBag, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export default function LandingPage() {
+  const [businesses, setBusinesses] = useState([]);
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [businessesRes, servicesRes] = await Promise.all([
+          fetch('http://localhost:8000/api/v1/businesses/'),
+          fetch('http://localhost:8000/api/v1/services/')
+        ]);
+        
+        if (businessesRes.ok) {
+          const bData = await businessesRes.json();
+          setBusinesses(bData.slice(0, 3)); // Top 3
+        }
+        
+        if (servicesRes.ok) {
+          const sData = await servicesRes.json();
+          setServices(sData.slice(0, 4)); // Popular 4
+        }
+      } catch (error) {
+        console.error('Error fetching landing data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
   return (
     <div className="w-full">
       {/* 1. Hero Section & 2. Smart Search */}
@@ -66,7 +96,7 @@ export default function LandingPage() {
       </section>
 
       {/* 4. Featured Professionals */}
-      <section className="py-20 px-4 bg-gray-50">
+      <section className="py-20 px-4 bg-white border-t border-gray-100">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-end mb-10">
             <h2 className="text-3xl font-bold text-gray-900">Featured Professionals</h2>
@@ -105,49 +135,104 @@ export default function LandingPage() {
           <button className="text-primary font-semibold hover:underline">View All</button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex p-4 border border-gray-100 rounded-2xl hover:shadow-lg transition cursor-pointer">
-              <div className="w-20 h-20 bg-gray-100 rounded-xl flex-shrink-0 mr-4 flex items-center justify-center">
-                <Building2 className="text-gray-400 w-8 h-8" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-lg text-gray-900">Business Name</h3>
-                <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full mb-2 inline-block">Clinic</span>
-                <div className="flex items-center text-sm text-gray-500">
-                  <Star className="w-4 h-4 text-accent fill-accent mr-1" /> 4.8 • Gitega
+          {loading ? (
+            [1, 2, 3].map((i) => (
+              <div key={i} className="flex p-4 border border-gray-100 rounded-2xl animate-pulse">
+                <div className="w-20 h-20 bg-gray-200 rounded-xl mr-4"></div>
+                <div className="flex-1 space-y-2 py-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : businesses.length > 0 ? (
+            businesses.map((business) => (
+              <div key={business.id} className="flex p-4 border border-gray-100 rounded-2xl hover:shadow-lg transition cursor-pointer">
+                <div className="w-20 h-20 bg-gray-100 rounded-xl flex-shrink-0 mr-4 flex items-center justify-center">
+                  <Building2 className="text-gray-400 w-8 h-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-gray-900">{business.name}</h3>
+                  <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full mb-2 inline-block">Business</span>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Star className="w-4 h-4 text-accent fill-accent mr-1" /> 4.8 • {business.address || 'Burundi'}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            [1, 2, 3].map((i) => (
+              <div key={i} className="flex p-4 border border-gray-100 rounded-2xl hover:shadow-lg transition cursor-pointer">
+                <div className="w-20 h-20 bg-gray-100 rounded-xl shrink-0 mr-4 flex items-center justify-center">
+                  <Building2 className="text-gray-400 w-8 h-8" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-lg text-gray-900">Demo Business {i}</h3>
+                  <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full mb-2 inline-block">Demo</span>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Star className="w-4 h-4 text-accent fill-accent mr-1" /> 5.0 • Bujumbura
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </section>
 
       {/* 6. Popular Services */}
-      <section className="py-20 px-4 bg-teal-50">
+      <section className="py-20 px-4 bg-white border-t border-gray-100">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-end mb-10">
             <h2 className="text-3xl font-bold text-gray-900">Popular Services</h2>
             <button className="text-primary font-semibold hover:underline">View All</button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition">
-                <div className="h-40 bg-gray-200 rounded-xl mb-4"></div>
-                <div className="text-xs font-bold text-primary tracking-wider uppercase mb-1">Web Development</div>
-                <h3 className="font-bold text-gray-900 mb-2 line-clamp-1">Build a modern SaaS Platform</h3>
-                <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
-                  <span className="text-sm text-gray-500 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-gray-200"></div> John D.</span>
-                  <span className="font-bold text-gray-900">From $500</span>
+            {loading ? (
+              [1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-pulse">
+                  <div className="h-40 bg-gray-200 rounded-xl mb-4"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/3 mb-2"></div>
+                  <div className="h-5 bg-gray-200 rounded w-3/4 mb-4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-full"></div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : services.length > 0 ? (
+              services.map((service) => (
+                <div key={service.id} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-50">
+                  <div className="h-40 bg-gray-100 rounded-xl mb-4 flex items-center justify-center">
+                    <Briefcase className="w-10 h-10 text-gray-300" />
+                  </div>
+                  <div className="text-xs font-bold text-primary tracking-wider uppercase mb-1">Service</div>
+                  <h3 className="font-bold text-gray-900 mb-2 line-clamp-1">{service.name}</h3>
+                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
+                    <span className="text-sm text-gray-500 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">{service.name.charAt(0)}</div> Provider</span>
+                    <span className="font-bold text-gray-900">${service.price}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              [1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-50">
+                  <div className="h-40 bg-gray-100 rounded-xl mb-4 flex items-center justify-center">
+                    <Briefcase className="w-10 h-10 text-gray-300" />
+                  </div>
+                  <div className="text-xs font-bold text-primary tracking-wider uppercase mb-1">Demo Service</div>
+                  <h3 className="font-bold text-gray-900 mb-2 line-clamp-1">Example Service {i}</h3>
+                  <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
+                    <span className="text-sm text-gray-500 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">D</div> Demo Provider</span>
+                    <span className="font-bold text-gray-900">From $100</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>
 
-      {/* 7. Why Ndangira? */}
+      {/* 7. Why Isoko Hub? */}
       <section className="py-24 px-4 max-w-7xl mx-auto text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-16">Why choose Ndangira?</h2>
+        <h2 className="text-3xl font-bold text-gray-900 mb-16">Why choose Isoko Hub?</h2>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="flex flex-col items-center">
             <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-6">
@@ -183,8 +268,8 @@ export default function LandingPage() {
       {/* 9. Mobile App */}
       <section className="py-20 px-4 bg-primary text-white text-center">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-4xl font-bold mb-6">Take Ndangira everywhere</h2>
-          <p className="text-teal-100 text-lg mb-8">The official Ndangira mobile app is currently under development.</p>
+          <h2 className="text-4xl font-bold mb-6">Take Isoko Hub everywhere</h2>
+          <p className="text-teal-100 text-lg mb-8">The official Isoko Hub mobile app is currently under development.</p>
           <div className="inline-block border-2 border-white/20 rounded-full px-8 py-3 font-semibold tracking-wide text-white bg-white/5 backdrop-blur-md">
             COMING SOON
           </div>
