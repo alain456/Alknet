@@ -7,9 +7,17 @@ from permissions.api_permissions import IsSuperAdmin
 class BusinessCategoryListView(generics.ListAPIView):
     queryset = BusinessCategory.objects.all()
     serializer_class = BusinessCategorySerializer
+    authentication_classes = []
     permission_classes = [AllowAny]
 
 class BusinessCategoryCreateView(generics.CreateAPIView):
     queryset = BusinessCategory.objects.all()
     serializer_class = BusinessCategorySerializer
-    permission_classes = [IsSuperAdmin]
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+class BusinessCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = BusinessCategory.objects.all()
+    serializer_class = BusinessCategorySerializer
+    authentication_classes = []
+    permission_classes = [AllowAny]

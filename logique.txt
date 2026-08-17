@@ -450,14 +450,14 @@ docker compose up
 Développer ton code.
 
 Quand tu as terminé :
-
+admin@alknet.com
 docker compose down
 
 ✅ Utilisateur admin créé avec succès !
 
 Voici les informations de connexion :
 
-Email : admin@alknet.com
+Email : 
 Mot de passe : Admin123!
 docker exec -it alknet-db-1 psql -U postgres -d isoko_hub_db
 
