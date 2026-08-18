@@ -1,13 +1,18 @@
 from django.urls import path
 from .views import (
-    BusinessListView, MyBusinessListView, AdminBusinessListView, AdminBusinessDetailView, 
+    BusinessListView, BusinessDetailView, MyBusinessListView, AdminBusinessListView, AdminBusinessDetailView, 
     BusinessEmployeeListCreateView, AdminModerationListView, AdminModerationApproveView, 
-    AdminModerationRejectView, AdminCSVImportView
+    AdminModerationRejectView, AdminCSVImportView, PublicBusinessRegistrationView,
+    BusinessRoleListCreateView, BusinessRoleDetailView
 )
 
 urlpatterns = [
+    path('register/', PublicBusinessRegistrationView.as_view(), name='business-register-public'),
     path('', BusinessListView.as_view(), name='business-list-public'),
+    path('<uuid:pk>/', BusinessDetailView.as_view(), name='business-detail-public'),
     path('me/', MyBusinessListView.as_view(), name='my-business-list-create'),
+    path('my-business/roles/', BusinessRoleListCreateView.as_view(), name='my-business-roles'),
+    path('my-business/roles/<uuid:pk>/', BusinessRoleDetailView.as_view(), name='my-business-roles-detail'),
     path('my-business/employees/', BusinessEmployeeListCreateView.as_view(), name='my-business-employees'),
     path('admin/list/', AdminBusinessListView.as_view(), name='admin_business_list'),
     path('admin/<uuid:pk>/', AdminBusinessDetailView.as_view(), name='admin_business_detail'),

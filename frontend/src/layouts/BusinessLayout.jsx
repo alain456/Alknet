@@ -5,7 +5,7 @@ import {
   Calendar, Tag, FileText, UsersRound, 
   CreditCard, BarChart3, Crown, Settings,
   LayoutDashboard, Menu, X, Search, Bell, LogOut,
-  Store
+  Store, HeartPulse, Stethoscope, Clock, Shield
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,6 +24,7 @@ export default function BusinessLayout() {
     { name: 'Dashboard', icon: LayoutDashboard, path: '/business' },
     { name: 'Business Profile', icon: Store, path: '/business/profile' },
     { name: 'Employees', icon: Users, path: '/business/employees' },
+    { name: 'Roles & Permissions', icon: Shield, path: '/business/roles' },
     { name: 'Services', icon: Building2, path: '/business/services' },
     { name: 'Products', icon: Package, path: '/business/products' },
   ];
@@ -44,6 +45,12 @@ export default function BusinessLayout() {
   const bottomNavItems = [
     { name: 'Subscription', icon: Crown, path: '/business/subscription' },
     { name: 'Settings', icon: Settings, path: '/business/settings' },
+  ];
+
+  const hospitalNavItems = [
+    { name: 'Medical Services', icon: HeartPulse, path: '/hospital/admin/services' },
+    { name: 'Doctors', icon: Stethoscope, path: '/hospital/admin/doctors' },
+    { name: 'Schedules', icon: Clock, path: '/hospital/admin/schedules' },
   ];
 
   const closeSidebar = () => setIsSidebarOpen(false);
@@ -105,6 +112,7 @@ export default function BusinessLayout() {
 
         <div className="flex-1 overflow-y-auto py-6 px-4">
           <NavGroup title="Main" items={mainNavItems} />
+          <NavGroup title="Hospital Admin" items={hospitalNavItems} />
           <NavGroup title="Operations" items={operationsNavItems} />
           <NavGroup title="CRM & Data" items={crmNavItems} />
           <NavGroup title="System" items={bottomNavItems} />

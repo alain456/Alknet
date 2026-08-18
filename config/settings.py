@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'offers',
     'analytics',
     'locations',
+    'hospital',
     'corsheaders',
 ]
 

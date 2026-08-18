@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Business, BusinessEmployee
+from .models import Business, BusinessEmployee, BusinessRole
 
 from business_categories.serializers import BusinessCategorySerializer
 
@@ -79,13 +79,22 @@ class AdminBusinessSerializer(serializers.ModelSerializer):
             instance.categories.set(category_ids)
         return instance
 
+class BusinessRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BusinessRole
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'business')
+
 class BusinessEmployeeSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source='user.email', read_only=True)
     user_first_name = serializers.CharField(source='user.first_name', read_only=True)
     user_last_name = serializers.CharField(source='user.last_name', read_only=True)
+    role_name = serializers.CharField(source='role.name', read_only=True)
+    role_access_level = serializers.CharField(source='role.system_access_level', read_only=True)
     
-    # We allow inputting an email to create an employee
+    # We allow inputting an email and role_id to create an employee
     email = serializers.EmailField(write_only=True, required=False)
+    role_id = serializers.UUIDField(write_only=True, required=False)
 
     class Meta:
         model = BusinessEmployee
@@ -94,6 +103,7 @@ class BusinessEmployeeSerializer(serializers.ModelSerializer):
         
     def create(self, validated_data):
         email = validated_data.pop('email', None)
+        role_id = validated_data.pop('role_id', None)
         if email:
             from django.contrib.auth import get_user_model
             User = get_user_model()

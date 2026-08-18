@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Briefcase, MapPin, Star, Building2, Store, Stethoscope, Laptop, HardHat, Sprout, Car, GraduationCap, Heart, Gavel, ShoppingBag, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Search, Briefcase, MapPin, Star, Building2, Store, Stethoscope, Laptop, HardHat, Sprout, Car, GraduationCap, Heart, Gavel, ShoppingBag, ShieldCheck, CheckCircle2, HeartPulse, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function LandingPage() {
   const [businesses, setBusinesses] = useState([]);
@@ -28,7 +29,8 @@ export default function LandingPage() {
 
         if (categoriesRes.ok) {
           const cData = await categoriesRes.json();
-          setCategories(cData.slice(0, 12)); // Top 12 categories
+          // Inject "Hôpital" module as a category
+          setCategories([{ id: 'hospital-module', name: 'Hôpital', isModule: true }, ...cData.slice(0, 11)]); 
         }
       } catch (error) {
         console.error('Error fetching landing data:', error);
@@ -39,6 +41,9 @@ export default function LandingPage() {
 
     fetchData();
   }, []);
+
+  const navigate = useNavigate();
+
   return (
     <div className="w-full">
       {/* 1. Hero Section & 2. Smart Search */}
@@ -51,9 +56,9 @@ export default function LandingPage() {
             Find trusted professionals, book services, order from the best businesses, and discover new opportunities in Burundi.
           </p>
           
-          <div className="flex justify-center gap-4 mb-12">
-            <button className="bg-accent hover:bg-yellow-400 text-gray-900 font-semibold py-3 px-8 rounded-lg shadow-lg transition transform hover:-translate-y-1">
-              Get Started
+          <div className="flex justify-center gap-4 mb-12 flex-wrap">
+            <button onClick={() => navigate('/register-business')} className="bg-accent hover:bg-yellow-400 text-gray-900 font-semibold py-3 px-8 rounded-lg shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2">
+              <Building2 className="w-5 h-5" /> Créer une Entreprise
             </button>
             <button className="bg-white/10 hover:bg-white/20 text-white border border-white/30 font-semibold py-3 px-8 rounded-lg transition backdrop-blur-sm">
               Explore Services
@@ -85,7 +90,7 @@ export default function LandingPage() {
               // Map common category names to icons, fallback to Briefcase
               const iconMap = {
                 'IT': Laptop, 'Technology': Laptop, 'Informatique': Laptop,
-                'Health': Stethoscope, 'Santé': Stethoscope,
+                'Health': Stethoscope, 'Santé': Stethoscope, 'Hôpital': HeartPulse, 'Hopital': HeartPulse,
                 'Construction': HardHat, 'Bâtiment': HardHat,
                 'Agriculture': Sprout, 'Agroalimentaire': Sprout,
                 'Restaurants': Store, 'Restauration': Store,
@@ -100,7 +105,17 @@ export default function LandingPage() {
               const IconComp = Object.entries(iconMap).find(([key]) => cat.name.toLowerCase().includes(key.toLowerCase()))?.[1] || Briefcase;
               
               return (
-                <div key={cat.id} className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group">
+                <div 
+                  key={cat.id} 
+                  onClick={() => {
+                    if (cat.isModule) {
+                      navigate('/hospitals');
+                    } else {
+                      navigate(`/businesses?category=${cat.name}`);
+                    }
+                  }}
+                  className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group"
+                >
                   <IconComp className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
                   <span className="font-medium text-gray-700 group-hover:text-primary text-center leading-tight">{cat.name}</span>
                 </div>
@@ -148,6 +163,45 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* 4.5. Top Hospitals (New Section) */}
+      <section className="py-20 px-4 max-w-7xl mx-auto border-t border-gray-100">
+        <div className="flex justify-between items-end mb-10">
+          <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <HeartPulse className="text-teal-600" /> Établissements de Santé
+          </h2>
+          <button onClick={() => navigate('/hospitals')} className="text-teal-600 font-semibold hover:underline">Voir l'annuaire complet</button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[1, 2, 3].map((i) => (
+            <div key={i} onClick={() => navigate(`/hospitals/${i}`)} className="flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl transition cursor-pointer group">
+              <div className="h-40 bg-teal-50 flex items-center justify-center relative">
+                <Building2 className="w-16 h-16 text-teal-200" />
+                <div className="absolute top-4 right-4 bg-white/90 px-2 py-1 rounded text-xs font-bold text-teal-700 shadow-sm backdrop-blur-sm">
+                  Ouvert 24/7
+                </div>
+              </div>
+              <div className="p-6 flex-1">
+                <h3 className="font-bold text-xl text-gray-900 mb-1 group-hover:text-teal-600 transition">Clinique Kira Hospital {i}</h3>
+                <p className="text-gray-500 text-sm mb-4"><MapPin className="inline w-4 h-4 mr-1"/> Bujumbura, Kiriri</p>
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <span className="px-2 py-1 bg-gray-50 text-xs rounded border border-gray-200">Urgences</span>
+                  <span className="px-2 py-1 bg-gray-50 text-xs rounded border border-gray-200">Maternité</span>
+                  <span className="px-2 py-1 bg-gray-50 text-xs rounded border border-gray-200">Laboratoire</span>
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                   <div className="flex items-center text-sm font-medium text-gray-700">
+                     <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mr-1" /> 4.9
+                   </div>
+                   <span className="text-teal-600 text-sm font-semibold flex items-center">
+                     Prendre RDV <ChevronRight className="w-4 h-4 ml-1" />
+                   </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

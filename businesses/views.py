@@ -1,5 +1,6 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, BasePermission
+from django.db import transaction
 from .models import Business
 from .serializers import BusinessSerializer, AdminBusinessSerializer
 
@@ -35,6 +36,15 @@ class BusinessListView(generics.ListAPIView):
             queryset = queryset.filter(quartier__icontains=quartier.strip())
         return queryset
 
+class BusinessDetailView(generics.RetrieveAPIView):
+    """
+    Endpoint public pour récupérer les détails d'une entreprise spécifique (ex: Hôpital).
+    """
+    queryset = Business.objects.filter(is_active=True, is_verified=True)
+    serializer_class = BusinessSerializer
+    permission_classes = [AllowAny]
+
+
 class MyBusinessListView(generics.ListCreateAPIView):
     """
     Endpoint pour qu'un utilisateur puisse lister ses entreprises et en créer de nouvelles.
@@ -61,12 +71,75 @@ class AdminBusinessDetailView(generics.RetrieveUpdateDestroyAPIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-from .models import BusinessEmployee
-from .serializers import BusinessEmployeeSerializer
+from .models import BusinessEmployee, BusinessRole
+from .serializers import BusinessEmployeeSerializer, BusinessRoleSerializer
+
+class BusinessRoleListCreateView(generics.ListCreateAPIView):
+    serializer_class = BusinessRoleSerializer
+    permission_classes = [CanCreateBusiness]
+
+    def get_queryset(self):
+        business = self.request.user.businesses.first()
+        if business:
+            return BusinessRole.objects.filter(business=business)
+        return BusinessRole.objects.none()
+
+    def perform_create(self, serializer):
+        business = self.request.user.businesses.first()
+        serializer.save(business=business)
+
+class BusinessRoleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BusinessRoleSerializer
+    permission_classes = [CanCreateBusiness]
+
+    def get_queryset(self):
+        business = self.request.user.businesses.first()
+        if business:
+            return BusinessRole.objects.filter(business=business)
+        return BusinessRole.objects.none()
 
 class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
     serializer_class = BusinessEmployeeSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [CanCreateBusiness]
+
+    def get_queryset(self):
+        business = self.request.user.businesses.first()
+        if business:
+            return BusinessEmployee.objects.filter(business=business)
+        return BusinessEmployee.objects.none()
+
+    def create(self, request, *args, **kwargs):
+        business = request.user.businesses.first()
+        if not business:
+            return Response({'detail': 'Vous ne possédez aucune entreprise.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        email = request.data.get('email')
+        position = request.data.get('position', 'STAFF')
+
+        role_id = request.data.get('role_id')
+
+        if not email:
+            return Response({'email': 'L\'email est requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            User = get_user_model()
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'email': 'Aucun utilisateur trouvé avec cet email.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if BusinessEmployee.objects.filter(business=business, user=user).exists():
+            return Response({'detail': 'Cet utilisateur est déjà un employé.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        role = None
+        if role_id:
+            try:
+                role = BusinessRole.objects.get(id=role_id, business=business)
+            except BusinessRole.DoesNotExist:
+                pass
+
+        employee = BusinessEmployee.objects.create(business=business, user=user, position=position, role=role)
+        serializer = self.get_serializer(employee)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 # --- VIEWS DE MODÉRATION ET IMPORTATION CSV ---
 from rest_framework.views import APIView
@@ -199,4 +272,94 @@ class AdminCSVImportView(APIView):
             'created_count': created_count,
             'errors': errors
         })
+
+class PublicBusinessRegistrationView(APIView):
+    """
+    Endpoint public permettant l'inscription d'une nouvelle entreprise (Onboarding).
+    Crée le compte utilisateur gérant et l'entreprise avec le statut 'PENDING'.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request):
+        data = request.data
+        email = data.get('owner_email_input') or data.get('email')
+        password = data.get('password')
+        name = data.get('name')
+        
+        if not email or not password or not name:
+            return Response({'error': 'Le nom de l\'entreprise, l\'email et le mot de passe sont obligatoires.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 1. Vérification si le nom de l'entreprise existe déjà
+        if Business.objects.filter(name__iexact=name).exists():
+            return Response({'error': 'Une entreprise avec ce nom existe déjà.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 2. Création ou récupération de l'utilisateur (Propriétaire)
+        try:
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    'role': 'BUSINESS_OWNER',
+                    'first_name': data.get('first_name', 'Admin'),
+                    'last_name': data.get('last_name', name),
+                    'is_active': True
+                }
+            )
+            
+            if created:
+                user.set_password(password)
+                user.save()
+            else:
+                # Si l'utilisateur existe déjà, on vérifie si le mot de passe correspond, sinon on refuse (sécurité basique)
+                if not user.check_password(password):
+                     return Response({'error': 'Un compte avec cet email existe déjà. Mot de passe incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # 3. Création de l'entreprise (Tenant)
+            primary_cat_id = data.get('primary_category')
+            primary_cat = None
+            if primary_cat_id:
+                try:
+                    primary_cat = BusinessCategory.objects.get(id=primary_cat_id)
+                except BusinessCategory.DoesNotExist:
+                    pass
+
+            business = Business.objects.create(
+                name=name,
+                owner=user,
+                email=email,
+                phone=data.get('phone', ''),
+                address=data.get('address', ''),
+                province=data.get('province', 'Bujumbura Mairie'),
+                commune=data.get('commune', ''),
+                quartier=data.get('quartier', ''),
+                latitude=data.get('latitude', None) or None,
+                longitude=data.get('longitude', None) or None,
+                website=data.get('website', ''),
+                description=data.get('description', ''),
+                primary_category=primary_cat,
+                extra_attributes=data.get('extra_attributes', {}),
+                verification_status='PENDING',
+                is_verified=False,
+                is_active=False
+            )
+
+            # Gestion du Logo
+            logo_data = data.get('logo')
+            if logo_data and logo_data.startswith('http'):
+                # Simple URL binding (If you are using CharField or similar for logo URL in the future)
+                pass
+
+            # Catégories secondaires
+            cat_ids = data.get('category_ids', [])
+            if cat_ids:
+                business.categories.set(cat_ids)
+
+            return Response({
+                'message': 'Votre entreprise a été soumise avec succès. Elle est en attente de validation.',
+                'business_id': business.id
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

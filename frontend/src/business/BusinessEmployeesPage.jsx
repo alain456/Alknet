@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Mail, Shield, UserX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import DataGrid from '../admin/components/DataGrid';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,13 +11,36 @@ export default function BusinessEmployeesPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newEmail, setNewEmail] = useState('');
-  const [newPosition, setNewPosition] = useState('Staff');
+  const [newRoleId, setNewRoleId] = useState('');
+  const [roles, setRoles] = useState([]);
   const [submitError, setSubmitError] = useState(null);
-  const { token } = useAuth();
+  const { token, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchEmployees();
+    if (token) {
+      fetchEmployees();
+      fetchRoles();
+    }
   }, [token]);
+
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/businesses/my-business/roles/', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.status === 401) {
+        setError('Votre session a expiré. Veuillez vous déconnecter et vous reconnecter.');
+        return;
+      }
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -25,6 +49,11 @@ export default function BusinessEmployeesPage() {
           'Authorization': `Bearer ${token}`
         }
       });
+      if (response.status === 401) {
+        logout();
+        navigate('/login');
+        return;
+      }
       if (!response.ok) throw new Error('Failed to fetch employees');
       const data = await response.json();
       setEmployees(data);
@@ -45,7 +74,7 @@ export default function BusinessEmployeesPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ email: newEmail, position: newPosition })
+        body: JSON.stringify({ email: newEmail, role_id: newRoleId })
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -53,7 +82,7 @@ export default function BusinessEmployeesPage() {
       }
       setIsModalOpen(false);
       setNewEmail('');
-      setNewPosition('Staff');
+      setNewRoleId('');
       fetchEmployees();
     } catch (err) {
       setSubmitError(err.message);
@@ -79,12 +108,12 @@ export default function BusinessEmployeesPage() {
       )
     },
     { 
-      key: 'position', 
+      key: 'role_name', 
       label: 'Role/Position',
-      render: (val) => (
+      render: (val, row) => (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
           <Shield className="w-3.5 h-3.5" />
-          {val}
+          {val || row.position || 'Staff'}
         </span>
       )
     },
@@ -172,15 +201,23 @@ export default function BusinessEmployeesPage() {
                 <p className="text-xs text-gray-500 mt-1">The user must already have an Isoko Hub account.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Position / Role</label>
-                <input 
-                  type="text" 
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rôle Personnalisé</label>
+                <select 
                   required
-                  value={newPosition}
-                  onChange={(e) => setNewPosition(e.target.value)}
+                  value={newRoleId}
+                  onChange={(e) => setNewRoleId(e.target.value)}
                   className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                  placeholder="e.g. Manager, Sales Staff"
-                />
+                >
+                  <option value="" disabled>-- Sélectionner un rôle --</option>
+                  {roles.map(role => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
+                </select>
+                {roles.length === 0 && (
+                  <p className="text-xs text-orange-500 mt-2">
+                    Vous n'avez créé aucun rôle. Allez dans "Roles & Permissions" pour en créer un d'abord.
+                  </p>
+                )}
               </div>
               <div className="pt-4 flex items-center gap-3 justify-end">
                 <button 

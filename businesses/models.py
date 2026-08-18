@@ -33,7 +33,7 @@ class Business(models.Model):
     )
 
     is_active = models.BooleanField(default=True)
-    is_verified = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=True)
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS_CHOICES, default='APPROVED')
     proof_document = models.CharField(max_length=555, blank=True, help_text="URL du justificatif / Agrément ministériel")
     rejection_reason = models.TextField(blank=True, help_text="Motif du rejet par la modération")
@@ -60,11 +60,35 @@ class Business(models.Model):
     def __str__(self):
         return self.name
 
+class BusinessRole(models.Model):
+    """Rôle dynamique créé par un hôpital/entreprise, lié à un niveau de sécurité strict."""
+    SYSTEM_ACCESS_CHOICES = (
+        ('ADMIN_ACCESS', 'Accès Administrateur'),
+        ('MEDICAL_ACCESS', 'Accès Médical (Médecins, Spécialistes)'),
+        ('LAB_ACCESS', 'Accès Laboratoire'),
+        ('CASHIER_ACCESS', 'Accès Caisse & Facturation'),
+        ('STAFF_ACCESS', 'Accès Staff Standard'),
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='roles')
+    name = models.CharField(max_length=150, help_text="Nom personnalisé du rôle (ex: Infirmier de Nuit)")
+    system_access_level = models.CharField(max_length=50, choices=SYSTEM_ACCESS_CHOICES, default='STAFF_ACCESS')
+    permissions = models.JSONField(default=list, blank=True, help_text="Liste des clés de permissions accordées au rôle")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('business', 'name')
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.get_system_access_level_display()})"
+
 class BusinessEmployee(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='employments')
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='employees')
-    position = models.CharField(max_length=100, default='Staff')
+    role = models.ForeignKey(BusinessRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='employees')
+    position = models.CharField(max_length=100, default='Staff', blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 

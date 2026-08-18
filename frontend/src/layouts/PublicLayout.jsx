@@ -1,5 +1,6 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
+import { Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function PublicLayout() {
@@ -21,11 +22,13 @@ export default function PublicLayout() {
             </div>
             <span className="font-bold text-xl text-white">Isoko Hub</span>
           </Link>
-          <nav className="hidden md:flex gap-6">
+          <nav className="hidden md:flex gap-6 items-center">
             <Link to="/" className="text-teal-100 hover:text-white font-medium transition">Home</Link>
             <Link to="/services" className="text-teal-100 hover:text-white font-medium transition">Services</Link>
             <Link to="/businesses" className="text-teal-100 hover:text-white font-medium transition">Businesses</Link>
             <Link to="/jobs" className="text-teal-100 hover:text-white font-medium transition">Jobs</Link>
+            <div className="w-px h-5 bg-teal-800 mx-2"></div>
+            
           </nav>
           <div className="flex gap-4 items-center">
             {isAuthenticated ? (

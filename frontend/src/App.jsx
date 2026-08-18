@@ -7,6 +7,11 @@ import LandingPage from './public/LandingPage';
 import ServicesPage from './public/ServicesPage';
 import BusinessesPage from './public/BusinessesPage';
 import JobsPage from './public/JobsPage';
+import HospitalDirectory from './hospital/HospitalDirectory';
+import HospitalProfile from './hospital/HospitalProfile';
+import BusinessRegistrationPage from './public/BusinessRegistrationPage';
+import ManageServices from './hospital/admin/ManageServices';
+import ManageDoctors from './hospital/admin/ManageDoctors';
 import AuthLayout from './layouts/AuthLayout';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
@@ -18,6 +23,7 @@ import UserDashboardPage from './dashboard/UserDashboardPage';
 import UserBookingsPage from './dashboard/UserBookingsPage';
 import UserProfilePage from './dashboard/UserProfilePage';
 import BusinessLayout from './layouts/BusinessLayout';
+import ManageRoles from './business/ManageRoles';
 import BusinessDashboardPage from './business/BusinessDashboardPage';
 import BusinessEmployeesPage from './business/BusinessEmployeesPage';
 import BusinessProductsPage from './business/BusinessProductsPage';
@@ -49,6 +55,9 @@ function App() {
             <Route path="services" element={<ServicesPage />} />
             <Route path="businesses" element={<BusinessesPage />} />
             <Route path="jobs" element={<JobsPage />} />
+            <Route path="hospitals" element={<HospitalDirectory />} />
+            <Route path="hospitals/:id" element={<HospitalProfile />} />
+            <Route path="register-business" element={<BusinessRegistrationPage />} />
           </Route>
 
           <Route element={<AuthLayout />}>
@@ -72,6 +81,7 @@ function App() {
           <Route element={<ProtectedRoute allowedRoles={['BUSINESS_OWNER', 'SUPER_ADMIN']} />}>
             <Route path="/business" element={<BusinessLayout />}>
               <Route index element={<BusinessDashboardPage />} />
+              <Route path="roles" element={<ManageRoles />} />
               <Route path="employees" element={<BusinessEmployeesPage />} />
               <Route path="products" element={<BusinessProductsPage />} />
               <Route path="services" element={<BusinessServicesPage />} />
@@ -79,6 +89,13 @@ function App() {
               <Route path="orders" element={<BusinessOrdersPage />} />
               <Route path="bookings" element={<BusinessBookingsPage />} />
               <Route path="settings" element={<BusinessSettingsPage />} />
+            </Route>
+            
+            {/* Hospital Admin Routes (Using BusinessLayout) */}
+            <Route path="/hospital/admin" element={<BusinessLayout />}>
+              <Route path="services" element={<ManageServices />} />
+              <Route path="doctors" element={<ManageDoctors />} />
+              <Route path="schedules" element={<div className="p-8"><h1 className="text-2xl font-bold">Gestion des Horaires</h1><p>En cours de développement...</p></div>} />
             </Route>
           </Route>
 
