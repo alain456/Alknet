@@ -1,5 +1,5 @@
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from django.db import transaction
 from .models import Business
 from .serializers import BusinessSerializer, AdminBusinessSerializer
@@ -11,7 +11,7 @@ class CanCreateBusiness(BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        allowed_roles = ['BUSINESS_OWNER', 'SUPER_ADMIN']
+        allowed_roles = ['BUSINESS_OWNER', 'SUPER_ADMIN', 'PROFESSIONAL']
         return request.user.role in allowed_roles
 
 class BusinessListView(generics.ListAPIView):
@@ -47,17 +47,34 @@ class BusinessDetailView(generics.RetrieveAPIView):
 
 class MyBusinessListView(generics.ListCreateAPIView):
     """
-    Endpoint pour qu'un utilisateur puisse lister ses entreprises et en créer de nouvelles.
+    Endpoint pour qu'un utilisateur puisse lister ses entreprises, en créer et les modifier.
     """
     serializer_class = BusinessSerializer
-    permission_classes = [CanCreateBusiness]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return Business.objects.filter(owner=self.request.user)
+        user = self.request.user
+        qs = Business.objects.filter(owner=user)
+        if not qs.exists() and hasattr(user, 'business_employees'):
+            emp_bus_ids = user.business_employees.values_list('business_id', flat=True)
+            qs = Business.objects.filter(id__in=emp_bus_ids)
+        return qs
 
     def perform_create(self, serializer):
         # Assigne automatiquement l'utilisateur connecté comme propriétaire
         serializer.save(owner=self.request.user)
+
+    def put(self, request, *args, **kwargs):
+        business = self.get_queryset().first()
+        if not business:
+            return Response({"detail": "Aucune entreprise trouvée."}, status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(business, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def patch(self, request, *args, **kwargs):
+        return self.put(request, *args, **kwargs)
 
 class AdminBusinessListView(generics.ListCreateAPIView):
     queryset = Business.objects.all().order_by('-created_at')

@@ -17,11 +17,24 @@ class Specialty(models.Model):
         verbose_name_plural = "Specialties"
 
 class DoctorProfile(models.Model):
+    GENDER_CHOICES = (
+        ('M', 'Masculin'),
+        ('F', 'Féminin'),
+    )
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='doctor_profile')
     hospital = models.ForeignKey(Business, on_delete=models.SET_NULL, null=True, blank=True, related_name='doctors')
     specialties = models.ManyToManyField(Specialty, related_name='doctors')
+    services = models.ManyToManyField('MedicalService', related_name='assigned_doctors', blank=True)
+    sub_specialty = models.CharField(max_length=150, blank=True, null=True, help_text="Sous-spécialité (ex: Cardiologie Pédiatrique)")
+    gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True)
     medical_license_number = models.CharField(max_length=100, unique=True)
+    languages_spoken = models.CharField(max_length=200, default="Français, Kirundi", help_text="Langues parlées")
+    qualifications = models.TextField(blank=True, null=True, help_text="Qualifications et diplômes")
+    experience_years = models.IntegerField(default=5, help_text="Années d'expérience professionnelle")
+    accepted_payment_methods = models.CharField(max_length=200, default="Espèces, Mobile Money, Carte Bancaire")
+    photo_url = models.URLField(blank=True, null=True, help_text="Photo professionnelle du médecin")
     bio = models.TextField(blank=True, null=True)
     is_available_for_telemedicine = models.BooleanField(default=False)
     consultation_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -29,7 +42,7 @@ class DoctorProfile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Dr. {self.user.get_full_name()} - {self.medical_license_number}"
+        return f"{self.user.get_full_name()} - {self.medical_license_number}"
 
 class Appointment(models.Model):
     STATUS_CHOICES = (
@@ -57,19 +70,36 @@ class Appointment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Appointment: {self.patient.get_full_name()} with Dr. {self.doctor.user.get_full_name()} on {self.appointment_date.strftime('%Y-%m-%d %H:%M')}"
+        return f"Appointment: {self.patient.get_full_name()} with {self.doctor.user.get_full_name()} on {self.appointment_date.strftime('%Y-%m-%d %H:%M')}"
 
 class MedicalService(models.Model):
-    """Départements ou services offerts par l'hôpital (ex: Urgences, Maternité)"""
+    """
+    Service médical / Paquet de soins offert par un hôpital (Conforme à Module Hopital.dotx - Section 3)
+    """
+    CATEGORY_CHOICES = (
+        ('GENERAL', 'Service Général'),
+        ('SPECIALIZED', 'Service Spécialisé'),
+        ('CARE_PACKAGE', 'Paquet de Soins'),
+    )
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='medical_services')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='GENERAL')
     name = models.CharField(max_length=150)
     description = models.TextField(blank=True, null=True)
+    head_doctor = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='headed_services')
+    contact_phone = models.CharField(max_length=50, blank=True, null=True)
+    operating_hours = models.CharField(max_length=150, blank=True, null=True, default='24h/24, 7j/7')
+    indicative_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    access_conditions = models.TextField(blank=True, null=True, default='Sur Rendez-vous')
+    telemedicine_available = models.BooleanField(default=False)
+    online_booking_available = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.name} - {self.hospital.name}"
+        return f"[{self.get_category_display()}] {self.name} - {self.hospital.name}"
 
 class DoctorSchedule(models.Model):
     """Horaires de disponibilité d'un médecin dans un hôpital spécifique"""

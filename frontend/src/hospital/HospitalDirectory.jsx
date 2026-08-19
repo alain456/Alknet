@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Star, Filter, HeartPulse, Phone, Clock, Stethoscope, Video } from 'lucide-react';
+import { Search, MapPin, Star, Filter, HeartPulse, Phone, Clock, Stethoscope, Video, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function HospitalDirectory() {
@@ -18,13 +18,15 @@ export default function HospitalDirectory() {
         if (response.ok) {
           const allBusinesses = await response.json();
           // Filter out businesses that are in the "Santé", "Hôpital" or "Health" categories
-          const healthCategories = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic'];
+          const healthCategories = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical'];
           const hospitalData = allBusinesses.filter(b => {
             const catName = (b.primary_category_name || b.category_name || '').toLowerCase();
+            const busName = (b.name || '').toLowerCase();
             const subCats = (b.categories_detail || []).map(c => (c.name || '').toLowerCase());
             const inPrimary = healthCategories.some(h => catName.includes(h));
+            const inName = healthCategories.some(h => busName.includes(h));
             const inSub = subCats.some(sub => healthCategories.some(h => sub && sub.includes(h)));
-            return inPrimary || inSub;
+            return inPrimary || inName || inSub;
           });
           
           // Map to match component's expected structure if needed

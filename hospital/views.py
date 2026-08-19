@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from businesses.models import BusinessRole, BusinessEmployee
 from .models import Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule, MedicalRecord, LabResult, Invoice
 from .serializers import (
     SpecialtySerializer, DoctorProfileSerializer, AppointmentSerializer, 
@@ -21,6 +22,7 @@ class SpecialtyViewSet(viewsets.ModelViewSet):
     search_fields = ['name']
 
 class DoctorProfileViewSet(viewsets.ModelViewSet):
+    queryset = DoctorProfile.objects.all()
     serializer_class = DoctorProfileSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [filters.SearchFilter]
@@ -41,7 +43,8 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Permet de créer le User et le DoctorProfile en même temps.
-        Requis dans request.data : email, first_name, last_name, password, hospital_id, medical_license_number
+        Requis dans request.data : email, first_name, last_name, password, hospital, medical_license_number
+        Optionnel : service_ids (liste des services à attribuer), role_id (Rôle BusinessRole à attribuer)
         """
         data = request.data
         if 'email' in data and 'password' in data:
@@ -65,10 +68,90 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(data=data_copy)
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
+            doctor_profile = serializer.instance
+            
+            # Attribution des services si fournis
+            if 'service_ids' in data:
+                doctor_profile.services.set(data['service_ids'])
+            
+            # Attribution du rôle BusinessRole et création de l'employé
+            hospital_obj = doctor_profile.hospital
+            if hospital_obj:
+                role_id = data.get('role_id')
+                role_obj = None
+                if role_id:
+                    role_obj = BusinessRole.objects.filter(id=role_id, business=hospital_obj).first()
+                
+                BusinessEmployee.objects.update_or_create(
+                    user=user,
+                    business=hospital_obj,
+                    defaults={'role': role_obj, 'position': 'Médecin'}
+                )
+            
             headers = self.get_success_headers(serializer.data)
             return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
             
         return super().create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        data = request.data.copy()
+
+        # Mise à jour des informations de l'utilisateur associé
+        user = instance.user
+        if 'first_name' in data:
+            user.first_name = data['first_name']
+        if 'last_name' in data:
+            user.last_name = data['last_name']
+        if 'email' in data and data['email']:
+            user.email = data['email']
+        user.save()
+
+        # Mise à jour du profil médecin via le serializer
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        # Mise à jour des services attribués
+        if 'service_ids' in data:
+            instance.services.set(data['service_ids'])
+
+        # Mise à jour du rôle RBAC BusinessRole
+        hospital_obj = instance.hospital
+        if hospital_obj and 'role_id' in data:
+            role_id = data.get('role_id')
+            role_obj = None
+            if role_id:
+                role_obj = BusinessRole.objects.filter(id=role_id, business=hospital_obj).first()
+            
+            BusinessEmployee.objects.update_or_create(
+                user=user,
+                business=hospital_obj,
+                defaults={'role': role_obj, 'position': 'Médecin'}
+            )
+
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post', 'put'])
+    def assign_services(self, request, pk=None):
+        """
+        Attribuer ou mettre à jour les services d'un médecin.
+        POST/PUT body: {"service_ids": [id1, id2, ...]}
+        """
+        doctor = self.get_object()
+        service_ids = request.data.get('service_ids', [])
+        
+        if not isinstance(service_ids, list):
+            return Response(
+                {'error': 'service_ids doit être une liste'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        doctor.services.set(service_ids)
+        serializer = self.get_serializer(doctor)
+        return Response(serializer.data)
 
 class AppointmentViewSet(viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
@@ -106,13 +189,16 @@ class MedicalServiceViewSet(viewsets.ModelViewSet):
     serializer_class = MedicalServiceSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['name']
+    search_fields = ['name', 'description']
 
     def get_queryset(self):
         queryset = super().get_queryset()
         hospital_id = self.request.query_params.get('hospital', None)
+        category = self.request.query_params.get('category', None)
         if hospital_id:
             queryset = queryset.filter(hospital_id=hospital_id)
+        if category:
+            queryset = queryset.filter(category=category)
         return queryset
 
 class DoctorScheduleViewSet(viewsets.ModelViewSet):
@@ -129,6 +215,47 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
         if hospital_id:
             queryset = queryset.filter(hospital_id=hospital_id)
         return queryset
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """
+        Créer plusieurs horaires pour un médecin en une seule requête.
+        Body: {"doctor_id": uuid, "hospital_id": uuid, "schedules": [{"day_of_week": 0, "start_time": "08:00", "end_time": "17:00", "is_available": true}, ...]}
+        """
+        doctor_id = request.data.get('doctor_id')
+        hospital_id = request.data.get('hospital_id')
+        schedules_data = request.data.get('schedules', [])
+
+        if not doctor_id or not hospital_id or not schedules_data:
+            return Response(
+                {'error': 'doctor_id, hospital_id et schedules sont requis'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from .models import DoctorProfile, Business
+            doctor = DoctorProfile.objects.get(id=doctor_id)
+            hospital = Business.objects.get(id=hospital_id)
+        except (DoctorProfile.DoesNotExist, Business.DoesNotExist):
+            return Response(
+                {'error': 'Médecin ou hôpital introuvable'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        created_schedules = []
+        for schedule_data in schedules_data:
+            schedule = DoctorSchedule.objects.create(
+                doctor=doctor,
+                hospital=hospital,
+                day_of_week=schedule_data.get('day_of_week'),
+                start_time=schedule_data.get('start_time'),
+                end_time=schedule_data.get('end_time'),
+                is_available=schedule_data.get('is_available', True)
+            )
+            created_schedules.append(schedule)
+
+        serializer = DoctorScheduleSerializer(created_schedules, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class MedicalRecordViewSet(viewsets.ModelViewSet):
     """

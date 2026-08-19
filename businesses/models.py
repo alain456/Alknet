@@ -47,8 +47,17 @@ class Business(models.Model):
 
     @property
     def full_address(self):
-        parts = [p for p in [self.address, self.avenue, self.quartier, self.zone, self.commune, self.province] if p]
-        return ", ".join(parts) if parts else "Adresse non renseignée"
+        components = []
+        if self.address and self.address.strip():
+            components.append(self.address.strip())
+        
+        for part in [self.avenue, self.quartier, self.zone, self.commune, self.province]:
+            if part and part.strip():
+                p_clean = part.strip()
+                if not any(p_clean.lower() in c.lower() for c in components):
+                    components.append(p_clean)
+        
+        return ", ".join(components) if components else "Adresse non renseignée"
 
     def save(self, *args, **kwargs):
         if not self.address:

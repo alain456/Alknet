@@ -9,9 +9,11 @@ import BusinessesPage from './public/BusinessesPage';
 import JobsPage from './public/JobsPage';
 import HospitalDirectory from './hospital/HospitalDirectory';
 import HospitalProfile from './hospital/HospitalProfile';
+import PublicAppointmentBooking from './hospital/PublicAppointmentBooking';
 import BusinessRegistrationPage from './public/BusinessRegistrationPage';
 import ManageServices from './hospital/admin/ManageServices';
 import ManageDoctors from './hospital/admin/ManageDoctors';
+import ManageSchedules from './hospital/admin/ManageSchedules';
 import AuthLayout from './layouts/AuthLayout';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
@@ -31,6 +33,7 @@ import BusinessServicesPage from './business/BusinessServicesPage';
 import BusinessOffersPage from './business/BusinessOffersPage';
 import BusinessOrdersPage from './business/BusinessOrdersPage';
 import BusinessBookingsPage from './business/BusinessBookingsPage';
+import BusinessProfilePage from './business/BusinessProfilePage';
 import BusinessSettingsPage from './business/BusinessSettingsPage';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboardPage from './admin/AdminDashboardPage';
@@ -57,6 +60,7 @@ function App() {
             <Route path="jobs" element={<JobsPage />} />
             <Route path="hospitals" element={<HospitalDirectory />} />
             <Route path="hospitals/:id" element={<HospitalProfile />} />
+            <Route path="hospital/book-appointment" element={<PublicAppointmentBooking />} />
             <Route path="register-business" element={<BusinessRegistrationPage />} />
           </Route>
 
@@ -88,6 +92,7 @@ function App() {
               <Route path="offers" element={<BusinessOffersPage />} />
               <Route path="orders" element={<BusinessOrdersPage />} />
               <Route path="bookings" element={<BusinessBookingsPage />} />
+              <Route path="profile" element={<BusinessProfilePage />} />
               <Route path="settings" element={<BusinessSettingsPage />} />
             </Route>
             
@@ -95,7 +100,7 @@ function App() {
             <Route path="/hospital/admin" element={<BusinessLayout />}>
               <Route path="services" element={<ManageServices />} />
               <Route path="doctors" element={<ManageDoctors />} />
-              <Route path="schedules" element={<div className="p-8"><h1 className="text-2xl font-bold">Gestion des Horaires</h1><p>En cours de développement...</p></div>} />
+              <Route path="schedules" element={<ManageSchedules />} />
             </Route>
           </Route>
 
