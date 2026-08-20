@@ -75,8 +75,8 @@ export function AuthProvider({ children }) {
       if (!response.ok) {
         const errorData = await response.json();
         const firstErrorKey = Object.keys(errorData)[0];
-        const errorMsg = Array.isArray(errorData[firstErrorKey]) 
-          ? `${firstErrorKey}: ${errorData[firstErrorKey][0]}` 
+        const errorMsg = Array.isArray(errorData[firstErrorKey])
+          ? `${firstErrorKey}: ${errorData[firstErrorKey][0]}`
           : 'Registration failed';
         throw new Error(errorMsg);
       }
@@ -97,6 +97,67 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('alknet_user');
   };
 
+  /**
+   * Tente de renouveler l'access token via le refresh token.
+   * Retourne le nouvel access token ou null si échec.
+   */
+  const refreshAccessToken = async () => {
+    const refreshToken = localStorage.getItem('alknet_refresh_token');
+    if (!refreshToken) return null;
+
+    try {
+      const res = await fetch('/api/v1/accounts/refresh/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh: refreshToken }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const newToken = data.access;
+        setToken(newToken);
+        localStorage.setItem('alknet_token', newToken);
+        return newToken;
+      } else {
+        // Refresh token invalide ou expiré → déconnexion
+        logout();
+        return null;
+      }
+    } catch {
+      logout();
+      return null;
+    }
+  };
+
+  /**
+   * Fonction fetch avec gestion automatique du 401.
+   * En cas de 401, tente un refresh du token puis réessaie la requête.
+   * Usage : const res = await authFetch(url, options);
+   */
+  const authFetch = async (url, options = {}) => {
+    const currentToken = localStorage.getItem('alknet_token');
+    const headers = {
+      ...options.headers,
+      ...(currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {}),
+    };
+
+    let response = await fetch(url, { ...options, headers });
+
+    if (response.status === 401) {
+      // Tentative de rafraîchissement du token
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        // Réessai avec le nouveau token
+        response = await fetch(url, {
+          ...options,
+          headers: { ...options.headers, 'Authorization': `Bearer ${newToken}` },
+        });
+      }
+    }
+
+    return response;
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -106,6 +167,8 @@ export function AuthProvider({ children }) {
       login,
       register,
       logout,
+      authFetch,
+      refreshAccessToken,
     }}>
       {children}
     </AuthContext.Provider>

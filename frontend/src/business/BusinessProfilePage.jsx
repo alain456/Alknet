@@ -9,7 +9,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 export default function BusinessProfilePage() {
-  const { token, logout } = useAuth();
+  const { token, logout, authFetch } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,9 +76,7 @@ export default function BusinessProfilePage() {
 
   const fetchBusinessProfile = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/businesses/me/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await authFetch('http://localhost:8000/api/v1/businesses/me/');
       if (!response.ok) throw new Error('Impossible de charger le profil');
       const data = await response.json();
       
@@ -176,12 +174,9 @@ export default function BusinessProfilePage() {
         extra_attributes: hospitalData
       };
 
-      const response = await fetch(`http://localhost:8000/api/v1/businesses/me/`, {
+      const response = await authFetch(`http://localhost:8000/api/v1/businesses/me/`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 

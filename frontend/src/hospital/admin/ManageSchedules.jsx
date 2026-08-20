@@ -20,7 +20,7 @@ export default function ManageSchedules() {
     is_available: true
   });
 
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
 
   const daysOfWeek = [
     { id: 0, name: 'Lundi' },
@@ -35,9 +35,7 @@ export default function ManageSchedules() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
         if (busRes.ok) {
           const businesses = await busRes.json();
           if (businesses.length > 0) {
@@ -48,6 +46,8 @@ export default function ManageSchedules() {
           } else {
             setLoading(false);
           }
+        } else {
+          setLoading(false);
         }
       } catch (err) {
         console.error(err);

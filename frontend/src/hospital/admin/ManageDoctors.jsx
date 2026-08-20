@@ -23,15 +23,13 @@ export default function ManageDoctors() {
     specialty_ids: [], service_ids: [], role_id: ''
   });
   
-  const { token } = useAuth();
+  const { token, authFetch } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
         if (busRes.ok) {
           const businesses = await busRes.json();
           if (businesses.length > 0) {
@@ -44,6 +42,8 @@ export default function ManageDoctors() {
           } else {
             setLoading(false);
           }
+        } else {
+          setLoading(false);
         }
       } catch (err) {
         console.error(err);

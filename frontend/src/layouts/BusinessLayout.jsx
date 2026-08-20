@@ -12,13 +12,11 @@ export default function BusinessLayout() {
   const [business, setBusiness] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const { token, logout, user } = useAuth();
+  const { token, logout, user, authFetch } = useAuth();
 
   useEffect(() => {
     if (token) {
-      fetch('http://localhost:8000/api/v1/businesses/me/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      authFetch('http://localhost:8000/api/v1/businesses/me/')
         .then(res => {
           if (res.status === 401) {
             logout();
