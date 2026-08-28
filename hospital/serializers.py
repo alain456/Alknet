@@ -1,9 +1,17 @@
 from rest_framework import serializers
 from .models import (
-    Specialty, DoctorProfile, Appointment, MedicalService,
+    Specialty, DoctorProfile, Appointment, AppointmentSlot, MedicalService,
     DoctorSchedule, MedicalRecord, LabResult, Invoice,
-    Notification, Prescription, HospitalProfile,
+    Notification, Prescription, HospitalProfile, ServiceAssignment,
+    ServiceCategory
 )
+
+
+class ServiceCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceCategory
+        fields = ['id', 'hospital', 'name', 'description', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
 
 # ---------------------------------------------------------------------------
@@ -266,9 +274,36 @@ class DoctorScheduleSerializer(serializers.ModelSerializer):
         return f"{obj.doctor.user.first_name} {obj.doctor.user.last_name}"
 
 
+class AppointmentSlotSerializer(serializers.ModelSerializer):
+    doctor_name = serializers.SerializerMethodField()
+    doctor_title = serializers.SerializerMethodField()
+    hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
+    booked_count = serializers.IntegerField(read_only=True)
+    remaining_slots = serializers.IntegerField(read_only=True)
+    is_full = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = AppointmentSlot
+        fields = [
+            'id', 'hospital', 'hospital_name', 'doctor', 'doctor_name', 'doctor_title',
+            'service', 'service_name', 'title', 'slot_date', 'start_time', 'end_time',
+            'consultation_type', 'max_patients', 'booked_count', 'remaining_slots',
+            'is_full', 'status', 'is_active', 'notes', 'created_by', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def get_doctor_name(self, obj):
+        return obj.doctor.user.get_full_name()
+
+    def get_doctor_title(self, obj):
+        return obj.doctor.get_staff_category_display()
+
+
 class AppointmentSerializer(serializers.ModelSerializer):
     """Rendez-vous complet avec workflow et téléconsultation — Module 01.5"""
     doctor_details = DoctorProfileListSerializer(source='doctor', read_only=True)
+    slot_details = AppointmentSlotSerializer(source='slot', read_only=True)
     patient_name = serializers.SerializerMethodField()
     hospital_name = serializers.CharField(source='hospital.name', read_only=True)
     # Géolocalisation de l'hôpital du RDV
@@ -286,6 +321,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'patient', 'patient_name',
             'doctor', 'doctor_details',
+            'slot', 'slot_details', 'queue_number',
             'hospital', 'hospital_name', 'hospital_latitude', 'hospital_longitude',
             'appointment_date', 'status', 'status_display',
             'consultation_type', 'consultation_type_display',
@@ -303,7 +339,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'patient', 'status', 'confirmed_at', 'completed_at',
+            'patient', 'status', 'queue_number', 'confirmed_at', 'completed_at',
             'cancelled_at', 'reminder_24h_sent', 'reminder_1h_sent',
         ]
 
@@ -502,6 +538,24 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         return None
 
     def get_doctor_name(self, obj):
-        if obj.doctor:
+        if obj.doctor and obj.doctor.user:
             return f"{obj.doctor.user.first_name} {obj.doctor.user.last_name}"
         return None
+
+
+class ServiceAssignmentSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    service_name = serializers.CharField(source='service.name', read_only=True)
+    role_in_service_display = serializers.CharField(source='get_role_in_service_display', read_only=True)
+
+    class Meta:
+        model = ServiceAssignment
+        fields = [
+            'id', 'hospital', 'user', 'user_email', 'user_name',
+            'service', 'service_name', 'role_in_service', 'role_in_service_display',
+            'is_primary', 'is_active', 'assigned_at', 'updated_at'
+        ]
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name()

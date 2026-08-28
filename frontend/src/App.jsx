@@ -13,6 +13,7 @@ import HospitalProfile from './hospital/HospitalProfile';
 import PublicAppointmentBooking from './hospital/PublicAppointmentBooking';
 import BusinessRegistrationPage from './public/BusinessRegistrationPage';
 import ManageServices from './hospital/admin/ManageServices';
+import ManageServiceCategories from './hospital/admin/ManageServiceCategories';
 import ManageDoctors from './hospital/admin/ManageDoctors';
 import ManageSchedules from './hospital/admin/ManageSchedules';
 import ManageAppointments from './hospital/admin/ManageAppointments';
@@ -115,6 +116,7 @@ function App() {
             {/* Hospital Admin Routes (Using BusinessLayout) */}
             <Route path="/hospital/admin" element={<BusinessLayout />}>
               <Route index element={<HospitalDashboard />} />
+              <Route path="service-categories" element={<ManageServiceCategories />} />
               <Route path="services" element={<ManageServices />} />
               <Route path="doctors" element={<ManageDoctors />} />
               <Route path="schedules" element={<ManageSchedules />} />
@@ -122,6 +124,8 @@ function App() {
               <Route path="medical-records" element={<ManageMedicalRecords />} />
               <Route path="invoices" element={<ManageInvoices />} />
               <Route path="lab-results" element={<ManageLabResults />} />
+              <Route path="roles" element={<ManageRoles />} />
+              <Route path="staff" element={<BusinessEmployeesPage />} />
               <Route path="reports" element={<ManageReports />} />
               <Route path="audit" element={<AuditLogs />} />
             </Route>

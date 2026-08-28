@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Building2, Users, Calendar, Settings,
   LayoutDashboard, Menu, X, Bell, LogOut, FileText,
-  Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck
+  Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck, FolderPlus
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -73,6 +73,7 @@ export default function BusinessLayout() {
       title: "Gestion Hospitalière",
       items: [
         { name: 'Profil & Équipements', icon: Store, path: '/business/profile' },
+        { name: 'Catégories de Prestations', icon: FolderPlus, path: '/hospital/admin/service-categories' },
         { name: 'Services & Paquets de Soins', icon: HeartPulse, path: '/hospital/admin/services' },
         { name: 'Annuaire des Médecins', icon: Stethoscope, path: '/hospital/admin/doctors' },
         { name: 'Planning & Horaires', icon: Clock, path: '/hospital/admin/schedules' },
@@ -90,9 +91,10 @@ export default function BusinessLayout() {
     {
       title: "Pilotage & Sécurité",
       items: [
+        { name: 'Rôles & Permissions (RBAC)', icon: Shield, path: '/hospital/admin/roles' },
+        { name: 'Gestion du Personnel', icon: Users, path: '/hospital/admin/staff' },
         { name: 'Rapports & Analytics', icon: LayoutDashboard, path: '/hospital/admin/reports' },
-        { name: 'Journal d\'Audit & RBAC', icon: Shield, path: '/hospital/admin/audit' },
-        { name: 'Gestion du Personnel', icon: Users, path: '/business/employees' },
+        { name: 'Journal d\'Audit', icon: FileText, path: '/hospital/admin/audit' },
       ]
     }
   ];

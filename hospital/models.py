@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from businesses.models import Business
 import uuid
 
@@ -457,12 +458,90 @@ class DoctorProfile(models.Model):
         return modes
 
 
-
 # ---------------------------------------------------------------------------
-# 01.5 — MODULE RENDEZ-VOUS
+# 01.5 — MODULE RENDEZ-VOUS & CRENEAUX ADMIN
 # Workflow complet de prise et gestion de rendez-vous.
 # Conforme à la spécification : Module Hopital.txt — Sections 5 et 13.
 # ---------------------------------------------------------------------------
+
+class AppointmentSlot(models.Model):
+    """
+    Créneau / Session de Rendez-vous créé par l'Administration de l'Hôpital.
+    Définit une offre de rendez-vous pour un médecin avec une capacité maximale de patients.
+    Conforme à Module Hopital.txt — Section 5.
+    """
+    STATUS_CHOICES = (
+        ('OPEN', 'Ouvert aux réservations'),
+        ('FULL', 'Complet'),
+        ('CANCELLED', 'Annulé'),
+        ('CLOSED', 'Fermé'),
+    )
+
+    TYPE_CHOICES = (
+        ('IN_PERSON', 'En présentiel'),
+        ('TELEMEDICINE', 'Téléconsultation'),
+        ('TELE_EXPERTISE', 'Télé-expertise'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='appointment_slots'
+    )
+    doctor = models.ForeignKey(
+        DoctorProfile, on_delete=models.CASCADE, related_name='appointment_slots'
+    )
+    service = models.ForeignKey(
+        'MedicalService', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='appointment_slots'
+    )
+    title = models.CharField(
+        max_length=200, default="Consultation Médicale",
+        help_text="Intitulé de la session (ex: Consultation Cardiologie)"
+    )
+    slot_date = models.DateField(help_text="Date de la session")
+    start_time = models.TimeField(help_text="Heure de début")
+    end_time = models.TimeField(help_text="Heure de fin")
+    consultation_type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default='IN_PERSON'
+    )
+    max_patients = models.PositiveIntegerField(
+        default=10,
+        help_text="Nombre maximum de personnes acceptées pour cette session"
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='OPEN'
+    )
+    is_active = models.BooleanField(
+        default=True, help_text="Permet à l'admin d'activer/désactiver la visibilité du rendez-vous côté patient"
+    )
+    notes = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Créneau de Rendez-vous"
+        verbose_name_plural = "Créneaux de Rendez-vous"
+        ordering = ['slot_date', 'start_time']
+
+    def __str__(self):
+        return f"{self.title} - Dr. {self.doctor.user.get_full_name()} ({self.slot_date})"
+
+    @property
+    def booked_count(self):
+        return self.appointments.exclude(status='CANCELLED').count()
+
+    @property
+    def remaining_slots(self):
+        rem = self.max_patients - self.booked_count
+        return max(0, rem)
+
+    @property
+    def is_full(self):
+        return self.remaining_slots <= 0
+
 
 class Appointment(models.Model):
     """
@@ -501,6 +580,17 @@ class Appointment(models.Model):
     }
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Association au créneau / session d'admin & numéro d'ordre
+    slot = models.ForeignKey(
+        AppointmentSlot, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='appointments',
+        help_text="Session / créneau de rendez-vous défini par l'administration"
+    )
+    queue_number = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Numéro d'ordre du patient selon l'ordre de postulation"
+    )
 
     # Parties prenantes
     patient = models.ForeignKey(
@@ -665,6 +755,24 @@ class Appointment(models.Model):
             return True
         return False
 
+
+
+class ServiceCategory(models.Model):
+    """Catégories personnalisées de prestations médicales gérées par un hôpital."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='service_categories')
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        verbose_name = "Catégorie de Prestation"
+        verbose_name_plural = "Catégories de Prestation"
+        unique_together = ('hospital', 'name')
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name} ({self.hospital.name})"
 
 
 # ---------------------------------------------------------------------------
@@ -869,6 +977,52 @@ class MedicalService(models.Model):
 
     @property
     def formatted_cost(self):
+        if self.indicative_cost == 0:
+            return "Gratuit / Non renseigné"
+        return f"{self.indicative_cost:,.0f} {self.currency}"
+
+
+class ServiceAssignment(models.Model):
+    """
+    Affectation d'un membre du personnel (User / BusinessEmployee) à un service médical spécifique.
+    Permet la gestion dynamique des services pour chaque rôle (Médecin, Infirmier, Laborantin, Caissier...).
+    """
+    ROLE_IN_SERVICE_CHOICES = (
+        ('HEAD', 'Chef de service / Responsable'),
+        ('PRACTITIONER', 'Praticien / Intervenant principal'),
+        ('ASSISTANT', 'Assistant / Soignant'),
+        ('STAFF', 'Personnel de support / Administratif'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='service_assignments'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='service_assignments'
+    )
+    service = models.ForeignKey(
+        MedicalService, on_delete=models.CASCADE, related_name='assignments'
+    )
+    role_in_service = models.CharField(
+        max_length=30, choices=ROLE_IN_SERVICE_CHOICES, default='PRACTITIONER'
+    )
+    is_primary = models.BooleanField(
+        default=True, help_text="Est le service principal de l'utilisateur"
+    )
+    is_active = models.BooleanField(default=True)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Affectation de Service"
+        verbose_name_plural = "Affectations de Services"
+        unique_together = ('user', 'service')
+        ordering = ['-assigned_at']
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} -> {self.service.name} ({self.get_role_in_service_display()})"
+
         """Retourne le tarif formaté pour l'affichage."""
         if self.indicative_cost == 0:
             return "Tarif à définir"

@@ -5,11 +5,12 @@ import { useAuth } from '../../context/AuthContext';
 export default function DoctorDashboard() {
   const { token , authFetch} = useAuth();
   const [appointments, setAppointments] = useState([]);
+  const [slots, setSlots] = useState([]);
   const [medicalRecords, setMedicalRecords] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('appointments');
+  const [activeTab, setActiveTab] = useState('slots');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -45,6 +46,7 @@ export default function DoctorDashboard() {
             const hid = businesses[0].id;
             setHospitalId(hid);
             fetchAppointments(hid);
+            fetchSlots(hid);
             fetchMedicalRecords(hid);
             fetchPrescriptions(hid);
           } else {
@@ -58,6 +60,19 @@ export default function DoctorDashboard() {
     };
     if (token) init();
   }, [token]);
+
+  const fetchSlots = async (hid) => {
+    try {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointment-slots/?hospital=${hid}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setSlots(await res.json());
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchAppointments = async (hid) => {
     try {
@@ -293,21 +308,32 @@ export default function DoctorDashboard() {
 
           {/* Tabs */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-gray-200 overflow-x-auto">
+              <button
+                onClick={() => setActiveTab('slots')}
+                className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
+                  activeTab === 'slots'
+                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Clock className="w-4 h-4 inline mr-2" />
+                Mes Créneaux & Sessions ({slots.length})
+              </button>
               <button
                 onClick={() => setActiveTab('appointments')}
-                className={`flex-1 px-6 py-4 font-medium transition ${
+                className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'appointments'
                     ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
                 <Calendar className="w-4 h-4 inline mr-2" />
-                Rendez-vous
+                Tous les Rendez-vous
               </button>
               <button
                 onClick={() => setActiveTab('records')}
-                className={`flex-1 px-6 py-4 font-medium transition ${
+                className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'records'
                     ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                     : 'text-gray-600 hover:text-gray-900'
@@ -318,7 +344,7 @@ export default function DoctorDashboard() {
               </button>
               <button
                 onClick={() => setActiveTab('prescriptions')}
-                className={`flex-1 px-6 py-4 font-medium transition ${
+                className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'prescriptions'
                     ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
                     : 'text-gray-600 hover:text-gray-900'
@@ -330,6 +356,76 @@ export default function DoctorDashboard() {
             </div>
 
             <div className="p-6">
+              {activeTab === 'slots' && (
+                <div className="space-y-4">
+                  {slots.length === 0 ? (
+                    <div className="text-center py-10 text-gray-500">
+                      <Clock className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                      <p className="font-semibold">Aucun créneau configuré pour vous.</p>
+                      <p className="text-xs text-gray-400">L'administration définira vos sessions de consultation.</p>
+                    </div>
+                  ) : (
+                    slots.map(slot => {
+                      const postulants = appointments.filter(a => a.slot === slot.id);
+                      return (
+                        <div key={slot.id} className="border border-gray-200 rounded-2xl p-5 hover:border-blue-300 transition space-y-3 bg-gray-50/50">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-gray-200 pb-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+                                  {slot.consultation_type === 'TELEMEDICINE' ? 'Téléconsultation' : 'Présentiel'}
+                                </span>
+                                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                  slot.remaining_slots === 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {slot.remaining_slots === 0 ? 'Complet' : `${slot.remaining_slots} places restantes`}
+                                </span>
+                              </div>
+                              <h3 className="text-lg font-bold text-gray-900">{slot.title}</h3>
+                              <p className="text-xs text-gray-500 flex items-center gap-3">
+                                <span>📅 Date: {formatDate(slot.slot_date)}</span>
+                                <span>⏰ Heures: {slot.start_time?.substring(0,5)} - {slot.end_time?.substring(0,5)}</span>
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-bold text-gray-500 block">Capacité du créneau</span>
+                              <span className="text-xl font-extrabold text-blue-600">{slot.booked_count} / {slot.max_patients}</span>
+                              <span className="text-xs text-gray-400 block">Patients inscrits</span>
+                            </div>
+                          </div>
+
+                          {/* Liste des patients ayant postulé */}
+                          <div>
+                            <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2">
+                              Patients inscrits par ordre de réservation:
+                            </h4>
+                            {postulants.length === 0 ? (
+                              <p className="text-xs text-gray-400 italic">Aucune candidature sur ce créneau.</p>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {postulants.sort((a,b) => (a.queue_number || 0) - (b.queue_number || 0)).map(apt => (
+                                  <div key={apt.id} className="bg-white p-3 rounded-xl border border-gray-200 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs">
+                                        #{apt.queue_number || 1}
+                                      </span>
+                                      <div>
+                                        <p className="text-xs font-bold text-gray-900">{apt.patient_name}</p>
+                                        <p className="text-[10px] text-gray-500">{apt.reason || 'Consultation'}</p>
+                                      </div>
+                                    </div>
+                                    <div>{getStatusBadge(apt.status)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
               {activeTab === 'appointments' && (
                 <div className="space-y-3">
                   {appointments.length === 0 ? (

@@ -1,3 +1,4 @@
+import uuid
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,15 +7,17 @@ from django.db import transaction
 from django.utils import timezone
 from businesses.models import BusinessRole, BusinessEmployee
 from .models import (
-    Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule,
-    MedicalRecord, LabResult, Invoice, Notification, Prescription, HospitalProfile
+    Specialty, DoctorProfile, Appointment, AppointmentSlot, MedicalService, DoctorSchedule,
+    MedicalRecord, LabResult, Invoice, Notification, Prescription, HospitalProfile, ServiceAssignment,
+    ServiceCategory
 )
 from .serializers import (
     SpecialtySerializer, DoctorProfileSerializer, DoctorProfileListSerializer,
-    AppointmentSerializer, MedicalServiceSerializer, DoctorScheduleSerializer,
+    AppointmentSerializer, AppointmentSlotSerializer, MedicalServiceSerializer, DoctorScheduleSerializer,
     MedicalRecordSerializer, LabResultSerializer, InvoiceSerializer,
     NotificationSerializer, PrescriptionSerializer,
-    HospitalProfileSerializer, HospitalProfileListSerializer,
+    HospitalProfileSerializer, HospitalProfileListSerializer, ServiceAssignmentSerializer,
+    ServiceCategorySerializer
 )
 from .permissions import IsMedicalRecordViewer, IsLabTechnician, IsCashier, IsHospitalAdmin
 
@@ -181,9 +184,11 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
                 is_available_for_telemedicine=is_telemed.lower() in ['true', '1']
             )
         if is_active is not None:
-            queryset = queryset.filter(
-                is_active=is_active.lower() in ['true', '1']
-            )
+            active_bool = is_active.lower() in ['true', '1']
+            queryset = queryset.filter(is_active=active_bool, user__is_active=active_bool)
+        else:
+            queryset = queryset.filter(is_active=True, user__is_active=True)
+
         if is_diaspora is not None:
             queryset = queryset.filter(
                 is_diaspora=is_diaspora.lower() in ['true', '1']
@@ -323,28 +328,95 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(doctor)
         return Response(serializer.data)
 
+class AllowAnyReadOnlyOrAuthenticatedCreate(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return bool(request.user and request.user.is_authenticated)
+
+
+class AppointmentSlotViewSet(viewsets.ModelViewSet):
+    """
+    Gestion des Créneaux / Sessions de Rendez-vous créés par l'Admin.
+    Permet la définition des quotas max_patients et la réservation avec ordre de passage.
+    """
+    queryset = AppointmentSlot.objects.all()
+    serializer_class = AppointmentSlotSerializer
+    permission_classes = [AllowAnyReadOnlyOrAuthenticatedCreate]
+
+    def get_queryset(self):
+        queryset = AppointmentSlot.objects.all()
+        hospital_id = self.request.query_params.get('hospital')
+        doctor_id = self.request.query_params.get('doctor')
+        status_param = self.request.query_params.get('status')
+        upcoming = self.request.query_params.get('upcoming')
+        is_active_param = self.request.query_params.get('is_active')
+
+        user = self.request.user
+        
+        # If explicitly requested, filter by is_active
+        if is_active_param is not None:
+            is_active_bool = is_active_param.lower() in ['true', '1', 'yes']
+            queryset = queryset.filter(is_active=is_active_bool)
+        elif not user.is_authenticated or (hasattr(user, 'role') and user.role not in ['SUPER_ADMIN', 'BUSINESS_OWNER'] and not BusinessEmployee.objects.filter(user=user.id).exists()):
+            # By default, public users and normal patients only see active slots
+            queryset = queryset.filter(is_active=True)
+
+        if user.is_authenticated and hasattr(user, 'doctor_profile') and not hospital_id and user.role not in ['SUPER_ADMIN', 'BUSINESS_OWNER']:
+            queryset = queryset.filter(doctor=user.doctor_profile)
+
+        if hospital_id:
+            queryset = queryset.filter(hospital_id=hospital_id)
+        if doctor_id:
+            queryset = queryset.filter(doctor_id=doctor_id)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        if upcoming and upcoming.lower() in ['true', '1']:
+            queryset = queryset.filter(slot_date__gte=timezone.now().date())
+
+        return queryset.order_by('slot_date', 'start_time')
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user if self.request.user.is_authenticated else None)
+
+
+class AllowAnyCreateOnly(permissions.BasePermission):
+    def has_permission(self, request, view):
+        if view.action == 'create':
+            return True
+        return bool(request.user and request.user.is_authenticated)
+
+
 class AppointmentViewSet(viewsets.ModelViewSet):
     """Workflow complet des rendez-vous — Module 01.5 avec isolation Multi-Tenant SaaS"""
     serializer_class = AppointmentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [AllowAnyCreateOnly]
 
     def get_queryset(self):
         user = self.request.user
+        if not user.is_authenticated:
+            return Appointment.objects.none()
+
+        hospital_id = self.request.query_params.get('hospital')
+
         if user.role == 'SUPER_ADMIN':
             queryset = Appointment.objects.all()
-        elif hasattr(user, 'doctor_profile'):
-            queryset = Appointment.objects.filter(doctor=user.doctor_profile)
         elif user.role == 'BUSINESS_OWNER':
             queryset = Appointment.objects.filter(hospital__owner=user)
         elif BusinessEmployee.objects.filter(user=user).exists():
-            queryset = Appointment.objects.filter(hospital__employees__user=user)
+            if hasattr(user, 'doctor_profile') and not hospital_id:
+                queryset = Appointment.objects.filter(doctor=user.doctor_profile)
+            else:
+                queryset = Appointment.objects.filter(hospital__employees__user=user)
+        elif hasattr(user, 'doctor_profile'):
+            queryset = Appointment.objects.filter(doctor=user.doctor_profile)
         else:
             queryset = Appointment.objects.filter(patient=user)
 
         appt_status = self.request.query_params.get('status')
         consultation_type = self.request.query_params.get('consultation_type')
-        hospital_id = self.request.query_params.get('hospital')
         upcoming = self.request.query_params.get('upcoming')  # ?upcoming=true
+        slot_id = self.request.query_params.get('slot')
 
         if appt_status:
             queryset = queryset.filter(status=appt_status)
@@ -352,6 +424,8 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(consultation_type=consultation_type)
         if hospital_id:
             queryset = queryset.filter(hospital_id=hospital_id)
+        if slot_id:
+            queryset = queryset.filter(slot_id=slot_id)
         if upcoming and upcoming.lower() in ['true', '1']:
             queryset = queryset.filter(
                 appointment_date__gte=timezone.now(),
@@ -361,7 +435,65 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(patient=self.request.user)
+        from rest_framework.exceptions import ValidationError
+        from datetime import datetime
+
+        user = self.request.user
+        data = self.request.data
+        slot_id = data.get('slot')
+
+        slot = None
+        queue_number = None
+
+        if slot_id:
+            try:
+                slot = AppointmentSlot.objects.get(id=slot_id)
+                if slot.remaining_slots <= 0 or slot.status == 'FULL':
+                    raise ValidationError({"slot": "Ce créneau de rendez-vous est déjà complet."})
+                queue_number = slot.booked_count + 1
+            except AppointmentSlot.DoesNotExist:
+                raise ValidationError({"slot": "Créneau de rendez-vous non trouvé."})
+
+        if user and user.is_authenticated:
+            patient_user = user
+        else:
+            email = data.get('patient_email') or data.get('email')
+            name = data.get('patient_name') or 'Patient'
+            phone = data.get('patient_phone') or ''
+
+            if not email:
+                email = f"guest_{uuid.uuid4().hex[:8]}@isokohub.com"
+
+            parts = name.strip().split()
+            first_name = parts[0] if parts else 'Patient'
+            last_name = ' '.join(parts[1:]) if len(parts) > 1 else ''
+
+            patient_user, _ = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'phone_number': phone,
+                    'role': 'CUSTOMER',
+                    'is_active': True
+                }
+            )
+
+        kwargs = {'patient': patient_user}
+        if slot:
+            kwargs['slot'] = slot
+            kwargs['queue_number'] = queue_number
+            kwargs['doctor'] = slot.doctor
+            kwargs['hospital'] = slot.hospital
+            if 'appointment_date' not in data or not data.get('appointment_date'):
+                dt = datetime.combine(slot.slot_date, slot.start_time)
+                kwargs['appointment_date'] = timezone.make_aware(dt) if timezone.is_naive(dt) else dt
+
+        appointment = serializer.save(**kwargs)
+
+        if slot and slot.booked_count >= slot.max_patients:
+            slot.status = 'FULL'
+            slot.save()
 
     # -----------------------------------------------------------------------
     # Actions de workflow (Module 01.5 — Sections 5 & 13)
@@ -546,6 +678,21 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             appointment=appointment
         )
         return Response(AppointmentSerializer(appointment).data)
+
+
+class ServiceCategoryViewSet(viewsets.ModelViewSet):
+    queryset = ServiceCategory.objects.all()
+    serializer_class = ServiceCategorySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'description']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        hospital_id = self.request.query_params.get('hospital', None)
+        if hospital_id:
+            queryset = queryset.filter(hospital_id=hospital_id)
+        return queryset
 
 
 class MedicalServiceViewSet(viewsets.ModelViewSet):
@@ -807,7 +954,31 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             return Invoice.objects.filter(patient=user)
         if user.role == 'BUSINESS_OWNER':
             return Invoice.objects.filter(hospital__owner=user)
-        return Invoice.objects.filter(hospital__employees__user=user)
         if user.role == 'CUSTOMER':
             return Invoice.objects.filter(patient=user)
         return Invoice.objects.filter(hospital__employees__user=user)
+
+
+class ServiceAssignmentViewSet(viewsets.ModelViewSet):
+    """
+    Gestion des affectations du personnel aux services hospitaliers.
+    Permet à l'Administrateur d'Hôpital d'affecter le personnel (Médecin, Infirmier, Laborantin, Caissier) à des services précis.
+    """
+    serializer_class = ServiceAssignmentSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        hospital_id = self.request.query_params.get('hospital')
+        qs = ServiceAssignment.objects.all()
+
+        if hospital_id:
+            qs = qs.filter(hospital_id=hospital_id)
+
+        if user.role == 'SUPER_ADMIN':
+            return qs
+        if user.role == 'BUSINESS_OWNER':
+            return qs.filter(hospital__owner=user)
+        
+        return qs.filter(hospital__employees__user=user)
+

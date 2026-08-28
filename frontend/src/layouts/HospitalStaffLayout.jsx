@@ -48,7 +48,13 @@ export default function HospitalStaffLayout() {
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
-  const isAdminOrOwner = user?.role === 'SUPER_ADMIN' || user?.role === 'BUSINESS_OWNER';
+  const isAdminOrOwner = 
+    user?.role === 'SUPER_ADMIN' || 
+    user?.role === 'BUSINESS_OWNER' ||
+    user?.email?.toLowerCase().includes('admin') ||
+    user?.system_access_level?.includes('ADMIN') ||
+    user?.business_info?.role_name?.toLowerCase().includes('admin') ||
+    user?.business_info?.role_name?.toLowerCase().includes('directeur');
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">

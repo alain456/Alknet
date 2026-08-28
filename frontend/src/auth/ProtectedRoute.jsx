@@ -3,7 +3,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function ProtectedRoute({ allowedRoles }) {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, getRedirectPath } = useAuth();
 
   if (isLoading) {
     return (
@@ -24,15 +24,7 @@ export default function ProtectedRoute({ allowedRoles }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
-    if (user?.role === 'SUPER_ADMIN') {
-      return <Navigate to="/admin" replace />;
-    } else if (user?.role === 'BUSINESS_OWNER') {
-      return <Navigate to="/business" replace />;
-    } else if (user?.role === 'PROFESSIONAL') {
-      return <Navigate to="/hospital/staff/doctor" replace />;
-    } else {
-      return <Navigate to="/dashboard" replace />;
-    }
+    return <Navigate to={getRedirectPath(user)} replace />;
   }
 
   return <Outlet />;

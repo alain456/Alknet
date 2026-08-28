@@ -2,21 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { 
   HeartPulse, Plus, CheckCircle, XCircle, Stethoscope, 
   Clock, Phone, DollarSign, ShieldAlert, Video, Calendar, 
-  Package, Edit3, Trash2, Filter, Search, Sparkles 
+  Package, Edit3, Trash2, Filter, Search, Sparkles, FolderPlus, Tag, Layers
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+
+const DEFAULT_CATEGORIES = [
+  { value: 'GENERAL', label: 'Service Général' },
+  { value: 'SPECIALIZED', label: 'Service Spécialisé' },
+  { value: 'CARE_PACKAGE', label: 'Paquet de Soins' },
+  { value: 'DIAGNOSTIC', label: 'Diagnostic & Imagerie' },
+  { value: 'SURGICAL', label: 'Chirurgie & Bloc' },
+  { value: 'EMERGENCY', label: 'Urgences 24/7' },
+  { value: 'MATERNITY', label: 'Maternité & Gynécologie' },
+  { value: 'PEDIATRIC', label: 'Pédiatrie' },
+  { value: 'PHARMACY', label: 'Pharmacie Hospitalière' },
+  { value: 'TELEMEDICINE', label: 'Télémédecine' },
+  { value: 'REHABILITATION', label: 'Rééducation & Kinésithérapie' },
+];
 
 export default function ManageServices() {
   const { token, authFetch } = useAuth();
   const [services, setServices] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Service Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingServiceId, setEditingServiceId] = useState(null);
+
+  // Category Management Modal State (CRUD)
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [editingCatId, setEditingCatId] = useState(null);
+  const [catError, setCatError] = useState(null);
 
   const initialFormState = {
     category: 'GENERAL',
@@ -49,6 +72,7 @@ export default function ManageServices() {
           setHospitalId(hid);
           fetchServices(hid);
           fetchDoctors(hid);
+          fetchCategories(hid);
         } else {
           setLoading(false);
         }
@@ -63,7 +87,7 @@ export default function ManageServices() {
 
   const fetchServices = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
       if (res.ok) {
         setServices(await res.json());
       }
@@ -76,15 +100,88 @@ export default function ManageServices() {
 
   const fetchDoctors = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}&is_active=true`);
       if (res.ok) {
-        setDoctors(await res.json());
+        const data = await res.json();
+        // Filtrer les utilisateurs inactifs ou supprimés
+        const activeDoctors = data.filter(d => d.is_active !== false && d.user_details?.is_active !== false);
+        setDoctors(activeDoctors);
       }
     } catch (err) {
       console.error(err);
     }
   };
 
+  const fetchCategories = async (hid) => {
+    try {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/service-categories/?hospital=${hid}`);
+      if (res.ok) {
+        setCategories(await res.json());
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // --- CRUD CATÉGORIES DE PRESTATIONS ---
+  const handleSaveCategory = async (e) => {
+    e.preventDefault();
+    setCatError(null);
+    if (!newCatName.trim()) return;
+
+    try {
+      const url = editingCatId 
+        ? `http://localhost:8000/api/v1/hospital/service-categories/${editingCatId}/`
+        : 'http://localhost:8000/api/v1/hospital/service-categories/';
+      const method = editingCatId ? 'PATCH' : 'POST';
+
+      const payload = {
+        hospital: hospitalId,
+        name: newCatName.trim(),
+        description: newCatDesc.trim()
+      };
+
+      const res = await authFetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        setNewCatName('');
+        setNewCatDesc('');
+        setEditingCatId(null);
+        fetchCategories(hospitalId);
+      } else {
+        const errData = await res.json();
+        setCatError(errData.name || errData.detail || 'Erreur lors de l\'enregistrement de la catégorie');
+      }
+    } catch (err) {
+      setCatError(err.message);
+    }
+  };
+
+  const handleEditCategory = (cat) => {
+    setEditingCatId(cat.id);
+    setNewCatName(cat.name);
+    setNewCatDesc(cat.description || '');
+  };
+
+  const handleDeleteCategory = async (catId) => {
+    if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette catégorie de prestation ?")) return;
+    try {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/service-categories/${catId}/`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchCategories(hospitalId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // --- SERVICE MODAL ---
   const handleOpenModal = (service = null) => {
     if (service) {
       setEditingServiceId(service.id);
@@ -109,7 +206,7 @@ export default function ManageServices() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmitService = async (e) => {
     e.preventDefault();
     try {
       const url = editingServiceId 
@@ -124,12 +221,9 @@ export default function ManageServices() {
         head_doctor: formData.head_doctor || null
       };
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -143,18 +237,23 @@ export default function ManageServices() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDeleteService = async (id) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce service ?")) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/services/${id}/`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/services/${id}/`, {
+        method: 'DELETE'
       });
       if (res.ok) fetchServices(hospitalId);
     } catch (err) {
       console.error(err);
     }
   };
+
+  // Liste globale de toutes les catégories disponibles (Standards + Hôpital)
+  const allCategoryOptions = [
+    ...DEFAULT_CATEGORIES,
+    ...categories.map(c => ({ value: c.name, label: c.name }))
+  ];
 
   // Filtrage des services
   const filteredServices = services.filter(s => {
@@ -165,15 +264,18 @@ export default function ManageServices() {
   });
 
   const getCategoryBadge = (category) => {
+    const match = allCategoryOptions.find(c => c.value === category);
+    const label = match ? match.label : category;
+
     switch (category) {
       case 'GENERAL':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">Service Général</span>;
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">{label}</span>;
       case 'SPECIALIZED':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">Service Spécialisé</span>;
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">{label}</span>;
       case 'CARE_PACKAGE':
-        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1"><Package className="w-3 h-3"/> Paquet de Soins</span>;
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1"><Package className="w-3 h-3"/> {label}</span>;
       default:
-        return null;
+        return <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 flex items-center gap-1"><Tag className="w-3 h-3"/> {label}</span>;
     }
   };
 
@@ -187,17 +289,28 @@ export default function ManageServices() {
           </div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <HeartPulse className="text-teal-400" />
-            Gestion des Services & Paquets de Soins
+            Gestion des Services & Catégories de Prestation
           </h1>
-          <p className="text-teal-100 text-sm mt-1">Configurez les départements généraux, spécialités médicales et paquets de soins de votre établissement.</p>
+          <p className="text-teal-100 text-sm mt-1">Configurez vos catégories de prestation sur-mesure, vos services médicaux et paquets de soins.</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          disabled={!hospitalId}
-          className="flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-teal-500/30 transition cursor-pointer disabled:opacity-50"
-        >
-          <Plus className="w-5 h-5" /> Ajouter un Service / Paquet
-        </button>
+        
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsCategoryModalOpen(true)}
+            disabled={!hospitalId}
+            className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white px-4 py-2.5 rounded-xl font-bold transition cursor-pointer disabled:opacity-50 text-xs"
+          >
+            <FolderPlus className="w-4 h-4 text-teal-400" /> Gérer les Catégories ({categories.length})
+          </button>
+          
+          <button 
+            onClick={() => handleOpenModal()}
+            disabled={!hospitalId}
+            className="flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-teal-500/30 transition cursor-pointer disabled:opacity-50 text-xs"
+          >
+            <Plus className="w-4 h-4" /> Nouveau Service
+          </button>
+        </div>
       </div>
 
       {!hospitalId && !loading && (
@@ -206,30 +319,36 @@ export default function ManageServices() {
         </div>
       )}
 
-      {/* Barre de Recherche et Onglets par Catégorie */}
+      {/* Barre de Recherche et Onglets de Catégorie Dynamiques */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
-        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto">
-          {[
-            { key: 'ALL', label: 'Tous les Services' },
-            { key: 'GENERAL', label: 'Services Généraux' },
-            { key: 'SPECIALIZED', label: 'Services Spécialisés' },
-            { key: 'CARE_PACKAGE', label: 'Paquets de Soins' }
-          ].map(tab => (
+        <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+          <button
+            onClick={() => setActiveTab('ALL')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              activeTab === 'ALL'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+            }`}
+          >
+            Tous ({services.length})
+          </button>
+
+          {allCategoryOptions.map(cat => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              key={cat.value}
+              onClick={() => setActiveTab(cat.value)}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-                activeTab === tab.key
+                activeTab === cat.value
                   ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
               }`}
             >
-              {tab.label}
+              {cat.label}
             </button>
           ))}
         </div>
 
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full sm:w-64 shrink-0">
           <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
           <input 
             type="text"
@@ -272,7 +391,7 @@ export default function ManageServices() {
                 <div className="space-y-1.5 pt-2 text-xs text-gray-600 dark:text-gray-300">
                   <div className="flex items-center gap-2">
                     <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Responsable: <strong className="text-gray-900 dark:text-white">{s.head_doctor_name || 'Non renseigné'}</strong></span>
+                    <span>Chef de Service: <strong className="text-gray-900 dark:text-white">{s.head_doctor_name || 'Non attribué'}</strong></span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-amber-500" />
@@ -303,35 +422,23 @@ export default function ManageServices() {
                     </div>
                   </div>
                 )}
-
-                {/* Badges Télé-expertise & RDV en ligne */}
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                  {s.telemedicine_available && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                      <Video className="w-3 h-3" /> Téléconsultation / Diaspora
-                    </span>
-                  )}
-                  {s.online_booking_available && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
-                      <Calendar className="w-3 h-3" /> RDV en Ligne
-                    </span>
-                  )}
-                </div>
               </div>
 
-              {/* Actions de modification et suppression */}
+              {/* Actions de carte */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <button 
                   onClick={() => handleOpenModal(s)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition cursor-pointer"
+                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl transition cursor-pointer"
+                  title="Éditer le service"
                 >
-                  <Edit3 className="w-3.5 h-3.5 text-blue-500" /> Modifier
+                  <Edit3 className="w-4 h-4" />
                 </button>
                 <button 
-                  onClick={() => handleDelete(s.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer"
+                  onClick={() => handleDeleteService(s.id)}
+                  className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition cursor-pointer"
+                  title="Supprimer"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> Supprimer
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -339,35 +446,141 @@ export default function ManageServices() {
         )}
       </div>
 
-      {/* Modal de Création & Édition Enrichie */}
+      {/* --- MODAL 1 : CRUD CATÉGORIES DE PRESTATION --- */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-gray-800 flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+              <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
+                <FolderPlus className="text-teal-600" />
+                Gestion des Catégories de Prestation Hospitalière
+              </h3>
+              <button onClick={() => { setIsCategoryModalOpen(false); setEditingCatId(null); setNewCatName(''); setNewCatDesc(''); }} className="text-gray-400 hover:text-gray-900 dark:hover:text-white text-xl font-bold">&times;</button>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
+              {/* Formulaire d'ajout / modification de catégorie */}
+              <form onSubmit={handleSaveCategory} className="bg-teal-50/40 dark:bg-teal-950/30 p-4 rounded-2xl border border-teal-100 dark:border-teal-800/60 space-y-3">
+                <h4 className="text-xs font-bold text-teal-900 dark:text-teal-200">
+                  {editingCatId ? 'Modifier la Catégorie' : 'Créer une Nouvelle Catégorie de Prestation'}
+                </h4>
+
+                {catError && (
+                  <p className="text-xs text-rose-600 font-semibold">{catError}</p>
+                )}
+
+                <div>
+                  <input 
+                    type="text" 
+                    required
+                    value={newCatName}
+                    onChange={e => setNewCatName(e.target.value)}
+                    placeholder="Nom de la catégorie (ex: Consultation Spécialisée, Bilans Santé...)"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div>
+                  <input 
+                    type="text" 
+                    value={newCatDesc}
+                    onChange={e => setNewCatDesc(e.target.value)}
+                    placeholder="Description optionnelle..."
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  {editingCatId && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setEditingCatId(null); setNewCatName(''); setNewCatDesc(''); }} 
+                      className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-xl"
+                    >
+                      Annuler
+                    </button>
+                  )}
+                  <button 
+                    type="submit" 
+                    className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow cursor-pointer"
+                  >
+                    {editingCatId ? 'Mettre à jour' : 'Ajouter la catégorie'}
+                  </button>
+                </div>
+              </form>
+
+              {/* Liste des catégories personnalisées existantes */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2">
+                  Catégories Créées pour cet Hôpital ({categories.length})
+                </h4>
+
+                {categories.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">Aucune catégorie sur-mesure créée. Vous pouvez utiliser les catégories standards ci-dessus.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {categories.map(cat => (
+                      <div key={cat.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs">
+                        <div>
+                          <p className="font-bold text-gray-900 dark:text-white">{cat.name}</p>
+                          {cat.description && <p className="text-[11px] text-gray-400">{cat.description}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handleEditCategory(cat)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            title="Éditer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteCategory(cat.id)}
+                            className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL 2 : CRÉATION / ÉDITION DE SERVICE --- */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-200 dark:border-gray-800 max-h-[90vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200 dark:border-gray-800 max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 shrink-0">
               <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
                 <HeartPulse className="text-teal-600" />
-                {editingServiceId ? 'Modifier le Service / Paquet' : 'Nouveau Service ou Paquet de Soins'}
+                {editingServiceId ? 'Éditer la Prestation Médicale' : 'Créer une Nouvelle Prestation / Paquet de Soins'}
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-900 dark:hover:text-white text-xl font-bold">&times;</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+            <form onSubmit={handleSubmitService} className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Catégorie de Prestation</label>
+                {/* Catégorie de Prestation (Liste combinée standard + catégories hôpital) */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-800 dark:text-gray-200 mb-1">Catégorie de Prestation *</label>
                   <select 
                     value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
                   >
-                    <option value="GENERAL">Service Général (Urgences, Pédiatrie...)</option>
-                    <option value="SPECIALIZED">Service Spécialisé (Cardiologie, Oncologie...)</option>
-                    <option value="CARE_PACKAGE">Paquet de Soins (Pack Maternité, Bilan...)</option>
+                    {allCategoryOptions.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nom du Service / Paquet *</label>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nom du Service / Paquet de Soins *</label>
                   <input 
                     type="text" 
                     required 
@@ -388,7 +601,7 @@ export default function ManageServices() {
                     <option value="">-- Non attribué --</option>
                     {doctors.map(d => (
                       <option key={d.id} value={d.id}>
-                        {d.user_details?.first_name} {d.user_details?.last_name} ({d.medical_license_number})
+                        {d.user_details?.first_name || 'Médecin'} {d.user_details?.last_name || ''} ({d.medical_license_number || 'Matricule N/A'})
                       </option>
                     ))}
                   </select>
@@ -426,17 +639,17 @@ export default function ManageServices() {
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Conditions d'Accès</label>
-                <input 
-                  type="text" 
-                  value={formData.access_conditions}
-                  onChange={e => setFormData({ ...formData, access_conditions: e.target.value })}
-                  placeholder="ex: Sur rendez-vous / Entrée libre aux urgences"
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Conditions d'Accès</label>
+                  <input 
+                    type="text" 
+                    value={formData.access_conditions}
+                    onChange={e => setFormData({ ...formData, access_conditions: e.target.value })}
+                    placeholder="ex: Sur rendez-vous / Entrée libre aux urgences"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
               </div>
 
               <div>
@@ -454,11 +667,11 @@ export default function ManageServices() {
               <div>
                 <label className="block text-xs font-bold text-gray-800 dark:text-gray-200 mb-1.5 flex items-center gap-1.5">
                   <Stethoscope className="w-4 h-4 text-teal-600" />
-                  Groupe de Médecins & Personnel Rattaché ({formData.assigned_doctor_ids.length} sélectionné(s))
+                  Groupe de Médecins Rattachés ({formData.assigned_doctor_ids.length} sélectionné(s))
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-xl p-3 bg-gray-50/50 dark:bg-gray-800/40">
                   {doctors.length === 0 ? (
-                    <p className="text-xs text-gray-400 col-span-full italic">Aucun membre de personnel créé dans l'hôpital.</p>
+                    <p className="text-xs text-gray-400 col-span-full italic">Aucun médecin actif disponible.</p>
                   ) : (
                     doctors.map(d => {
                       const docName = `${d.user_details?.first_name || ''} ${d.user_details?.last_name || ''}`;
@@ -485,11 +698,11 @@ export default function ManageServices() {
                 </div>
               </div>
 
-              {/* Switches d'options */}
+              {/* Options du service */}
               <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-2xl space-y-2 border border-gray-200 dark:border-gray-700">
                 <label className="flex items-center justify-between cursor-pointer">
                   <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                    <Video className="w-4 h-4 text-indigo-500" /> Disponible pour la Téléconsultation / Diaspora
+                    <Video className="w-4 h-4 text-indigo-500" /> Disponible pour la Téléconsultation
                   </span>
                   <input 
                     type="checkbox"

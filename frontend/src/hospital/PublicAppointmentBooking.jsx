@@ -145,9 +145,12 @@ export default function PublicAppointmentBooking() {
         hospital: selectedHospital.id,
         doctor: selectedDoctor.id,
         appointment_date: `${bookingDetails.date}T${bookingDetails.time}:00Z`,
-        type: bookingDetails.type,
+        consultation_type: bookingDetails.type === 'TELEMEDICINE' ? 'TELEMEDICINE' : 'IN_PERSON',
         reason: bookingDetails.reason,
-        notes: `Patient: ${bookingDetails.patient_name} (${bookingDetails.patient_phone})`
+        notes: `Patient: ${bookingDetails.patient_name} (${bookingDetails.patient_phone})`,
+        patient_name: bookingDetails.patient_name,
+        patient_phone: bookingDetails.patient_phone,
+        patient_email: bookingDetails.patient_email
       };
 
       const res = await fetch('http://localhost:8000/api/v1/hospital/appointments/', {
@@ -159,14 +162,20 @@ export default function PublicAppointmentBooking() {
         body: JSON.stringify(payload)
       });
 
-      const code = `RDV-${Math.floor(100000 + Math.random() * 900000)}`;
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('Booking error:', errorData);
+        alert(`Erreur lors de la réservation : ${errorData.detail || JSON.stringify(errorData) || 'Veuillez vérifier les informations'}`);
+        return;
+      }
+
+      const createdAppointment = await res.json();
+      const code = `RDV-${createdAppointment.id ? createdAppointment.id.substring(0, 6).toUpperCase() : Math.floor(100000 + Math.random() * 900000)}`;
       setConfirmationCode(code);
       setCurrentStep(6);
     } catch (err) {
-      console.error(err);
-      const code = `RDV-${Math.floor(100000 + Math.random() * 900000)}`;
-      setConfirmationCode(code);
-      setCurrentStep(6);
+      console.error('Booking network error:', err);
+      alert('Erreur de connexion au serveur. Veuillez vérifier votre réseau et réessayer.');
     } finally {
       setSubmitting(false);
     }

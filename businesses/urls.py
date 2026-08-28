@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     BusinessListView, BusinessDetailView, MyBusinessListView, AdminBusinessListView, AdminBusinessDetailView, 
-    BusinessEmployeeListCreateView, AdminModerationListView, AdminModerationApproveView, 
+    BusinessEmployeeListCreateView, BusinessEmployeeDetailView, AdminModerationListView, AdminModerationApproveView, 
     AdminModerationRejectView, AdminCSVImportView, PublicBusinessRegistrationView,
     BusinessRoleListCreateView, BusinessRoleDetailView
 )
@@ -14,6 +14,7 @@ urlpatterns = [
     path('my-business/roles/', BusinessRoleListCreateView.as_view(), name='my-business-roles'),
     path('my-business/roles/<uuid:pk>/', BusinessRoleDetailView.as_view(), name='my-business-roles-detail'),
     path('my-business/employees/', BusinessEmployeeListCreateView.as_view(), name='my-business-employees'),
+    path('my-business/employees/<uuid:pk>/', BusinessEmployeeDetailView.as_view(), name='my-business-employee-detail'),
     path('admin/list/', AdminBusinessListView.as_view(), name='admin_business_list'),
     path('admin/<uuid:pk>/', AdminBusinessDetailView.as_view(), name='admin_business_detail'),
     path('admin/moderation/', AdminModerationListView.as_view(), name='admin_moderation_list'),

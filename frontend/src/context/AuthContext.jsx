@@ -57,14 +57,34 @@ export function AuthProvider({ children }) {
   const getRedirectPath = (userOrRole) => {
     // Si un objet user est passé
     if (typeof userOrRole === 'object' && userOrRole !== null) {
-      const { role, staff_category, system_access_level, email } = userOrRole;
+      const { role, staff_category, system_access_level, email, business_info, is_superuser } = userOrRole;
       const userEmail = (email || '').toLowerCase();
       const category = (staff_category || '').toUpperCase();
       const accessLevel = (system_access_level || '').toUpperCase();
+      const roleName = (business_info?.role_name || '').toLowerCase();
 
-      if (role === 'SUPER_ADMIN') return '/admin';
-      if (role === 'BUSINESS_OWNER') return '/hospital/admin';
+      // 1. Super Admin
+      if (role === 'SUPER_ADMIN' || is_superuser) {
+        return '/admin';
+      }
 
+      // 2. Hospital / Business Admin & Owner
+      if (
+        role === 'BUSINESS_OWNER' ||
+        accessLevel.includes('ADMIN') ||
+        accessLevel.includes('ALL') ||
+        category === 'ADMIN' ||
+        category === 'DIRECTION' ||
+        category === 'GESTONNAIRE' ||
+        roleName.includes('admin') ||
+        roleName.includes('propriétaire') ||
+        roleName.includes('directeur') ||
+        userEmail.includes('admin')
+      ) {
+        return '/hospital/admin';
+      }
+
+      // 3. Hospital Staff Roles
       if (role === 'PROFESSIONAL' || category || accessLevel) {
         if (accessLevel === 'RECEPTIONIST_ACCESS' || category === 'RECEPTIONIST' || category === 'ACCUEIL' || userEmail.includes('accueil') || userEmail.includes('reception')) {
           return '/hospital/staff/receptionist';
@@ -81,7 +101,8 @@ export function AuthProvider({ children }) {
         if (category === 'DOCTOR' || category === 'SPECIALIST' || category === 'MEDECIN' || userEmail.includes('medecin') || userEmail.includes('doctor')) {
           return '/hospital/staff/doctor';
         }
-        return '/hospital/staff/doctor';
+        // Fallback for professionals: default to hospital admin dashboard if role is unknown
+        return '/hospital/admin';
       }
       return '/dashboard';
     }
@@ -93,7 +114,7 @@ export function AuthProvider({ children }) {
       case 'BUSINESS_OWNER':
         return '/hospital/admin';
       case 'PROFESSIONAL':
-        return '/hospital/staff/doctor';
+        return '/hospital/admin';
       case 'CUSTOMER':
         return '/dashboard';
       default:

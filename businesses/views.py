@@ -159,6 +159,34 @@ class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
         serializer = self.get_serializer(employee)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BusinessEmployeeSerializer
+    permission_classes = [CanCreateBusiness]
+
+    def get_queryset(self):
+        business = self.request.user.businesses.first()
+        if business:
+            return BusinessEmployee.objects.filter(business=business)
+        return BusinessEmployee.objects.none()
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        role_id = request.data.get('role_id')
+        position = request.data.get('position')
+
+        if position is not None:
+            instance.position = position
+        if role_id:
+            try:
+                role = BusinessRole.objects.get(id=role_id, business=instance.business)
+                instance.role = role
+            except BusinessRole.DoesNotExist:
+                pass
+
+        instance.save()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
 # --- VIEWS DE MODÉRATION ET IMPORTATION CSV ---
 from rest_framework.views import APIView
 from rest_framework.response import Response
