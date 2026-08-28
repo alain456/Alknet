@@ -54,6 +54,21 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const getRedirectPath = (role) => {
+    switch (role) {
+      case 'SUPER_ADMIN':
+        return '/admin';
+      case 'BUSINESS_OWNER':
+        return '/business';
+      case 'PROFESSIONAL':
+        return '/hospital/staff/doctor';
+      case 'CUSTOMER':
+        return '/dashboard';
+      default:
+        return '/dashboard';
+    }
+  };
+
   const register = async (formData) => {
     setIsLoading(true);
     try {
@@ -169,6 +184,7 @@ export function AuthProvider({ children }) {
       logout,
       authFetch,
       refreshAccessToken,
+      getRedirectPath,
     }}>
       {children}
     </AuthContext.Provider>

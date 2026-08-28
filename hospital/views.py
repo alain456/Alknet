@@ -4,11 +4,11 @@ from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from businesses.models import BusinessRole, BusinessEmployee
-from .models import Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule, MedicalRecord, LabResult, Invoice
+from .models import Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule, MedicalRecord, LabResult, Invoice, Notification, Prescription
 from .serializers import (
     SpecialtySerializer, DoctorProfileSerializer, AppointmentSerializer, 
     MedicalServiceSerializer, DoctorScheduleSerializer, MedicalRecordSerializer, 
-    LabResultSerializer, InvoiceSerializer
+    LabResultSerializer, InvoiceSerializer, NotificationSerializer, PrescriptionSerializer
 )
 from .permissions import IsMedicalRecordViewer, IsLabTechnician, IsCashier, IsHospitalAdmin
 
@@ -276,18 +276,150 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 class LabResultViewSet(viewsets.ModelViewSet):
     """
     Accès Laboratoire:
-    Enregistrement et validation des résultats d'examens.
+    Enregistrement et validation des résultats d'examens avec workflow de sécurité élevée.
     """
     serializer_class = LabResultSerializer
     permission_classes = [permissions.IsAuthenticated, IsLabTechnician]
+    filterset_fields = ['hospital', 'patient', 'status']
 
     def get_queryset(self):
         user = self.request.user
         if user.role == 'SUPER_ADMIN':
             return LabResult.objects.all()
         if user.role == 'CUSTOMER':
-            return LabResult.objects.filter(patient=user)
+            # Les patients ne voient que les résultats validés ou communiqués
+            return LabResult.objects.filter(patient=user, status__in=['VALIDATED', 'COMMUNICATED'])
         return LabResult.objects.filter(hospital__employees__user=user)
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """
+        Mettre à jour le statut d'un résultat de laboratoire.
+        Workflow: REQUESTED → SAMPLE_COLLECTED → IN_ANALYSIS → RESULT_AVAILABLE → VALIDATED → COMMUNICATED
+        Body: {"status": "SAMPLE_COLLECTED" | "IN_ANALYSIS" | "RESULT_AVAILABLE" | "VALIDATED" | "COMMUNICATED"}
+        """
+        from django.utils import timezone
+        
+        lab_result = self.get_object()
+        new_status = request.data.get('status')
+        
+        valid_statuses = ['SAMPLE_COLLECTED', 'IN_ANALYSIS', 'RESULT_AVAILABLE', 'VALIDATED', 'COMMUNICATED']
+        
+        if new_status not in valid_statuses:
+            return Response(
+                {'error': f'Statut invalide. Valeurs acceptées: {", ".join(valid_statuses)}'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        lab_result.status = new_status
+        
+        # Enregistrer qui a validé et quand
+        if new_status == 'VALIDATED':
+            if hasattr(request.user, 'doctor_profile'):
+                lab_result.validated_by = request.user.doctor_profile
+            lab_result.validation_date = timezone.now()
+        
+        # Enregistrer la date de communication et envoyer notification
+        if new_status == 'COMMUNICATED':
+            lab_result.communication_date = timezone.now()
+            
+            # Créer une notification pour le patient
+            from .models import Notification
+            Notification.objects.create(
+                user=lab_result.patient,
+                notification_type='LAB_RESULT',
+                title='Résultat de laboratoire disponible',
+                message=f'Votre résultat d\'examen "{lab_result.test_name}" est maintenant disponible. Veuillez consulter votre espace patient.',
+                lab_result=lab_result
+            )
+        
+        lab_result.save()
+        
+        serializer = self.get_serializer(lab_result)
+        return Response(serializer.data)
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    """
+    Système de notifications pour les patients.
+    Les utilisateurs ne voient que leurs propres notifications.
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'SUPER_ADMIN':
+            return Notification.objects.all()
+        # Chaque utilisateur voit uniquement ses propres notifications
+        return Notification.objects.filter(user=user)
+
+    @action(detail=True, methods=['post'])
+    def mark_as_read(self, request, pk=None):
+        """
+        Marquer une notification comme lue.
+        """
+        from django.utils import timezone
+        
+        notification = self.get_object()
+        
+        # Vérifier que l'utilisateur est bien le destinataire
+        if notification.user != request.user:
+            return Response(
+                {'error': 'Vous ne pouvez pas marquer cette notification comme lue'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        notification.is_read = True
+        notification.read_at = timezone.now()
+        notification.save()
+        
+        serializer = self.get_serializer(notification)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def mark_all_as_read(self, request):
+        """
+        Marquer toutes les notifications de l'utilisateur comme lues.
+        """
+        from django.utils import timezone
+        
+        notifications = self.get_queryset().filter(is_read=False)
+        notifications.update(is_read=True, read_at=timezone.now())
+        
+        return Response({'message': 'Toutes les notifications ont été marquées comme lues'})
+
+class PrescriptionViewSet(viewsets.ModelViewSet):
+    """
+    Gestion des prescriptions médicales et examens.
+    Accessible par les médecins pour prescrire et par les patients pour voir leurs prescriptions.
+    """
+    serializer_class = PrescriptionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'PROFESSIONAL':
+            # Le médecin voit ses prescriptions
+            return Prescription.objects.filter(doctor__user=user)
+        elif user.role == 'CUSTOMER':
+            # Le patient voit ses prescriptions
+            return Prescription.objects.filter(patient=user)
+        elif user.role in ['BUSINESS_OWNER', 'SUPER_ADMIN']:
+            # L'admin voit toutes les prescriptions de son hôpital
+            return Prescription.objects.all()
+        return Prescription.objects.none()
+
+    def perform_create(self, serializer):
+        # Si c'est un médecin, il est automatiquement le prescripteur
+        if self.request.user.role == 'PROFESSIONAL':
+            from .models import DoctorProfile
+            try:
+                doctor = DoctorProfile.objects.get(user=self.request.user)
+                serializer.save(doctor=doctor, patient=self.request.user)
+            except DoctorProfile.DoesNotExist:
+                serializer.save()
+        else:
+            serializer.save()
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     """

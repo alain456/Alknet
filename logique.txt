@@ -537,3 +537,21 @@ Ne développez pas tout en même temps pour ne pas vous décourager. Suivez cet 
 3. **Étape 3 (Le premier Frontend - Priorité Mobile)** : Créez l'application Flutter. Codez l'authentification et l'Espace Client / Agriculteur. Connectez-les à l'API Django. À ce stade, vous avez déjà un produit minimal viable (MVP) qui fonctionne sur téléphone.
 4. **Étape 4 (Le second Frontend - Web)** : Créez le site React. Codez l'Espace Entreprise / Professionnel pour leur permettre de gérer leur activité confortablement sur ordinateur.
 
+Ce qui reste potentiellement à faire
+Pour le module Laboratoire (selon vos spécifications)
+Notifications au patient : Système de notification quand un résultat est communiqué
+Gestion des documents PDF : Upload et téléchargement des résultats en PDF
+Historique des modifications : Traçabilité complète des changements de statut
+Dashboard laboratoire : Statistiques spécifiques au laboratoire
+Fonctionnalités générales hospitalières
+Téléconsultation : Intégration vidéo pour les consultations à distance
+Pharmacie : Gestion des prescriptions et médicaments
+Radiologie/Imagerie : Gestion des examens d'imagerie
+Hospitalisation : Gestion des lits et admissions
+Urgences : Module de gestion des urgences
+Rapports et exports : Génération de rapports statistiques
+Signature électronique : Pour validation médicale sécurisée
+Infrastructure
+Migrations Django : À appliquer pour les modifications de modèles
+Tests : Tests unitaires et d'intégration
+Documentation API : Swagger/OpenAPI

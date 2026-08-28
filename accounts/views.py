@@ -9,6 +9,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 # pyrefly: ignore [missing-import]
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import RegisterSerializer, UserSerializer, CustomTokenObtainPairSerializer
+from permissions.custom_permissions import IsSuperAdmin, IsAdminOrBusinessOwnerOrProfessional
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -41,21 +42,21 @@ User = get_user_model()
 class AdminUserListView(generics.ListAPIView):
     queryset = User.objects.all().order_by('-created_at')
     serializer_class = UserSerializer
-    permission_classes = [AllowAny] # Use AllowAny temporarily for easy frontend testing
+    permission_classes = [IsSuperAdmin]
 
 class AdminUserCreateView(generics.CreateAPIView):
     queryset = User.objects.all()
     from .serializers import AdminUserCreateSerializer
     serializer_class = AdminUserCreateSerializer
-    permission_classes = [AllowAny] # Temporary for easy frontend testing; should be IsAuthenticated and IsAdminUser in production
+    permission_classes = [IsSuperAdmin]
 
 class AdminProfessionalListView(generics.ListAPIView):
     queryset = User.objects.filter(role='PROFESSIONAL').order_by('-created_at')
     serializer_class = UserSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrBusinessOwnerOrProfessional]
 
 class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     from .serializers import AdminUserUpdateSerializer
     serializer_class = AdminUserUpdateSerializer
-    permission_classes = [AllowAny] # Temporary for easy frontend testing
+    permission_classes = [IsSuperAdmin]

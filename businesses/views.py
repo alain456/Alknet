@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from django.db import transaction
 from .models import Business
 from .serializers import BusinessSerializer, AdminBusinessSerializer
+from permissions.custom_permissions import IsSuperAdmin, IsBusinessOwner, IsAdminOrBusinessOwner
 
 class CanCreateBusiness(BasePermission):
     """
@@ -79,14 +80,12 @@ class MyBusinessListView(generics.ListCreateAPIView):
 class AdminBusinessListView(generics.ListCreateAPIView):
     queryset = Business.objects.all().order_by('-created_at')
     serializer_class = AdminBusinessSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsSuperAdmin]
 
 class AdminBusinessDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Business.objects.all()
     serializer_class = AdminBusinessSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsSuperAdmin]
 
 from .models import BusinessEmployee, BusinessRole
 from .serializers import BusinessEmployeeSerializer, BusinessRoleSerializer

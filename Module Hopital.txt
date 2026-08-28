@@ -1,0 +1,626 @@
+Oui. Votre idée est techniquement faisable, et je vous conseille de ne pas concevoir le module « Hôpital » comme une simple page descriptive, mais comme un véritable module de gestion et d’accès aux services hospitaliers, connecté aux modules « Patient », « Médecin », « Rendez-vous », « Laboratoire », « Paiement » et surtout « Télémédecine ».
+L’OMS recommande justement que les projets de santé numérique soient conçus autour des besoins du système de santé, de l’interopérabilité, de la sécurité, de l’accessibilité et d'une architecture durable. Sa stratégie numérique a d'ailleurs été prolongée jusqu'en 2027. 
+Je vous propose ci-dessous une première spécification fonctionnelle et technique du module Hôpital, que vous pourrez intégrer dans votre cahier des charges.
+1. Module « Hôpital » — objectif général
+Le module doit permettre à un patient, à un proche ou à un professionnel de santé de :
+    • rechercher un hôpital ; 
+    • connaître les services et spécialités disponibles ; 
+    • vérifier les horaires et la disponibilité des spécialistes ; 
+    • prendre un rendez-vous ; 
+    • demander une consultation à distance ; 
+    • consulter les résultats de laboratoire auxquels il a droit ; 
+    • connaître les modalités et coûts de prise en charge ; 
+    • effectuer ou initier un paiement ; 
+    • contacter le service clientèle de l'hôpital 24h/24 et 7j/7 ; 
+    • obtenir l'itinéraire et la géolocalisation de l'établissement ; 
+    • accéder à des services de télémédecine avec des médecins locaux et/ou des spécialistes exerçant à l'étranger. 
+L'objectif est donc de transformer l'hôpital en « établissement de santé virtuellement accessible », tout en conservant l'hôpital physique comme lieu de prise en charge.
+
+2. Fiche d'identité de l'hôpital
+2.1 Informations générales
+Chaque hôpital dispose d'une fiche structurée comprenant :
+Champ
+Description
+Identifiant hôpital
+Identifiant unique généré par le système
+Nom
+Nom officiel
+Sigle
+Facultatif
+Logo
+Image
+Type
+Public, privé, confessionnel, ONG, etc.
+Statut
+En activité, temporairement fermé, etc.
+Niveau
+Hôpital de district, provincial, national, spécialisé, etc.
+Niveau de référence
+Niveau auquel l'établissement peut recevoir les références
+Adresse
+Adresse physique
+Province/ville
+Localisation administrative
+Géolocalisation
+Latitude + longitude
+Téléphone
+Numéro principal
+Email
+Adresse institutionnelle
+Site web
+Facultatif
+Description
+Présentation de l'établissement
+Langues
+Langues disponibles
+Horaires
+Heures normales d'ouverture
+Urgences
+Disponibilité du service d'urgence
+2.2 Géolocalisation
+La plateforme doit permettre :
+Patient → Hôpital → « Voir sur la carte » → itinéraire
+Il serait utile de prévoir :
+    • latitude ; 
+    • longitude ; 
+    • adresse ; 
+    • distance par rapport au patient ; 
+    • temps estimé de trajet lorsque le service cartographique le permet ; 
+    • bouton « Itinéraire » ; 
+    • indication « ouvert/fermé » ; 
+    • indication « service d'urgence disponible ». 
+
+3. Services et paquets de soins
+Il faut éviter de mettre tous les services dans un simple champ texte.
+Créer une véritable base de données des services.
+Exemple
+Hôpital X
+Services généraux
+    • Médecine interne 
+    • Chirurgie 
+    • Pédiatrie 
+    • Gynécologie-obstétrique 
+    • Urgences 
+    • Maternité 
+    • Dentisterie 
+Services spécialisés
+    • Cardiologie 
+    • Neurologie 
+    • Néphrologie 
+    • Oncologie 
+    • Orthopédie 
+    • Ophtalmologie 
+    • Dermatologie 
+    • etc. 
+Pour chaque service :
+    • nom ; 
+    • description ; 
+    • responsable ; 
+    • horaires ; 
+    • disponibilité ; 
+    • numéro de contact ; 
+    • coût indicatif ; 
+    • conditions d'accès ; 
+    • possibilité de consultation à distance ; 
+    • possibilité de rendez-vous en ligne. 
+
+4. Annuaire des médecins spécialistes
+C'est une fonctionnalité particulièrement importante.
+Chaque spécialiste devrait avoir son propre profil.
+Données du médecin
+    • nom et prénom ; 
+    • photo professionnelle ; 
+    • sexe, si nécessaire et justifié ; 
+    • spécialité ; 
+    • sous-spécialité ; 
+    • numéro d'enregistrement professionnel, selon les règles nationales ; 
+    • établissement de rattachement ; 
+    • langues parlées ; 
+    • qualifications ; 
+    • expérience ; 
+    • services proposés ; 
+    • jours de consultation ; 
+    • horaires ; 
+    • disponibilité ; 
+    • consultation physique ou à distance ; 
+    • tarif ; 
+    • mode de paiement accepté ; 
+    • bouton « Prendre rendez-vous ». 
+Exemple
+Dr X — Cardiologue
+Hôpital Y
+Consultation : lundi–vendredi
+08h00–13h00
+Consultation physique : Oui
+Téléconsultation : Oui
+Rendez-vous : disponible
+Le patient peut ensuite sélectionner :
+Prendre rendez-vous → Date → Heure → Motif → Mode de consultation → Confirmation.
+
+5. Module « Rendez-vous »
+Je recommande de le développer comme un module indépendant mais intégré au module Hôpital.
+Workflow
+Patient
+→ recherche hôpital
+→ sélectionne spécialité
+→ sélectionne médecin
+→ consulte les créneaux
+→ choisit date/heure
+→ indique le motif
+→ choisit présentiel ou téléconsultation
+→ confirme
+→ reçoit notification.
+Notifications
+Le système peut envoyer :
+    • confirmation ; 
+    • rappel 24 h avant ; 
+    • rappel 1 h avant ; 
+    • modification du rendez-vous ; 
+    • annulation ; 
+    • retard du médecin ; 
+    • lien de téléconsultation. 
+Les notifications peuvent être prévues par :
+    • application ; 
+    • SMS ; 
+    • email ; 
+    • WhatsApp, si une intégration officielle est retenue. 
+
+6. Résultats de laboratoire
+Il s'agit d'un sous-module qui doit être traité avec un niveau de sécurité élevé.
+Workflow proposé
+Patient
+→ demande/examen prescrit
+→ prélèvement
+→ laboratoire
+→ validation du résultat
+→ résultat publié
+→ notification au patient
+→ consultation sécurisée du résultat.
+Le patient ne devrait pas pouvoir voir un résultat non validé.
+Il faut donc avoir au minimum les statuts :
+Demandé → Prélèvement effectué → En analyse → Résultat disponible → Validé → Communiqué
+Pour chaque résultat
+    • patient ; 
+    • examen ; 
+    • date ; 
+    • laboratoire ; 
+    • médecin prescripteur ; 
+    • résultat ; 
+    • unité ; 
+    • valeurs de référence ; 
+    • commentaire ; 
+    • statut ; 
+    • médecin ayant validé ; 
+    • date de validation ; 
+    • document PDF éventuel. 
+À terme, je recommande de prévoir une architecture compatible avec HL7 FHIR, qui est un standard largement utilisé pour l'échange de données de santé. L'OMS et HL7 collaborent d'ailleurs spécifiquement sur l'interopérabilité des systèmes de santé. 
+
+7. Paiement
+Le module Hôpital doit afficher clairement :
+    • prix de consultation ; 
+    • prix des examens ; 
+    • prix des procédures ; 
+    • prix des paquets de soins ; 
+    • assurance acceptée ; 
+    • paiement direct ; 
+    • paiement mobile ; 
+    • paiement bancaire ; 
+    • autres moyens disponibles. 
+Il est préférable de séparer la gestion financière de la gestion clinique.
+Architecture :
+Patient → Facture → Paiement → Confirmation → Reçu
+Le système doit enregistrer :
+    • montant ; 
+    • devise ; 
+    • service concerné ; 
+    • patient ; 
+    • hôpital ; 
+    • date ; 
+    • méthode ; 
+    • référence transactionnelle ; 
+    • statut : en attente / payé / échoué / remboursé. 
+
+8. Service clientèle 24/7
+Je vous conseille de créer un véritable « Centre de contact » plutôt que trois simples numéros.
+Interface patient
+Service clientèle – disponible 24h/24, 7j/7
+    • 📞 Appeler 
+    • WhatsApp 
+    • Email 
+    • Chat 
+    • Signaler un problème 
+    • Demander de l'aide 
+Le système peut créer automatiquement un ticket.
+Exemple :
+Ticket #HOP-2026-000245
+Statut :
+Nouveau → En traitement → Résolu → Fermé
+Cela permet ensuite à l'administration de mesurer :
+    • nombre de demandes ; 
+    • temps moyen de réponse ; 
+    • demandes les plus fréquentes ; 
+    • plaintes ; 
+    • problèmes non résolus. 
+
+9. ⭐ Module stratégique : Télémédecine
+C'est à mon avis le cœur innovant de votre projet.
+Votre proposition de faire intervenir à distance des médecins spécialistes qui se trouvent à l'étranger peut être structurée comme un réseau de médecins partenaires à distance.
+L'OMS dispose d'un guide spécifique sur la mise en œuvre de la télémédecine et souligne notamment la nécessité de planifier les parcours de soins, les ressources, les infrastructures et les conditions de mise en œuvre. 
+9.1 Principe
+Le modèle que vous décrivez peut être :
+Patient au Burundi
+↓
+Hôpital partenaire au Burundi
+↓
+Médecin local/intermédiaire
+↓
+Plateforme sécurisée de télémédecine
+↓
+Spécialiste au Burundi ou à l'étranger
+↓
+Avis spécialisé
+↓
+Médecin local
+↓
+Prise en charge du patient
+Cela est important : le spécialiste à distance ne devrait pas simplement être mis en communication directe avec le patient sans organisation clinique.
+Le médecin local joue le rôle de :
+    • professionnel référent ; 
+    • collecteur des informations cliniques ; 
+    • interlocuteur auprès du spécialiste ; 
+    • personne qui réalise les examens nécessaires ; 
+    • personne qui assure le suivi du patient sur place. 
+
+10. « Espace de télémédecine » dans l'hôpital
+Votre idée d'aménager physiquement un espace dans chaque hôpital est excellente.
+Il pourrait être appelé :
+« Unité de télémédecine »
+ou
+« Centre de consultation spécialisée à distance »
+L'espace devrait comprendre :
+    • ordinateur professionnel ; 
+    • écran suffisamment grand ; 
+    • webcam HD ; 
+    • microphone ; 
+    • haut-parleurs/casque ; 
+    • connexion Internet stable ; 
+    • connexion de secours 4G/5G ; 
+    • onduleur ; 
+    • alimentation électrique de secours ; 
+    • imprimante/scanner si nécessaire ; 
+    • dispositif de confidentialité acoustique ; 
+    • espace garantissant la confidentialité du patient. 
+Pour certaines spécialités, on pourra progressivement connecter des dispositifs médicaux compatibles :
+    • stéthoscope numérique ; 
+    • ECG ; 
+    • otoscope ; 
+    • dermatoscope ; 
+    • échographe, selon le contexte ; 
+    • caméra médicale ; 
+    • autres dispositifs spécialisés. 
+Il faut cependant commencer avec une architecture simple et fiable plutôt que vouloir connecter immédiatement tous les équipements.
+
+11. Fonctionnement d'une téléconsultation spécialisée
+Je vous propose ce workflow :
+Étape 1 — Identification du besoin
+Le médecin local constate :
+« Besoin d'un avis cardiologique spécialisé. »
+Il crée une demande de télé-expertise.
+Étape 2 — Constitution du dossier
+Le système demande :
+    • identité du patient ; 
+    • motif ; 
+    • antécédents pertinents ; 
+    • symptômes ; 
+    • signes cliniques ; 
+    • traitements ; 
+    • examens disponibles ; 
+    • images ; 
+    • résultats biologiques ; 
+    • question précise adressée au spécialiste. 
+Étape 3 — Recherche du spécialiste
+La plateforme recherche :
+Cardiologue → disponibilité → langue → pays → domaine d'expertise
+Étape 4 — Attribution
+Le spécialiste accepte la demande.
+Étape 5 — Consultation
+Connexion vidéo sécurisée :
+Médecin local + patient + spécialiste distant
+Étape 6 — Avis spécialisé
+Le spécialiste renseigne :
+    • observations ; 
+    • hypothèses ; 
+    • examens complémentaires recommandés ; 
+    • recommandations ; 
+    • traitement proposé, lorsque cela relève de son cadre professionnel ; 
+    • niveau d'urgence ; 
+    • nécessité d'un transfert/référencement. 
+Étape 7 — Validation
+Le médecin local prend connaissance de l'avis et poursuit la prise en charge.
+Étape 8 — Archivage
+Le compte rendu est enregistré dans le dossier médical du patient avec traçabilité.
+
+12. Gestion des médecins de la diaspora
+Je créerais un sous-module spécifique :
+« Réseau des médecins partenaires à distance »
+Chaque médecin expatrié peut avoir :
+    • profil professionnel ; 
+    • spécialité ; 
+    • sous-spécialité ; 
+    • pays de résidence ; 
+    • fuseau horaire ; 
+    • langues ; 
+    • disponibilités ; 
+    • établissement de rattachement à l'étranger ; 
+    • qualifications ; 
+    • domaines d'expertise ; 
+    • statut de vérification ; 
+    • hôpitaux partenaires ; 
+    • types d'intervention ; 
+    • tarif ou intervention bénévole ; 
+    • nombre de télé-expertises réalisées. 
+Statut du médecin
+Par exemple :
+Candidature → Vérification des documents → Validé → Actif → Suspendu
+La plateforme doit prévoir une vérification des qualifications et de l'autorisation d'exercer, conformément au cadre juridique applicable. C'est un point à définir avec les autorités sanitaires et les ordres professionnels concernés.
+
+13. Très important : ne pas confondre trois services
+Je recommande de distinguer dans le cahier des charges :
+A. Téléconsultation
+Le médecin consulte directement le patient à distance.
+B. Télé-expertise
+Le médecin local demande l'avis d'un spécialiste distant.
+C. Téléassistance
+Un spécialiste distant assiste un professionnel local pendant un acte ou une procédure.
+Ces trois services ont des workflows, des responsabilités et des exigences différentes.
+
+14. Architecture technique proposée
+Pour éviter que votre plateforme devienne difficile à faire évoluer, je recommande une architecture modulaire :
+                    PLATEFORME SANTÉ
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+     PATIENT             HÔPITAL          MÉDECIN
+        │                  │                  │
+        └──────────────────┼──────────────────┘
+                           │
+                 SERVICES MÉDICAUX
+                           │
+       ┌──────────┬────────┼────────┬──────────┐
+       │          │        │        │          │
+  Rendez-vous  Labo   Télémédecine Paiement  Notifications
+                           │
+                    Médecins diaspora
+                           │
+                   Consultation distante
+Couche technique
+Frontend Web / Mobile
+          │
+       API Gateway
+          │
+    Backend applicatif
+          │
+ ┌────────┼───────────────┐
+ │        │               │
+Base     Service        Service
+Données  Vidéo         Notifications
+ │        │               │
+PostgreSQL WebRTC       SMS/Email/
+ │                       WhatsApp
+ │
+FHIR / Interopérabilité
+ │
+Systèmes hospitaliers
+
+15. Gestion des droits d'accès
+C'est indispensable pour les données médicales.
+Je recommande un modèle RBAC (Role-Based Access Control).
+Rôles
+Patient
+    • voir son dossier ; 
+    • prendre rendez-vous ; 
+    • voir ses résultats autorisés ; 
+    • consulter ses factures ; 
+    • accéder à ses téléconsultations. 
+Médecin
+    • voir les patients qui lui sont attribués ; 
+    • consulter les informations nécessaires ; 
+    • ajouter une note clinique ; 
+    • prescrire ; 
+    • demander une télé-expertise. 
+Spécialiste distant
+    • accéder uniquement aux dossiers qui lui sont attribués ; 
+    • consulter les informations nécessaires ; 
+    • produire un avis ; 
+    • participer à la téléconsultation. 
+Laboratoire
+    • enregistrer les résultats ; 
+    • valider les résultats. 
+Caissier
+    • gérer les factures et paiements ; 
+    • sans accès inutile aux informations médicales. 
+Administrateur hôpital
+    • gérer établissement, services, médecins, horaires, tarifs. 
+Super administrateur plateforme
+    • gérer l'ensemble de la plateforme, avec des restrictions et une traçabilité renforcées. 
+
+16. Sécurité et confidentialité
+Pour votre projet, je considérerais ceci comme une exigence de niveau 1, pas comme une fonctionnalité optionnelle.
+Il faut notamment prévoir :
+    • HTTPS/TLS ; 
+    • chiffrement des données sensibles au repos ; 
+    • authentification forte ; 
+    • MFA pour les professionnels ; 
+    • gestion fine des permissions ; 
+    • journalisation des accès ; 
+    • audit trail ; 
+    • expiration des sessions ; 
+    • sauvegardes chiffrées ; 
+    • plan de récupération après sinistre ; 
+    • protection contre les accès non autorisés ; 
+    • séparation des environnements développement/test/production ; 
+    • gestion du consentement ; 
+    • politique de conservation des données ; 
+    • traçabilité des consultations du dossier ; 
+    • procédure de révocation des comptes. 
+Il faut également intégrer les exigences du cadre juridique applicable au Burundi concernant les données personnelles, le secret médical, la télémédecine, l'exercice professionnel et les paiements.
+
+17. Interopérabilité : point à décider maintenant
+Je vous recommande fortement de prévoir dès le début une architecture API-first et une compatibilité HL7 FHIR plutôt que de créer une plateforme fermée. FHIR est spécifiquement conçu pour l'échange de données de santé entre systèmes. 
+Par exemple :
+Patient
+Practitioner
+Organization
+Location
+Appointment
+Encounter
+Observation
+DiagnosticReport
+MedicationRequest
+ServiceRequest
+DocumentReference
+CarePlan
+Consent
+Invoice
+PaymentNotice
+Cela vous permettra plus tard de connecter :
+    • systèmes hospitaliers ; 
+    • laboratoires ; 
+    • pharmacies ; 
+    • assurance maladie ; 
+    • systèmes nationaux de santé ; 
+    • autres plateformes numériques. 
+L'OMS recommande également des systèmes de santé numériques intégrés et interopérables. 
+
+18. Tableau des principales fonctionnalités du module Hôpital
+Fonctionnalité
+Patient
+Médecin
+Administration
+Fiche hôpital
+✓
+✓
+✓
+Géolocalisation
+✓
+✓
+✓
+Services disponibles
+✓
+✓
+✓
+Annuaire spécialistes
+✓
+✓
+✓
+Horaires médecins
+✓
+✓
+✓
+Rendez-vous
+✓
+✓
+✓
+Résultats laboratoire
+✓
+✓
+✓
+Paiement
+✓
+—
+✓
+Service clientèle
+✓
+✓
+✓
+Téléconsultation
+✓
+✓
+✓
+Télé-expertise
+—
+✓
+✓
+Réseau diaspora
+—
+✓
+✓
+Gestion espace télémédecine
+—
+✓
+✓
+Statistiques
+—
+—
+✓
+Audit/traçabilité
+—
+—
+✓
+
+19. MVP : ce que je vous conseille de développer en premier
+Ne cherchez surtout pas à tout développer en même temps.
+Phase 1 — MVP
+Hôpital
+    • fiche établissement ; 
+    • localisation ; 
+    • services ; 
+    • spécialistes ; 
+    • horaires ; 
+    • contacts. 
+Patient
+    • recherche ; 
+    • consultation des hôpitaux ; 
+    • prise de rendez-vous ; 
+    • notifications. 
+Professionnel
+    • profil ; 
+    • agenda ; 
+    • gestion rendez-vous. 
+Phase 2
+    • laboratoire ; 
+    • résultats ; 
+    • paiement ; 
+    • facturation ; 
+    • service clientèle/tickets. 
+Phase 3
+Télémédecine
+    • téléconsultation ; 
+    • télé-expertise ; 
+    • salle de télémédecine ; 
+    • médecins diaspora ; 
+    • dossier médical partagé ; 
+    • partage sécurisé d'examens. 
+Phase 4
+    • interconnexion avec les hôpitaux ; 
+    • FHIR/API ; 
+    • assurance ; 
+    • pharmacie ; 
+    • statistiques nationales ; 
+    • aide à la décision clinique, si justifiée et validée. 
+
+20. Le point le plus important pour votre projet
+Je modifierais légèrement votre formulation initiale.
+Au lieu de :
+« Hôpital : description générale de l'hôpital... »
+je proposerais comme intitulé technique :
+MODULE 01 — GESTION ET ACCÈS NUMÉRIQUE AUX SERVICES HOSPITALIERS
+Avec les sous-modules :
+01.1 — Référentiel des établissements
+01.2 — Services et paquets de soins
+01.3 — Annuaire des professionnels de santé
+01.4 — Disponibilités et agenda
+01.5 — Rendez-vous
+01.6 — Laboratoire et résultats
+01.7 — Facturation et paiement
+01.8 — Service clientèle 24/7
+01.9 — Géolocalisation
+01.10 — Télémédecine
+01.11 — Télé-expertise internationale / diaspora médicale
+01.12 — Administration et statistiques
+01.13 — Sécurité, consentement et traçabilité
+01.14 — Interopérabilité/API
+Cette structuration est beaucoup plus exploitable ensuite par une équipe informatique pour produire les maquettes UX/UI, les spécifications fonctionnelles, les API, la base de données et le cahier des charges de développement.
+Pour la télémédecine, l'OMS recommande notamment une approche structurée de planification, de mise en œuvre et de maintenance plutôt qu'une simple application de visioconférence. 
+Si vous le souhaitez, je peux poursuivre avec la spécification technique détaillée de ce Module 01, notamment les champs de chaque écran, les acteurs et leurs droits, les workflows, les tables de base de données, les API REST/FHIR et les règles métier, sous une forme directement exploitable par vos informaticiens et votre équipe chargée du cahier des charges.
+

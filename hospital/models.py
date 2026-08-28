@@ -143,24 +143,134 @@ class MedicalRecord(models.Model):
         return f"Record for {self.patient.get_full_name()} at {self.hospital.name}"
 
 class LabResult(models.Model):
-    """Résultats d'examens de laboratoire."""
+    """Résultats d'examens de laboratoire avec workflow de sécurité élevée."""
+    STATUS_CHOICES = (
+        ('REQUESTED', 'Demandé'),
+        ('SAMPLE_COLLECTED', 'Prélèvement effectué'),
+        ('IN_ANALYSIS', 'En analyse'),
+        ('RESULT_AVAILABLE', 'Résultat disponible'),
+        ('VALIDATED', 'Validé'),
+        ('COMMUNICATED', 'Communiqué'),
+    )
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='lab_results')
     hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='lab_results')
     ordered_by = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordered_labs')
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_labs')
+    validated_by = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_labs')
     
-    test_name = models.CharField(max_length=200)
-    result_notes = models.TextField(blank=True, null=True)
+    test_name = models.CharField(max_length=200, help_text="Nom de l'examen")
+    test_date = models.DateField(help_text="Date de l'examen")
+    result_value = models.CharField(max_length=500, help_text="Valeur du résultat")
+    unit = models.CharField(max_length=50, blank=True, help_text="Unité de mesure")
+    reference_values = models.TextField(blank=True, help_text="Valeurs de référence normales")
+    result_notes = models.TextField(blank=True, help_text="Commentaires sur le résultat")
     document_url = models.URLField(blank=True, null=True, help_text="Lien vers le fichier PDF du résultat")
+    
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='REQUESTED')
+    
+    validation_date = models.DateTimeField(null=True, blank=True, help_text="Date de validation du résultat")
+    communication_date = models.DateTimeField(null=True, blank=True, help_text="Date de communication au patient")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Résultat de laboratoire"
+        verbose_name_plural = "Résultats de laboratoire"
+
+    def __str__(self):
+        return f"Lab: {self.test_name} - {self.patient.get_full_name()} ({self.get_status_display()})"
+
+class Notification(models.Model):
+    """Notifications pour les patients (résultats de laboratoire, rappels, etc.)."""
+    NOTIFICATION_TYPES = (
+        ('LAB_RESULT', 'Résultat de laboratoire'),
+        ('APPOINTMENT_REMINDER', 'Rappel de rendez-vous'),
+        ('PRESCRIPTION_READY', 'Prescription prête'),
+        ('INVOICE_PAYMENT', 'Facture à payer'),
+        ('GENERAL', 'Information générale'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
+    notification_type = models.CharField(max_length=30, choices=NOTIFICATION_TYPES, default='GENERAL')
+    
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    
+    # Lien vers l'objet concerné (optionnel)
+    lab_result = models.ForeignKey('LabResult', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
+    appointment = models.ForeignKey('Appointment', on_delete=models.SET_NULL, null=True, blank=True, related_name='notifications')
+    
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at']
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
 
     def __str__(self):
-        return f"Lab: {self.test_name} - {self.patient.get_full_name()}"
+        return f"{self.title} - {self.user.email}"
+
+class Prescription(models.Model):
+    """Prescriptions médicales et examens demandés par les médecins."""
+    PRESCRIPTION_TYPE_CHOICES = (
+        ('MEDICATION', 'Médicament'),
+        ('EXAM', 'Examen'),
+        ('PROCEDURE', 'Procédure'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    # Patient concerné
+    patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='prescriptions')
+    
+    # Médecin prescripteur
+    doctor = models.ForeignKey('DoctorProfile', on_delete=models.CASCADE, related_name='prescriptions')
+    
+    # Hôpital
+    hospital = models.ForeignKey('businesses.Business', on_delete=models.CASCADE, related_name='prescriptions')
+    
+    # Type de prescription
+    prescription_type = models.CharField(max_length=20, choices=PRESCRIPTION_TYPE_CHOICES)
+    
+    # Détails de la prescription
+    medication_name = models.CharField(max_length=255, blank=True, help_text="Nom du médicament")
+    dosage = models.CharField(max_length=100, blank=True, help_text="Dosage (ex: 500mg)")
+    frequency = models.CharField(max_length=100, blank=True, help_text="Fréquence (ex: 3 fois par jour)")
+    duration = models.CharField(max_length=100, blank=True, help_text="Durée (ex: 7 jours)")
+    instructions = models.TextField(blank=True, help_text="Instructions spéciales")
+    
+    # Pour les examens
+    exam_name = models.CharField(max_length=255, blank=True, help_text="Nom de l'examen")
+    exam_reason = models.TextField(blank=True, help_text="Raison de l'examen")
+    
+    # Statut
+    is_active = models.BooleanField(default=True)
+    is_dispensed = models.BooleanField(default=False, help_text="Médicament délivré")
+    is_completed = models.BooleanField(default=False, help_text="Examen complété")
+    
+    # Dates
+    prescribed_at = models.DateTimeField(auto_now_add=True)
+    valid_until = models.DateField(null=True, blank=True, help_text="Date de validité de l'ordonnance")
+    
+    class Meta:
+        ordering = ['-prescribed_at']
+        verbose_name = "Prescription"
+        verbose_name_plural = "Prescriptions"
+    
+    def __str__(self):
+        if self.prescription_type == 'MEDICATION':
+            return f"Ordonnance: {self.medication_name} - {self.patient.email}"
+        elif self.prescription_type == 'EXAM':
+            return f"Examen: {self.exam_name} - {self.patient.email}"
+        return f"Prescription {self.id} - {self.patient.email}"
 
 class Invoice(models.Model):
     """Facturation des actes médicaux et consultations."""

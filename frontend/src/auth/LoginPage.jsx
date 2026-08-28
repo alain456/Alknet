@@ -8,7 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, getRedirectPath } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -20,14 +20,9 @@ export default function LoginPage() {
       const loggedUser = await login(email, password);
       setIsLoading(false);
       
-      // Role-based redirection
-      if (loggedUser.role === 'SUPER_ADMIN') {
-        navigate('/admin');
-      } else if (loggedUser.role === 'BUSINESS_OWNER') {
-        navigate('/business');
-      } else {
-        navigate('/dashboard');
-      }
+      // Role-based redirection using getRedirectPath
+      const redirectPath = getRedirectPath(loggedUser.role);
+      navigate(redirectPath);
     } catch (err) {
       setIsLoading(false);
       setError(err.message || 'Unable to sign in. Please check your credentials.');

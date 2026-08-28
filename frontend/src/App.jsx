@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './auth/ProtectedRoute';
 import PublicLayout from './layouts/PublicLayout';
+import HospitalStaffLayout from './layouts/HospitalStaffLayout';
 import LandingPage from './public/LandingPage';
 import ServicesPage from './public/ServicesPage';
 import BusinessesPage from './public/BusinessesPage';
@@ -14,6 +15,14 @@ import BusinessRegistrationPage from './public/BusinessRegistrationPage';
 import ManageServices from './hospital/admin/ManageServices';
 import ManageDoctors from './hospital/admin/ManageDoctors';
 import ManageSchedules from './hospital/admin/ManageSchedules';
+import ManageAppointments from './hospital/admin/ManageAppointments';
+import ManageMedicalRecords from './hospital/admin/ManageMedicalRecords';
+import ManageInvoices from './hospital/admin/ManageInvoices';
+import ManageLabResults from './hospital/admin/ManageLabResults';
+import HospitalDashboard from './hospital/admin/HospitalDashboard';
+import LabTechnicianDashboard from './hospital/staff/LabTechnicianDashboard';
+import DoctorDashboard from './hospital/staff/DoctorDashboard';
+import CashierDashboard from './hospital/staff/CashierDashboard';
 import AuthLayout from './layouts/AuthLayout';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
@@ -24,6 +33,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import UserDashboardPage from './dashboard/UserDashboardPage';
 import UserBookingsPage from './dashboard/UserBookingsPage';
 import UserProfilePage from './dashboard/UserProfilePage';
+import Notifications from './patient/Notifications';
 import BusinessLayout from './layouts/BusinessLayout';
 import ManageRoles from './business/ManageRoles';
 import BusinessDashboardPage from './business/BusinessDashboardPage';
@@ -78,6 +88,7 @@ function App() {
               <Route index element={<UserDashboardPage />} />
               <Route path="bookings" element={<UserBookingsPage />} />
               <Route path="profile" element={<UserProfilePage />} />
+              <Route path="notifications" element={<Notifications />} />
             </Route>
           </Route>
 
@@ -98,9 +109,23 @@ function App() {
             
             {/* Hospital Admin Routes (Using BusinessLayout) */}
             <Route path="/hospital/admin" element={<BusinessLayout />}>
+              <Route index element={<HospitalDashboard />} />
               <Route path="services" element={<ManageServices />} />
               <Route path="doctors" element={<ManageDoctors />} />
               <Route path="schedules" element={<ManageSchedules />} />
+              <Route path="appointments" element={<ManageAppointments />} />
+              <Route path="medical-records" element={<ManageMedicalRecords />} />
+              <Route path="invoices" element={<ManageInvoices />} />
+              <Route path="lab-results" element={<ManageLabResults />} />
+            </Route>
+
+            {/* Hospital Staff Routes */}
+            <Route element={<ProtectedRoute allowedRoles={['PROFESSIONAL', 'BUSINESS_OWNER', 'SUPER_ADMIN']} />}>
+              <Route element={<HospitalStaffLayout />}>
+                <Route path="/hospital/staff/lab-technician" element={<LabTechnicianDashboard />} />
+                <Route path="/hospital/staff/doctor" element={<DoctorDashboard />} />
+                <Route path="/hospital/staff/cashier" element={<CashierDashboard />} />
+              </Route>
             </Route>
           </Route>
 

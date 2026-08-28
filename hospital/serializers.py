@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule, MedicalRecord, LabResult, Invoice
+from .models import Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule, MedicalRecord, LabResult, Invoice, Notification, Prescription
 
 class SpecialtySerializer(serializers.ModelSerializer):
     class Meta:
@@ -119,13 +119,37 @@ class MedicalRecordSerializer(serializers.ModelSerializer):
 
 class LabResultSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
+    patient_email = serializers.SerializerMethodField()
+    hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    ordered_by_name = serializers.SerializerMethodField()
+    validated_by_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
 
     class Meta:
         model = LabResult
-        fields = '__all__'
+        fields = [
+            'id', 'patient', 'patient_name', 'patient_email', 'hospital', 'hospital_name',
+            'ordered_by', 'ordered_by_name', 'uploaded_by', 'validated_by', 'validated_by_name',
+            'test_name', 'test_date', 'result_value', 'unit', 'reference_values',
+            'result_notes', 'document_url', 'status', 'status_display',
+            'validation_date', 'communication_date', 'created_at', 'updated_at'
+        ]
 
     def get_patient_name(self, obj):
         return f"{obj.patient.first_name} {obj.patient.last_name}" if obj.patient else "Inconnu"
+
+    def get_patient_email(self, obj):
+        return obj.patient.email if obj.patient else None
+
+    def get_ordered_by_name(self, obj):
+        if obj.ordered_by:
+            return f"Dr. {obj.ordered_by.user.first_name} {obj.ordered_by.user.last_name}"
+        return None
+
+    def get_validated_by_name(self, obj):
+        if obj.validated_by:
+            return f"Dr. {obj.validated_by.user.first_name} {obj.validated_by.user.last_name}"
+        return None
 
 class InvoiceSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
@@ -136,3 +160,56 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def get_patient_name(self, obj):
         return f"{obj.patient.first_name} {obj.patient.last_name}" if obj.patient else "Inconnu"
+
+class NotificationSerializer(serializers.ModelSerializer):
+    user_email = serializers.SerializerMethodField()
+    notification_type_display = serializers.CharField(source='get_notification_type_display', read_only=True)
+    lab_result_summary = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Notification
+        fields = [
+            'id', 'user', 'user_email', 'notification_type', 'notification_type_display',
+            'title', 'message', 'lab_result', 'lab_result_summary', 'appointment',
+            'is_read', 'read_at', 'created_at'
+        ]
+
+    def get_user_email(self, obj):
+        return obj.user.email if obj.user else None
+
+    def get_lab_result_summary(self, obj):
+        if obj.lab_result:
+            return {
+                'test_name': obj.lab_result.test_name,
+                'status': obj.lab_result.status,
+                'test_date': obj.lab_result.test_date
+            }
+        return None
+
+class PrescriptionSerializer(serializers.ModelSerializer):
+    patient_email = serializers.SerializerMethodField()
+    patient_name = serializers.SerializerMethodField()
+    doctor_name = serializers.SerializerMethodField()
+    prescription_type_display = serializers.CharField(source='get_prescription_type_display', read_only=True)
+    
+    class Meta:
+        model = Prescription
+        fields = ['id', 'patient', 'patient_email', 'patient_name', 'doctor', 'doctor_name', 
+                  'hospital', 'prescription_type', 'prescription_type_display',
+                  'medication_name', 'dosage', 'frequency', 'duration', 'instructions',
+                  'exam_name', 'exam_reason', 'is_active', 'is_dispensed', 'is_completed',
+                  'prescribed_at', 'valid_until']
+        read_only_fields = ['prescribed_at']
+    
+    def get_patient_email(self, obj):
+        return obj.patient.email if obj.patient else None
+    
+    def get_patient_name(self, obj):
+        if obj.patient:
+            return f"{obj.patient.first_name} {obj.patient.last_name}"
+        return None
+    
+    def get_doctor_name(self, obj):
+        if obj.doctor:
+            return f"{obj.doctor.user.first_name} {obj.doctor.user.last_name}"
+        return None
