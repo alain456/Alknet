@@ -1,0 +1,366 @@
+Prompt final à utiliser pour terminer le frontend MVP
+Rôle
+Tu es un lead frontend engineer, architecte React et product designer senior. Finalise le frontend web du module Hôpital de la plateforme Isoko Hub en t’appuyant sur l’implémentation existante et sur les spécifications fonctionnelles fournies.
+
+Ne recrée pas les fonctionnalités déjà présentes. Inspecte et réutilise les composants, modèles frontend, routes et dashboards existants. Complète uniquement ce qui manque, harmonise l’expérience et rends les parcours réellement navigables.
+
+Le MVP doit rester volontairement limité. Ne développe pas maintenant :
+
+le spécialiste distant ou médecin partenaire de la diaspora ;
+le coordinateur de télémédecine ;
+l’agent du service clientèle / support.
+Ne crée pas leurs dashboards, menus, permissions, routes ou workflows. Garde uniquement une architecture extensible pour pouvoir les ajouter dans une phase ultérieure.
+
+Stack obligatoire
+React avec TypeScript ;
+Tailwind CSS ;
+React Router ;
+architecture par fonctionnalités ;
+composants réutilisables ;
+données et appels API compatibles avec le backend Django existant ;
+ne pas remplacer Django par un autre backend ;
+ne pas créer de nouvelle base de données ;
+ne pas modifier les modèles backend sauf si une incompatibilité évidente est signalée séparément ;
+ne pas exposer de secrets ;
+utiliser des mocks uniquement lorsque l’API n’existe pas encore, avec une couche de service facilement remplaçable.
+Périmètre
+Construire et finaliser les espaces web professionnels de l’hôpital :
+
+administrateur d’hôpital ;
+médecin local ;
+infirmier/infirmière ;
+laborantin ;
+caissier/agent de facturation ;
+agent d’accueil/admissions ;
+éventuellement responsable de laboratoire, responsable financier et directeur médical.
+Les trois rôles suivants sont reportés après le MVP et ne doivent pas apparaître dans la navigation actuelle :
+
+spécialiste distant / médecin partenaire diaspora ;
+coordinateur de télémédecine ;
+agent du service clientèle / support.
+La partie publique existante et l’application patient/mobile ne doivent pas être supprimées. Elles doivent continuer à fonctionner, mais le travail principal concerne les espaces professionnels inclus dans le MVP.
+
+Règle principale de sécurité UX
+Mettre en place un contrôle d’accès par rôle côté frontend avec un RoleGuard ou PermissionGuard. Le frontend doit masquer ou désactiver les fonctions non autorisées, mais ne jamais prétendre remplacer les contrôles de sécurité du backend.
+
+Les données médicales doivent être affichées selon le principe du moindre privilège :
+
+le caissier voit les données nécessaires à la facturation, pas les notes cliniques ;
+l’agent d’accueil voit les données administratives nécessaires, pas le dossier médical complet ;
+le médecin et l’infirmier accèdent uniquement aux patients concernés par leur prise en charge.
+Dashboards par rôle
+Dashboard administrateur d’hôpital
+Créer un tableau de bord global avec :
+
+nombre de patients du jour ;
+rendez-vous du jour ;
+rendez-vous en attente ;
+consultations terminées ;
+analyses en attente ;
+recettes du jour ;
+factures impayées ;
+disponibilité des services ;
+disponibilité des médecins ;
+graphiques par période ;
+activités récentes ;
+alertes importantes.
+L’administrateur doit pouvoir accéder à :
+
+fiche de l’hôpital ;
+services et paquets de soins ;
+médecins et professionnels ;
+horaires ;
+rendez-vous ;
+patients et admissions ;
+laboratoire ;
+facturation ;
+rapports ;
+utilisateurs et permissions ;
+audit.
+Dashboard médecin
+Afficher :
+
+agenda du jour ;
+rendez-vous à venir ;
+patients assignés ;
+consultations à compléter ;
+résultats de laboratoire disponibles ;
+alertes cliniques non lues.
+Ajouter des vues pour :
+
+dossier patient ;
+note de consultation ;
+diagnostic ;
+prescription ;
+compte rendu de consultation.
+Dashboard infirmier
+Afficher :
+
+file d’attente ;
+patients attendus ;
+constantes à saisir ;
+soins à suivre ;
+alertes transmises au médecin.
+Créer un formulaire rapide et accessible pour les constantes vitales, avec validation et historique.
+
+Dashboard laborantin
+Afficher :
+
+examens demandés ;
+prélèvements reçus ;
+analyses en cours ;
+résultats à saisir ;
+résultats à transmettre ;
+résultats à valider si le rôle dispose de cette permission.
+Utiliser les statuts :
+
+Demandé → Prélèvement effectué → En analyse → Résultat disponible → Validé → Communiqué
+
+Ne jamais afficher au patient un résultat qui n’est pas validé dans le parcours public.
+
+Dashboard caissier
+Afficher :
+
+encaissements du jour ;
+factures en attente ;
+paiements récents ;
+paiements échoués ;
+remboursements à traiter ;
+total par mode de paiement.
+Créer les flux de facturation, paiement et émission de reçu sans afficher les détails cliniques inutiles.
+
+Dashboard agent d’accueil
+Afficher :
+
+patients attendus ;
+arrivées du jour ;
+file d’attente ;
+rendez-vous à confirmer ;
+consultations en retard ;
+services disponibles.
+Créer les parcours d’enregistrement d’un patient, d’arrivée, d’orientation et de gestion de rendez-vous.
+
+Fonctionnalités suspendues du MVP
+Ne pas construire pour le moment :
+
+le dashboard du spécialiste distant ;
+le réseau des médecins partenaires de la diaspora ;
+l’attribution d’une télé-expertise à un spécialiste externe ;
+le dashboard et le workflow du coordinateur de télémédecine ;
+la gestion des salles et équipements de télémédecine ;
+le dashboard du service clientèle ;
+les tickets, plaintes et statistiques de support.
+Si une section ou un bouton lié à ces fonctionnalités existe déjà, le masquer du menu MVP ou le remplacer par un état discret Bientôt disponible. Ne pas simuler un workflow incomplet.
+
+Routes à prévoir ou harmoniser
+Utiliser les routes existantes lorsqu’elles existent déjà. Ajouter ou compléter les routes suivantes :
+
+/hospital/dashboard
+/hospital/profile
+/hospital/services
+/hospital/doctors
+/hospital/doctors/:id
+/hospital/schedules
+/hospital/patients
+/hospital/patients/:id
+/hospital/admissions
+/hospital/appointments
+/hospital/laboratory
+/hospital/laboratory/requests
+/hospital/laboratory/results
+/hospital/billing
+/hospital/payments
+/hospital/reports
+/hospital/users
+/hospital/audit
+
+Les routes de télémédecine avancée et de support ne doivent pas être actives dans le MVP. Elles pourront être ajoutées dans une version ultérieure.
+
+Modules à finaliser
+Fiche établissement
+Permettre à l’administrateur de gérer :
+
+nom officiel ;
+sigle ;
+logo ;
+type ;
+statut ;
+niveau de référence ;
+adresse ;
+province/ville ;
+latitude et longitude ;
+téléphone ;
+email ;
+site web ;
+description ;
+langues ;
+horaires ;
+disponibilité des urgences ;
+ambulance si cette information est disponible.
+Ajouter une prévisualisation publique de la fiche.
+
+Services et tarifs
+Permettre de gérer :
+
+nom ;
+catégorie ;
+description ;
+responsable ;
+horaires ;
+disponibilité ;
+contact ;
+coût indicatif ;
+conditions d’accès ;
+rendez-vous en ligne ;
+téléconsultation ;
+paquets de soins.
+Médecins et disponibilités
+Créer une gestion complète des profils :
+
+nom et prénom exacts, sans ajouter automatiquement « Dr. » ;
+photo ;
+spécialité ;
+sous-spécialité ;
+numéro professionnel ;
+langues ;
+qualifications ;
+expérience ;
+établissement de rattachement ;
+type de consultation ;
+tarifs ;
+jours et horaires ;
+statut ;
+indisponibilités.
+Rendez-vous
+Prévoir :
+
+calendrier ;
+liste ;
+filtres par médecin, service et statut ;
+confirmation ;
+modification ;
+annulation ;
+mode présentiel ou téléconsultation ;
+motif ;
+notifications.
+Statuts :
+
+En attente, Confirmé, Terminé, Annulé.
+
+Laboratoire
+Créer une interface de suivi par étapes, avec formulaires séparés pour la saisie et la validation. Afficher le médecin prescripteur, l’examen, les unités, les valeurs de référence, les commentaires, le validateur et la date de validation.
+
+Facturation et paiement
+Afficher :
+
+consultation ;
+examen ;
+procédure ;
+paquet de soins ;
+assurance ;
+paiement direct ;
+mobile money ;
+banque ;
+statut du paiement ;
+reçu.
+Statuts :
+
+En attente, Payé, Échoué, Remboursé.
+
+Télémédecine — préparation uniquement
+La télémédecine avancée est reportée après le MVP. Ne pas implémenter :
+
+le spécialiste distant ou médecin partenaire diaspora ;
+le coordinateur de télémédecine ;
+l’attribution d’une télé-expertise ;
+la gestion d’une salle ou d’une session spécialisée ;
+la téléassistance.
+Si une fonctionnalité de téléconsultation publique existe déjà, la conserver sans l’étendre avec un nouveau workflow professionnel. Dans le dashboard du médecin, afficher au maximum une action désactivée Télé-expertise — bientôt disponible.
+
+Consentement, audit et traçabilité
+Ajouter dans les écrans sensibles :
+
+confirmation du consentement lorsque nécessaire ;
+utilisateur ayant consulté ou modifié une donnée ;
+date et heure ;
+historique des changements ;
+journal d’accès ;
+message lorsqu’une donnée n’est pas accessible au rôle courant.
+Ne pas afficher de promesse juridique ou de conformité automatique. Préparer simplement l’interface pour les exigences de sécurité et de confidentialité qui seront imposées par le backend et le cadre applicable.
+
+Design system
+Créer une interface cohérente avec :
+
+sidebar ;
+topbar ;
+breadcrumbs ;
+cartes KPI ;
+tableaux filtrables ;
+badges de statut ;
+drawers de détails ;
+modales de confirmation ;
+timeline ;
+calendrier ;
+formulaires multi-étapes ;
+notifications toast ;
+états loading, empty, error et success ;
+responsive desktop/tablette.
+Direction visuelle :
+
+style professionnel et médical ;
+bleu profond, bleu clair, blanc et gris neutres ;
+vert pour les états positifs ;
+orange pour les alertes ;
+rouge pour les erreurs et urgences ;
+hiérarchie visuelle claire ;
+aucun lorem ipsum ;
+interface entièrement en français ;
+dates, heures et montants localisés.
+Données mockées et intégration backend
+Réutiliser les données et contrats API déjà présents. Lorsque certaines fonctionnalités ne possèdent pas encore d’API :
+
+créer un service mocké temporaire ;
+isoler les données de démonstration ;
+utiliser les mêmes types que les réponses attendues ;
+afficher clairement les états simulés dans le code ;
+ne pas mélanger les mocks avec les composants visuels.
+Prévoir des exemples pour l’hôpital Baho et plusieurs profils :
+
+un médecin local ;
+une infirmière major ;
+un laborantin ;
+un caissier ;
+un agent d’accueil ;
+éventuellement un responsable de laboratoire ;
+éventuellement un responsable financier.
+Critères d’acceptation
+Le travail est terminé si :
+
+Les dashboards existants sont conservés et visuellement harmonisés.
+Le profil de chaque rôle possède un parcours cohérent.
+L’administrateur peut gérer les établissements, services, médecins, horaires, utilisateurs et statistiques.
+L’agent d’accueil peut gérer une arrivée, une file d’attente et un rendez-vous.
+Le médecin peut consulter un patient autorisé et rédiger une note de consultation.
+L’infirmier peut saisir les constantes et suivre les soins.
+Le laborantin peut suivre une analyse et saisir un résultat.
+La validation d’un résultat est séparée de sa simple saisie lorsque les permissions l’exigent.
+Le caissier peut gérer une facture, un paiement et un reçu sans voir inutilement le dossier clinique.
+Les trois fonctionnalités suspendues ne figurent pas dans la navigation du MVP.
+Les permissions modifient effectivement les actions visibles.
+Les états de chargement, erreur, vide et succès sont traités.
+Les informations médicales et financières sont visuellement séparées.
+L’application reste utilisable sur desktop et tablette.
+Les routes sont navigables sans écran fictif ou lien cassé.
+Aucun backend ou secret n’est ajouté dans le frontend.
+Le code existant est réutilisé au lieu d’être dupliqué.
+Les fonctionnalités reportées sont signalées proprement dans le code et dans le README.
+Ordre de réalisation recommandé
+Auditer les routes, composants et dashboards déjà présents.
+Harmoniser le layout, les rôles et les permissions.
+Finaliser le dashboard administrateur.
+Ajouter l’accueil/admission.
+Finaliser les parcours médecin, infirmier, laboratoire et caisse.
+Ajouter les rapports et le journal d’audit.
+Vérifier les parcours avec l’hôpital Baho et les rôles inclus dans le MVP.
+Documenter les trois fonctionnalités suspendues comme feuille de route post-MVP.
+Ne transforme pas le résultat en simple maquette statique. Chaque écran principal doit être navigable et chaque action importante doit produire un changement d’état visible, même lorsque la donnée est simulée.

@@ -3,7 +3,7 @@ import { Receipt, DollarSign, User, Calendar, CheckCircle, XCircle, Clock, Searc
 import { useAuth } from '../../context/AuthContext';
 
 export default function ManageInvoices() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [patients, setPatients] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -23,7 +23,7 @@ export default function ManageInvoices() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -48,7 +48,7 @@ export default function ManageInvoices() {
 
   const fetchInvoices = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -63,7 +63,7 @@ export default function ManageInvoices() {
 
   const fetchPatients = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/accounts/users/', {
+      const res = await authFetch('http://localhost:8000/api/v1/accounts/admin/users/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -77,7 +77,7 @@ export default function ManageInvoices() {
 
   const fetchAppointments = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}&status=COMPLETED`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}&status=COMPLETED`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -91,7 +91,7 @@ export default function ManageInvoices() {
   const handleCreateInvoice = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/invoices/', {
+      const res = await authFetch('http://localhost:8000/api/v1/hospital/invoices/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -119,7 +119,7 @@ export default function ManageInvoices() {
 
   const handleStatusChange = async (invoiceId, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/invoices/${invoiceId}/`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/${invoiceId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

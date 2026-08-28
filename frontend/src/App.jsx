@@ -20,9 +20,13 @@ import ManageMedicalRecords from './hospital/admin/ManageMedicalRecords';
 import ManageInvoices from './hospital/admin/ManageInvoices';
 import ManageLabResults from './hospital/admin/ManageLabResults';
 import HospitalDashboard from './hospital/admin/HospitalDashboard';
+import ManageReports from './hospital/admin/ManageReports';
+import AuditLogs from './hospital/admin/AuditLogs';
 import LabTechnicianDashboard from './hospital/staff/LabTechnicianDashboard';
 import DoctorDashboard from './hospital/staff/DoctorDashboard';
+import NurseDashboard from './hospital/staff/NurseDashboard';
 import CashierDashboard from './hospital/staff/CashierDashboard';
+import ReceptionistDashboard from './hospital/staff/ReceptionistDashboard';
 import AuthLayout from './layouts/AuthLayout';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
@@ -57,6 +61,7 @@ import AdminOrdersPage from './admin/AdminOrdersPage';
 import AdminPaymentsPage from './admin/AdminPaymentsPage';
 import AdminLocationsPage from './admin/AdminLocationsPage';
 import AdminSettingsPage from './admin/AdminSettingsPage';
+import AdminAuditLogsPage from './admin/AdminAuditLogsPage';
 
 function App() {
   return (
@@ -117,15 +122,19 @@ function App() {
               <Route path="medical-records" element={<ManageMedicalRecords />} />
               <Route path="invoices" element={<ManageInvoices />} />
               <Route path="lab-results" element={<ManageLabResults />} />
+              <Route path="reports" element={<ManageReports />} />
+              <Route path="audit" element={<AuditLogs />} />
             </Route>
+          </Route>
 
-            {/* Hospital Staff Routes */}
-            <Route element={<ProtectedRoute allowedRoles={['PROFESSIONAL', 'BUSINESS_OWNER', 'SUPER_ADMIN']} />}>
-              <Route element={<HospitalStaffLayout />}>
-                <Route path="/hospital/staff/lab-technician" element={<LabTechnicianDashboard />} />
-                <Route path="/hospital/staff/doctor" element={<DoctorDashboard />} />
-                <Route path="/hospital/staff/cashier" element={<CashierDashboard />} />
-              </Route>
+          {/* Hospital Staff Routes */}
+          <Route element={<ProtectedRoute allowedRoles={['PROFESSIONAL', 'BUSINESS_OWNER', 'SUPER_ADMIN']} />}>
+            <Route element={<HospitalStaffLayout />}>
+              <Route path="/hospital/staff/receptionist" element={<ReceptionistDashboard />} />
+              <Route path="/hospital/staff/lab-technician" element={<LabTechnicianDashboard />} />
+              <Route path="/hospital/staff/doctor" element={<DoctorDashboard />} />
+              <Route path="/hospital/staff/nurse" element={<NurseDashboard />} />
+              <Route path="/hospital/staff/cashier" element={<CashierDashboard />} />
             </Route>
           </Route>
 
@@ -142,9 +151,11 @@ function App() {
               <Route path="products" element={<AdminProductsPage />} />
               <Route path="orders" element={<AdminOrdersPage />} />
               <Route path="payments" element={<AdminPaymentsPage />} />
+              <Route path="audit-logs" element={<AdminAuditLogsPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
             </Route>
           </Route>
+
 
           <Route path="*" element={<div className="p-20 text-center text-2xl font-bold">404 - Page Not Found</div>} />
         </Routes>

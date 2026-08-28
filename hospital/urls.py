@@ -3,10 +3,12 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     SpecialtyViewSet, DoctorProfileViewSet, AppointmentViewSet,
     MedicalServiceViewSet, DoctorScheduleViewSet, MedicalRecordViewSet,
-    LabResultViewSet, InvoiceViewSet, NotificationViewSet, PrescriptionViewSet
+    LabResultViewSet, InvoiceViewSet, NotificationViewSet, PrescriptionViewSet,
+    HospitalProfileViewSet
 )
 
 router = DefaultRouter()
+router.register(r'profiles', HospitalProfileViewSet, basename='hospital-profile')
 router.register(r'specialties', SpecialtyViewSet)
 router.register(r'doctors', DoctorProfileViewSet, basename='doctor')
 router.register(r'appointments', AppointmentViewSet, basename='appointment')

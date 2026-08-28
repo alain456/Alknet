@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Building2, Users, Calendar, Settings,
-  LayoutDashboard, Menu, X, Bell, LogOut,
+  LayoutDashboard, Menu, X, Bell, LogOut, FileText,
   Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +28,14 @@ export default function BusinessLayout() {
         .then(data => {
           if (data && data.length > 0) {
             setBusiness(data[0]);
+          } else {
+            // Fallback for Super Admin or admin without direct ownership
+            authFetch('http://localhost:8000/api/v1/businesses/')
+              .then(res => res.ok ? res.json() : [])
+              .then(allBus => {
+                const list = Array.isArray(allBus) ? allBus : (allBus.results || []);
+                if (list.length > 0) setBusiness(list[0]);
+              });
           }
         })
         .catch(err => console.error(err));
@@ -58,7 +66,7 @@ export default function BusinessLayout() {
     {
       title: "Vue d'ensemble",
       items: [
-        { name: 'Tableau de Bord', icon: LayoutDashboard, path: '/business' },
+        { name: 'Tableau de Bord', icon: LayoutDashboard, path: '/hospital/admin' },
       ]
     },
     {
@@ -71,22 +79,20 @@ export default function BusinessLayout() {
       ]
     },
     {
-      title: "Sécurité & Personnel",
+      title: "Activité Clinique & Patientèle",
       items: [
+        { name: 'Rendez-vous Médicaux', icon: Calendar, path: '/hospital/admin/appointments' },
+        { name: 'Dossiers Médicaux', icon: FileText, path: '/hospital/admin/medical-records' },
+        { name: 'Laboratoire', icon: Sparkles, path: '/hospital/admin/lab-results' },
+        { name: 'Facturation & Caisse', icon: Building2, path: '/hospital/admin/invoices' },
+      ]
+    },
+    {
+      title: "Pilotage & Sécurité",
+      items: [
+        { name: 'Rapports & Analytics', icon: LayoutDashboard, path: '/hospital/admin/reports' },
+        { name: 'Journal d\'Audit & RBAC', icon: Shield, path: '/hospital/admin/audit' },
         { name: 'Gestion du Personnel', icon: Users, path: '/business/employees' },
-        { name: 'Rôles & Permissions (RBAC)', icon: Shield, path: '/business/roles' },
-      ]
-    },
-    {
-      title: "Activité Clinique",
-      items: [
-        { name: 'Rendez-vous Médicaux', icon: Calendar, path: '/business/bookings' },
-      ]
-    },
-    {
-      title: "Configuration",
-      items: [
-        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
       ]
     }
   ];

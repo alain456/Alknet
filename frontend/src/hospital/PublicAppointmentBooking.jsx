@@ -628,7 +628,7 @@ export default function PublicAppointmentBooking() {
             {/* Récapitulatif */}
             <div className="bg-gray-50 dark:bg-gray-800/50 p-6 rounded-2xl text-left space-y-2 text-xs text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800">
               <p className="flex justify-between"><span>Hôpital :</span> <strong className="text-gray-900 dark:text-white">{selectedHospital?.name}</strong></p>
-              <p className="flex justify-between"><span>Médecin :</span> <strong className="text-gray-900 dark:text-white">{selectedDoctor?.user_details?.first_name} {selectedDoctor?.user_details?.last_name}</strong></p>
+              <p className="flex justify-between"><span>Médecin :</span> <strong className="text-gray-900 dark:text-white">{selectedDoctor?.user_details?.first_name || selectedDoctor?.full_name || selectedDoctor?.name} {selectedDoctor?.user_details?.last_name || ''}</strong></p>
               <p className="flex justify-between"><span>Date & Heure :</span> <strong className="text-gray-900 dark:text-white">{bookingDetails.date} à {bookingDetails.time}</strong></p>
               <p className="flex justify-between"><span>Mode de consultation :</span> <strong className="text-gray-900 dark:text-white">{bookingDetails.type === 'TELEMEDICINE' ? 'Téléconsultation Vidéo' : 'Présentiel à l\'hôpital'}</strong></p>
               <p className="flex justify-between"><span>Tarif estimé :</span> <strong className="text-teal-600 dark:text-teal-400 font-bold">{Number(selectedDoctor?.consultation_fee || 0).toLocaleString()} BIF</strong></p>

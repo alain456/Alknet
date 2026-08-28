@@ -23,6 +23,7 @@ export default function ManageServices() {
     name: '',
     description: '',
     head_doctor: '',
+    assigned_doctor_ids: [],
     contact_phone: '',
     operating_hours: '24h/24, 7j/7',
     indicative_cost: 0,
@@ -92,6 +93,7 @@ export default function ManageServices() {
         name: service.name || '',
         description: service.description || '',
         head_doctor: service.head_doctor || '',
+        assigned_doctor_ids: service.assigned_doctors_details ? service.assigned_doctors_details.map(d => d.id) : [],
         contact_phone: service.contact_phone || '',
         operating_hours: service.operating_hours || '24h/24, 7j/7',
         indicative_cost: service.indicative_cost || 0,
@@ -270,11 +272,11 @@ export default function ManageServices() {
                 <div className="space-y-1.5 pt-2 text-xs text-gray-600 dark:text-gray-300">
                   <div className="flex items-center gap-2">
                     <Stethoscope className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Responsable: <strong className="text-gray-900 dark:text-white">{s.head_doctor_name}</strong></span>
+                    <span>Responsable: <strong className="text-gray-900 dark:text-white">{s.head_doctor_name || 'Non renseigné'}</strong></span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="w-3.5 h-3.5 text-amber-500" />
-                    <span>Horaires: <strong>{s.operating_hours || '24h/24, 7j/7'}</strong></span>
+                    <span>Horaires: <strong>{typeof s.operating_hours === 'object' ? 'Voir détails' : (s.operating_hours || '24h/24, 7j/7')}</strong></span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Phone className="w-3.5 h-3.5 text-blue-500" />
@@ -285,6 +287,22 @@ export default function ManageServices() {
                     <span>Tarif Indicatif: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{parseFloat(s.indicative_cost || 0).toLocaleString()} BIF</strong></span>
                   </div>
                 </div>
+
+                {/* Équipe Médicale Rattachée */}
+                {s.assigned_doctors_details && s.assigned_doctors_details.length > 0 && (
+                  <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                      <Stethoscope className="w-3 h-3 text-teal-500" /> Équipe Rattachée ({s.assigned_doctors_details.length}) :
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {s.assigned_doctors_details.map(doc => (
+                        <span key={doc.id} className="px-2 py-0.5 rounded text-[11px] font-medium bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 border border-teal-100 dark:border-teal-800">
+                          {doc.full_name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Badges Télé-expertise & RDV en ligne */}
                 <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
@@ -430,6 +448,41 @@ export default function ManageServices() {
                   placeholder="Décrivez les actes médicaux, équipements et spécialités rattachés..."
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 ></textarea>
+              </div>
+
+              {/* Multi-sélection de l'Équipe Médicale rattachée */}
+              <div>
+                <label className="block text-xs font-bold text-gray-800 dark:text-gray-200 mb-1.5 flex items-center gap-1.5">
+                  <Stethoscope className="w-4 h-4 text-teal-600" />
+                  Groupe de Médecins & Personnel Rattaché ({formData.assigned_doctor_ids.length} sélectionné(s))
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-xl p-3 bg-gray-50/50 dark:bg-gray-800/40">
+                  {doctors.length === 0 ? (
+                    <p className="text-xs text-gray-400 col-span-full italic">Aucun membre de personnel créé dans l'hôpital.</p>
+                  ) : (
+                    doctors.map(d => {
+                      const docName = `${d.user_details?.first_name || ''} ${d.user_details?.last_name || ''}`;
+                      const isSelected = formData.assigned_doctor_ids.includes(d.id);
+                      return (
+                        <label key={d.id} className="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer p-1 hover:bg-teal-50/50 dark:hover:bg-gray-800 rounded-lg">
+                          <input 
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setFormData({ ...formData, assigned_doctor_ids: [...formData.assigned_doctor_ids, d.id] });
+                              } else {
+                                setFormData({ ...formData, assigned_doctor_ids: formData.assigned_doctor_ids.filter(id => id !== d.id) });
+                              }
+                            }}
+                            className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                          />
+                          <span className="truncate">{docName} <span className="text-[10px] text-gray-400 font-normal">({d.staff_category_display || 'Médecin'})</span></span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
               </div>
 
               {/* Switches d'options */}

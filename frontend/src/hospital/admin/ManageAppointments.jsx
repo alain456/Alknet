@@ -3,7 +3,7 @@ import { Calendar, Clock, User, Stethoscope, Video, MapPin, Filter, Search, Chec
 import { useAuth } from '../../context/AuthContext';
 
 export default function ManageAppointments() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [hospitalId, setHospitalId] = useState(null);
@@ -15,7 +15,7 @@ export default function ManageAppointments() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -26,6 +26,19 @@ export default function ManageAppointments() {
             fetchAppointments(hid);
             fetchDoctors(hid);
           } else {
+            // Fallback for Super Admin or admin without direct ownership
+            const allBusRes = await authFetch('http://localhost:8000/api/v1/businesses/');
+            if (allBusRes.ok) {
+              const allBus = await allBusRes.json();
+              const list = Array.isArray(allBus) ? allBus : (allBus.results || []);
+              if (list.length > 0) {
+                const hid = list[0].id;
+                setHospitalId(hid);
+                fetchAppointments(hid);
+                fetchDoctors(hid);
+                return;
+              }
+            }
             setLoading(false);
           }
         }
@@ -39,7 +52,7 @@ export default function ManageAppointments() {
 
   const fetchAppointments = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -54,7 +67,7 @@ export default function ManageAppointments() {
 
   const fetchDoctors = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
       if (res.ok) {
         setDoctors(await res.json());
       }
@@ -65,7 +78,7 @@ export default function ManageAppointments() {
 
   const handleStatusChange = async (appointmentId, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/appointments/${appointmentId}/`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/${appointmentId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

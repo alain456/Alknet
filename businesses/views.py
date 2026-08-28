@@ -56,6 +56,8 @@ class MyBusinessListView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         qs = Business.objects.filter(owner=user)
+        if not qs.exists() and hasattr(user, 'doctor_profile') and user.doctor_profile and user.doctor_profile.hospital:
+            qs = Business.objects.filter(id=user.doctor_profile.hospital_id)
         if not qs.exists() and hasattr(user, 'business_employees'):
             emp_bus_ids = user.business_employees.values_list('business_id', flat=True)
             qs = Business.objects.filter(id__in=emp_bus_ids)

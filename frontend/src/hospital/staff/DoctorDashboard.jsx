@@ -3,7 +3,7 @@ import { Stethoscope, Users, Calendar, FileText, Clock, CheckCircle, AlertCircle
 import { useAuth } from '../../context/AuthContext';
 
 export default function DoctorDashboard() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [medicalRecords, setMedicalRecords] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
@@ -36,7 +36,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -61,7 +61,7 @@ export default function DoctorDashboard() {
 
   const fetchAppointments = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -85,7 +85,7 @@ export default function DoctorDashboard() {
 
   const fetchMedicalRecords = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -103,7 +103,7 @@ export default function DoctorDashboard() {
 
   const fetchPrescriptions = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/prescriptions/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/prescriptions/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -122,7 +122,7 @@ export default function DoctorDashboard() {
   const handleCreatePrescription = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/prescriptions/', {
+      const res = await authFetch('http://localhost:8000/api/v1/hospital/prescriptions/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +156,7 @@ export default function DoctorDashboard() {
   const handleDeletePrescription = async (id) => {
     if (!window.confirm('Voulez-vous vraiment supprimer cette prescription ?')) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/prescriptions/${id}/`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/prescriptions/${id}/`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -170,7 +170,7 @@ export default function DoctorDashboard() {
 
   const handleAppointmentStatusUpdate = async (appointmentId, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/appointments/${appointmentId}/`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/${appointmentId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -225,8 +225,13 @@ export default function DoctorDashboard() {
             Espace Médecin
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            Gestion des patients et rendez-vous
+            Gestion des patients, consultations et prescriptions
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed flex items-center gap-1.5" title="Fonctionnalité post-MVP">
+            <Globe className="w-3.5 h-3.5 text-gray-400" /> Télé-expertise — bientôt disponible
+          </span>
         </div>
       </div>
 

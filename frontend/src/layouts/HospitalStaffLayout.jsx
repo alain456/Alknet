@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, Calendar, FileText, Pill, Users, 
-  Settings, Menu, X, LogOut, Stethoscope, Bell
+  LayoutDashboard, Calendar, FileText, Users, 
+  Settings, Menu, X, LogOut, Stethoscope, Bell, HeartPulse, UserCheck, CheckCircle2, Clock, Shield
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function HospitalStaffLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -17,20 +18,37 @@ export default function HospitalStaffLayout() {
     navigate('/login');
   };
 
+  // Détection du rôle/espace actuel à partir de l'URL
+  const isNurse = location.pathname.includes('/nurse');
+  const isLab = location.pathname.includes('/lab-technician');
+  const isCashier = location.pathname.includes('/cashier');
+  const isReception = location.pathname.includes('/receptionist');
+
+  let spaceTitle = "Espace Médecin";
+  if (isReception) spaceTitle = "Accueil & Admissions";
+  if (isNurse) spaceTitle = "Espace Infirmier";
+  if (isLab) spaceTitle = "Espace Laboratoire";
+  if (isCashier) spaceTitle = "Espace Caisse";
+
   const navItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/hospital/staff/doctor' },
-    { name: 'Rendez-vous', icon: Calendar, path: '/hospital/staff/doctor' },
-    { name: 'Dossiers', icon: FileText, path: '/hospital/staff/doctor' },
-    { name: 'Prescriptions', icon: Pill, path: '/hospital/staff/doctor' },
+    { name: 'Accueil & Admissions', icon: UserCheck, path: '/hospital/staff/receptionist' },
+    { name: 'Médecins', icon: Stethoscope, path: '/hospital/staff/doctor' },
+    { name: 'Infirmiers / Soins', icon: HeartPulse, path: '/hospital/staff/nurse' },
+    { name: 'Laboratoire', icon: FileText, path: '/hospital/staff/lab-technician' },
+    { name: 'Caisse & Reçus', icon: Calendar, path: '/hospital/staff/cashier' },
   ];
 
-  const bottomNavItems = [
-    { name: 'Patients', icon: Users, path: '/hospital/staff/doctor' },
-    { name: 'Notifications', icon: Bell, path: '/dashboard/notifications' },
-    { name: 'Paramètres', icon: Settings, path: '/dashboard/settings' },
+  // Exemples de notifications hospitalières en temps réel
+  const staffNotifications = [
+    { id: 1, title: "Nouveau patient à l'accueil", desc: "Nduwimana Jean est arrivé pour le service de Pédiatrie.", time: "Il y a 5 min", type: "reception" },
+    { id: 2, title: "Constantes vitale enregistrées", desc: "Infirmière A. a mis à jour les constantes de K. Marie.", time: "Il y a 12 min", type: "nurse" },
+    { id: 3, title: "Analyse Labo Validée", desc: "Bilan hématologique validé par le technicien.", time: "Il y a 25 min", type: "lab" },
+    { id: 4, title: "Paiement Confirmé", desc: "Facture #INV-2026-089 réglée par Lumicash.", time: "Il y a 40 min", type: "cashier" },
   ];
 
   const closeSidebar = () => setIsSidebarOpen(false);
+
+  const isAdminOrOwner = user?.role === 'SUPER_ADMIN' || user?.role === 'BUSINESS_OWNER';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">
@@ -38,7 +56,7 @@ export default function HospitalStaffLayout() {
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden backdrop-blur-sm"
           onClick={closeSidebar}
         />
       )}
@@ -46,21 +64,24 @@ export default function HospitalStaffLayout() {
       {/* Sidebar */}
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="flex flex-col h-full">
-          {/* Logo */}
+          {/* Logo / Header */}
           <div className="p-6 border-b border-gray-200 dark:border-gray-800">
-            <Link to="/hospital/staff/doctor" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
-                <Stethoscope className="w-6 h-6 text-white" />
+            <Link to={location.pathname} className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-teal-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-teal-600/20">
+                <Stethoscope className="w-6 h-6" />
               </div>
-              <div>
-                <h1 className="font-bold text-gray-900 dark:text-white">Espace Médecin</h1>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Hôpital</p>
+              <div className="min-w-0 flex-1">
+                <h1 className="font-bold text-gray-900 dark:text-white text-sm truncate">{spaceTitle}</h1>
+                <p className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">Portail Hôpital Isoko</p>
               </div>
             </Link>
           </div>
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="px-3 mb-2 text-[10.5px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Postes Hospitaliers
+            </div>
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
@@ -69,14 +90,14 @@ export default function HospitalStaffLayout() {
                   key={item.path}
                   to={item.path}
                   onClick={closeSidebar}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-xs font-semibold ${
                     isActive
-                      ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.name}</span>
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
+                  <span className="truncate">{item.name}</span>
                 </Link>
               );
             })}
@@ -84,78 +105,129 @@ export default function HospitalStaffLayout() {
 
           {/* Bottom Navigation */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
-            {bottomNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={closeSidebar}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                    isActive
-                      ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.name}</span>
-                </Link>
-              );
-            })}
+            {isAdminOrOwner && (
+              <Link
+                to="/hospital/admin"
+                onClick={closeSidebar}
+                className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                <Settings className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                <span className="truncate">Admin Hôpital</span>
+              </Link>
+            )}
+
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                showNotifications 
+                  ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800' 
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Bell className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                <span>Notifications</span>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
+            </button>
           </div>
 
           {/* User Info & Logout */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-800">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                <span className="font-semibold text-blue-600 dark:text-blue-400">
-                  {user?.first_name?.[0]}{user?.last_name?.[0]}
+              <div className="w-9 h-9 bg-teal-100 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800 rounded-full flex items-center justify-center shrink-0">
+                <span className="font-bold text-teal-700 dark:text-teal-300 text-xs">
+                  {(user?.first_name?.[0] || 'U').toUpperCase()}{(user?.last_name?.[0] || '').toUpperCase()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 dark:text-white truncate">
-                  {user?.first_name} {user?.last_name}
+                <p className="font-bold text-xs text-gray-900 dark:text-white truncate">
+                  {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'Agent Hospitalier'}
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {user?.email}
+                <p className="text-[10px] text-gray-400 truncate">
+                  {user?.email || 'personnel@isoko.bi'}
                 </p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-xs font-bold cursor-pointer"
             >
-              <LogOut className="w-4 h-4" />
-              <span className="font-medium">Déconnexion</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Déconnexion</span>
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto">
-        {/* Mobile Header */}
-        <header className="lg:hidden sticky top-0 z-30 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3">
-          <div className="flex items-center justify-between">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Mobile & Desktop Top Bar */}
+        <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              className="lg:hidden p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer"
             >
-              <Menu className="w-6 h-6" />
+              <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                <span className="font-semibold text-blue-600 dark:text-blue-400 text-sm">
-                  {user?.first_name?.[0]}{user?.last_name?.[0]}
-                </span>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-teal-500 animate-pulse"></span>
+              <h2 className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                {spaceTitle} — Portails Médicaux Isoko
+              </h2>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              <Bell className="w-5 h-5" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-teal-500 rounded-full"></span>
+            </button>
           </div>
         </header>
 
-        {/* Page Content */}
-        <div className="p-6">
+        {/* Modal / Drawer des Notifications Hospitalières */}
+        {showNotifications && (
+          <div className="absolute top-16 right-4 sm:right-8 z-50 w-80 sm:w-96 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="p-4 bg-teal-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4" />
+                <h3 className="font-bold text-xs uppercase tracking-wider">Alertes Hospitalières</h3>
+              </div>
+              <button 
+                onClick={() => setShowNotifications(false)}
+                className="text-teal-200 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
+              {staffNotifications.map((n) => (
+                <div key={n.id} className="p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="font-bold text-xs text-gray-900 dark:text-white">{n.title}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> {n.time}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">{n.desc}</p>
+                </div>
+              ))}
+            </div>
+            <div className="p-2.5 bg-gray-50 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 text-center">
+              <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
+                Toutes les alertes sont synchronisées en temps réel
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Dynamic Page Content */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <Outlet />
         </div>
       </main>

@@ -284,7 +284,7 @@ export default function HospitalProfile() {
                   </div>
                   <div>
                     <h4 className="font-bold text-sm text-gray-900 dark:text-white">
-                      {selectedDoctor.user_details?.first_name || selectedDoctor.name} {selectedDoctor.user_details?.last_name || ''}
+                      {selectedDoctor.user_details?.first_name || selectedDoctor.full_name || selectedDoctor.name} {selectedDoctor.user_details?.last_name || ''}
                     </h4>
                     <p className="text-xs text-teal-700 dark:text-teal-300 font-semibold">
                       {hospital.name} • Tarif: {Number(selectedDoctor.consultation_fee || selectedDoctor.fee || 0).toLocaleString()} BIF
@@ -474,7 +474,7 @@ export default function HospitalProfile() {
                 </div>
                 <h4 className="text-xl font-bold text-gray-900 dark:text-white">Rendez-vous Confirmé !</h4>
                 <p className="text-sm text-gray-600 dark:text-gray-300">
-                  Votre demande de rendez-vous pour le <strong>{bookingData.date} à {bookingData.time}</strong> avec <strong>{selectedDoctor.user_details?.first_name || selectedDoctor.name}</strong> a été enregistrée avec succès.
+                  Votre demande de rendez-vous pour le <strong>{bookingData.date} à {bookingData.time}</strong> avec <strong>{selectedDoctor.user_details?.first_name || selectedDoctor.full_name || selectedDoctor.name}</strong> a été enregistrée avec succès.
                 </p>
                 <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs text-gray-500 font-mono">
                   Mode : {bookingData.type === 'TELEMEDICINE' ? 'Téléconsultation Vidéo' : 'Consultation Présentielle'}

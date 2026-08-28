@@ -18,10 +18,13 @@ export default function ManageDoctors() {
   
   const [formData, setFormData] = useState({ 
     first_name: '', last_name: '', email: '', password: '', 
+    staff_category: 'DOCTOR',
     medical_license_number: '', consultation_fee: 0, 
     is_available_for_telemedicine: false, bio: '',
     specialty_ids: [], service_ids: [], role_id: ''
   });
+  
+  const [activeCategoryTab, setActiveCategoryTab] = useState('ALL');
   
   const { token, authFetch } = useAuth();
   const navigate = useNavigate();
@@ -107,6 +110,7 @@ export default function ManageDoctors() {
     setEditingDoctorId(null);
     setFormData({ 
       first_name: '', last_name: '', email: '', password: '', 
+      staff_category: 'DOCTOR',
       medical_license_number: '', consultation_fee: 0, 
       is_available_for_telemedicine: false, bio: '',
       specialty_ids: [], service_ids: [], role_id: ''
@@ -125,6 +129,7 @@ export default function ManageDoctors() {
       last_name: doc.user_details?.last_name || '', 
       email: doc.user_details?.email || '', 
       password: '', // Optionnel lors de la modification
+      staff_category: doc.staff_category || 'DOCTOR',
       medical_license_number: doc.medical_license_number || '', 
       consultation_fee: doc.consultation_fee || 0, 
       is_available_for_telemedicine: doc.is_available_for_telemedicine || false, 
@@ -176,11 +181,10 @@ export default function ManageDoctors() {
         delete payload.password;
       }
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(payload)
       });
@@ -224,23 +228,48 @@ export default function ManageDoctors() {
         </div>
       )}
 
+      {/* Onglets de filtrage par Catégorie de Personnel */}
+      <div className="flex items-center gap-2 overflow-x-auto bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-800">
+        {[
+          { key: 'ALL', label: 'Tout le Personnel' },
+          { key: 'SPECIALIST', label: 'Médecins Spécialistes' },
+          { key: 'DOCTOR', label: 'Docteurs / Généralistes' },
+          { key: 'NURSE', label: 'Infirmiers & Soignants' }
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveCategoryTab(tab.key)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              activeCategoryTab === tab.key
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {loading ? (
           <div className="col-span-full py-12 text-center text-gray-500">Chargement du corps médical...</div>
-        ) : doctors.length === 0 && hospitalId ? (
+        ) : doctors.filter(d => activeCategoryTab === 'ALL' || d.staff_category === activeCategoryTab).length === 0 && hospitalId ? (
           <div className="col-span-full py-12 text-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-8">
             <Stethoscope className="w-12 h-12 text-teal-500 mx-auto mb-3 opacity-50" />
-            <p className="text-gray-500 font-medium">Aucun médecin enregistré pour le moment.</p>
+            <p className="text-gray-500 font-medium">Aucun personnel enregistré dans cette catégorie.</p>
             <button 
               onClick={openCreateModal}
               className="mt-4 text-teal-600 hover:underline text-sm font-semibold inline-flex items-center gap-1"
             >
-              <Plus className="w-4 h-4" /> Enregistrer le premier médecin
+              <Plus className="w-4 h-4" /> Enregistrer du personnel
             </button>
           </div>
         ) : (
-          doctors.map(doc => {
+          doctors
+            .filter(d => activeCategoryTab === 'ALL' || d.staff_category === activeCategoryTab)
+            .map(doc => {
             const docFullName = `${doc.user_details?.first_name || ''} ${doc.user_details?.last_name || ''}`;
+            const isNurse = doc.staff_category === 'NURSE';
             return (
               <div key={doc.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between space-y-4">
                 <div>
@@ -276,11 +305,20 @@ export default function ManageDoctors() {
                     </div>
                   </div>
 
-                  {/* Badge Rôle RBAC */}
-                  <div className="mb-3 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                      <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                      Rôle : {doc.user_details?.role_name || 'Médecin'}
+                  {/* Badge Catégorie & Rôle RBAC */}
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${
+                      doc.staff_category === 'SPECIALIST' 
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200'
+                        : isNurse
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200'
+                        : 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200'
+                    }`}>
+                      {doc.staff_category_display || (isNurse ? 'Infirmier(e)' : 'Médecin')}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                      <Shield className="w-3.5 h-3.5 text-gray-500" />
+                      {doc.user_details?.role_name || 'Personnel'}
                     </span>
                   </div>
 
@@ -291,7 +329,15 @@ export default function ManageDoctors() {
                     </p>
                     <p className="flex items-center gap-2">
                       <CreditCard className="w-3.5 h-3.5 text-gray-400" /> 
-                      <span className="font-semibold text-gray-900 dark:text-white">{Number(doc.consultation_fee).toLocaleString()} BIF</span> / consultation
+                      {isNurse ? (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded">
+                          Gratuit (Soins de service / Pas de tarif consultation)
+                        </span>
+                      ) : (
+                        <span>
+                          <span className="font-semibold text-gray-900 dark:text-white">{Number(doc.consultation_fee || 0).toLocaleString()} BIF</span> / consultation
+                        </span>
+                      )}
                     </p>
                     {doc.is_available_for_telemedicine && (
                       <p className="flex items-center gap-2 text-teal-600 dark:text-teal-400 font-medium">
@@ -345,6 +391,39 @@ export default function ManageDoctors() {
             </div>
 
             <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Choix de la Catégorie du Personnel */}
+              <div className="bg-teal-50/50 dark:bg-teal-950/20 p-3.5 rounded-xl border border-teal-100 dark:border-teal-900">
+                <label className="block text-xs font-bold text-teal-900 dark:text-teal-300 mb-1.5">
+                  Catégorie du Personnel *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { key: 'SPECIALIST', label: 'Médecin Spécialiste', feeRequired: true },
+                    { key: 'DOCTOR', label: 'Docteur / Généraliste', feeRequired: true },
+                    { key: 'NURSE', label: 'Infirmier(e) / Soignant(e)', feeRequired: false }
+                  ].map(cat => (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      onClick={() => {
+                        setFormData({
+                          ...formData,
+                          staff_category: cat.key,
+                          consultation_fee: cat.key === 'NURSE' ? 0 : formData.consultation_fee
+                        });
+                      }}
+                      className={`p-2 rounded-lg text-xs font-semibold border transition cursor-pointer text-center ${
+                        formData.staff_category === cat.key
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Prénom</label>
@@ -376,8 +455,17 @@ export default function ManageDoctors() {
                   <input type="text" required value={formData.medical_license_number} onChange={e => setFormData({...formData, medical_license_number: e.target.value})} className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600" placeholder="ex: MED-2026-88" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Frais de consultation (BIF)</label>
-                  <input type="number" required value={formData.consultation_fee} onChange={e => setFormData({...formData, consultation_fee: e.target.value})} className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600" />
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Frais de consultation (BIF) {formData.staff_category === 'NURSE' && '(Non applicable pour infirmiers)'}
+                  </label>
+                  <input 
+                    type="number" 
+                    disabled={formData.staff_category === 'NURSE'}
+                    required={formData.staff_category !== 'NURSE'} 
+                    value={formData.staff_category === 'NURSE' ? 0 : formData.consultation_fee} 
+                    onChange={e => setFormData({...formData, consultation_fee: e.target.value})} 
+                    className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800/50" 
+                  />
                 </div>
               </div>
 

@@ -6,7 +6,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 export default function HospitalDashboard() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -26,7 +26,7 @@ export default function HospitalDashboard() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -36,6 +36,17 @@ export default function HospitalDashboard() {
             setHospitalId(hid);
             fetchDashboardData(hid);
           } else {
+            const allBusRes = await authFetch('http://localhost:8000/api/v1/businesses/');
+            if (allBusRes.ok) {
+              const allBus = await allBusRes.json();
+              const list = Array.isArray(allBus) ? allBus : (allBus.results || []);
+              if (list.length > 0) {
+                const hid = list[0].id;
+                setHospitalId(hid);
+                fetchDashboardData(hid);
+                return;
+              }
+            }
             setLoading(false);
           }
         }
@@ -50,23 +61,23 @@ export default function HospitalDashboard() {
   const fetchDashboardData = async (hid) => {
     try {
       // Récupérer les médecins
-      const docsRes = await fetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
+      const docsRes = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
       const doctors = docsRes.ok ? await docsRes.json() : [];
 
       // Récupérer les services
-      const svcRes = await fetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
+      const svcRes = await authFetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
       const services = svcRes.ok ? await svcRes.json() : [];
 
       // Récupérer les rendez-vous
-      const aptRes = await fetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`);
+      const aptRes = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`);
       const appointments = aptRes.ok ? await aptRes.json() : [];
 
       // Récupérer les factures
-      const invRes = await fetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`);
+      const invRes = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`);
       const invoices = invRes.ok ? await invRes.json() : [];
 
       // Récupérer les dossiers médicaux
-      const recRes = await fetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`);
+      const recRes = await authFetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`);
       const records = recRes.ok ? await recRes.json() : [];
 
       // Calculer les statistiques

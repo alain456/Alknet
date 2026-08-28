@@ -3,12 +3,18 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.utils import timezone
 from businesses.models import BusinessRole, BusinessEmployee
-from .models import Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule, MedicalRecord, LabResult, Invoice, Notification, Prescription
+from .models import (
+    Specialty, DoctorProfile, Appointment, MedicalService, DoctorSchedule,
+    MedicalRecord, LabResult, Invoice, Notification, Prescription, HospitalProfile
+)
 from .serializers import (
-    SpecialtySerializer, DoctorProfileSerializer, AppointmentSerializer, 
-    MedicalServiceSerializer, DoctorScheduleSerializer, MedicalRecordSerializer, 
-    LabResultSerializer, InvoiceSerializer, NotificationSerializer, PrescriptionSerializer
+    SpecialtySerializer, DoctorProfileSerializer, DoctorProfileListSerializer,
+    AppointmentSerializer, MedicalServiceSerializer, DoctorScheduleSerializer,
+    MedicalRecordSerializer, LabResultSerializer, InvoiceSerializer,
+    NotificationSerializer, PrescriptionSerializer,
+    HospitalProfileSerializer, HospitalProfileListSerializer,
 )
 from .permissions import IsMedicalRecordViewer, IsLabTechnician, IsCashier, IsHospitalAdmin
 
@@ -21,22 +27,175 @@ class SpecialtyViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
+
+# ---------------------------------------------------------------------------
+# 01.1 — PROFIL HÔPITAL + GÉOLOCALISATION
+# ---------------------------------------------------------------------------
+
+class HospitalProfileViewSet(viewsets.ModelViewSet):
+    """
+    CRUD pour les fiches hôpital.
+    Actions supplémentaires :
+      - GET /hospitals/nearby/?lat=X&lng=Y&radius=10  → Hôpitaux dans le rayon (km)
+      - GET /hospitals/{id}/services/               → Services de l'hôpital
+      - GET /hospitals/{id}/doctors/                → Médecins de l'hôpital
+    """
+    queryset = HospitalProfile.objects.select_related('business').all()
+    serializer_class = HospitalProfileSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['business__name', 'acronym', 'level', 'hospital_type']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return HospitalProfileListSerializer
+        return HospitalProfileSerializer
+
+    def get_queryset(self):
+        queryset = HospitalProfile.objects.select_related('business').all()
+        # Filtres
+        hospital_type = self.request.query_params.get('hospital_type')
+        level = self.request.query_params.get('level')
+        emergency = self.request.query_params.get('emergency')
+        telemedicine = self.request.query_params.get('telemedicine')
+        province = self.request.query_params.get('province')
+
+        if hospital_type:
+            queryset = queryset.filter(hospital_type=hospital_type)
+        if level:
+            queryset = queryset.filter(level=level)
+        if emergency is not None:
+            queryset = queryset.filter(emergency_available=emergency.lower() in ['true', '1'])
+        if telemedicine is not None:
+            queryset = queryset.filter(telemedicine_unit_available=telemedicine.lower() in ['true', '1'])
+        if province:
+            queryset = queryset.filter(business__province__icontains=province)
+        return queryset
+
+    @action(detail=False, methods=['get'], url_path='nearby')
+    def nearby(self, request):
+        """
+        Retourne les hôpitaux dans un rayon donné autour d'un point GPS.
+        Paramètres : lat (float), lng (float), radius (float, km, défaut=20)
+        Algorithme : distance Haversine approxée — précis pour distances courtes.
+        """
+        import math
+
+        try:
+            user_lat = float(request.query_params.get('lat', 0))
+            user_lng = float(request.query_params.get('lng', 0))
+            radius_km = float(request.query_params.get('radius', 20))
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Paramètres lat, lng et radius doivent être des nombres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not user_lat or not user_lng:
+            return Response(
+                {'error': 'Les paramètres lat et lng sont requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Filtrer les hôpitaux ayant des coordonnées GPS
+        hospitals = HospitalProfile.objects.select_related('business').filter(
+            business__latitude__isnull=False,
+            business__longitude__isnull=False,
+        )
+
+        def haversine_distance(lat1, lng1, lat2, lng2):
+            """Distance en km entre deux points GPS (formule Haversine)."""
+            R = 6371  # Rayon de la Terre en km
+            phi1, phi2 = math.radians(lat1), math.radians(lat2)
+            dphi = math.radians(lat2 - lat1)
+            dlambda = math.radians(lng2 - lng1)
+            a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+            return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+        results = []
+        for h in hospitals:
+            dist = haversine_distance(
+                user_lat, user_lng,
+                h.business.latitude, h.business.longitude
+            )
+            if dist <= radius_km:
+                results.append((dist, h))
+
+        # Tri par distance croissante
+        results.sort(key=lambda x: x[0])
+
+        serializer = HospitalProfileListSerializer(
+            [h for _, h in results], many=True, context={'request': request}
+        )
+        data = serializer.data
+        # Injection de la distance dans chaque objet
+        for i, (dist, _) in enumerate(results):
+            data[i]['distance_km'] = round(dist, 2)
+
+        return Response(data)
+
+    @action(detail=True, methods=['get'], url_path='services')
+    def services(self, request, pk=None):
+        """Liste des services médicaux actifs d'un hôpital."""
+        hospital_profile = self.get_object()
+        services = MedicalService.objects.filter(
+            hospital=hospital_profile.business, is_active=True
+        ).order_by('display_order', 'category', 'name')
+        serializer = MedicalServiceSerializer(services, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='doctors')
+    def doctors(self, request, pk=None):
+        """Liste des médecins actifs rattachés à un hôpital."""
+        hospital_profile = self.get_object()
+        doctors = DoctorProfile.objects.filter(
+            hospital=hospital_profile.business, is_active=True
+        ).select_related('user').prefetch_related('specialties')
+        serializer = DoctorProfileListSerializer(doctors, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
 class DoctorProfileViewSet(viewsets.ModelViewSet):
     queryset = DoctorProfile.objects.all()
     serializer_class = DoctorProfileSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['user__first_name', 'user__last_name', 'bio']
+    search_fields = ['user__first_name', 'user__last_name', 'bio', 'medical_license_number']
+
+    def get_serializer_class(self):
+        return DoctorProfileSerializer
 
     def get_queryset(self):
-        queryset = DoctorProfile.objects.all()
-        hospital_id = self.request.query_params.get('hospital', None)
-        is_telemed = self.request.query_params.get('is_available_for_telemedicine', None)
-        if hospital_id is not None:
+        queryset = DoctorProfile.objects.select_related('user', 'hospital').prefetch_related('specialties')
+        hospital_id = self.request.query_params.get('hospital')
+        is_telemed = self.request.query_params.get('is_available_for_telemedicine')
+        is_active = self.request.query_params.get('is_active')
+        is_diaspora = self.request.query_params.get('is_diaspora')
+        is_tele_expertise = self.request.query_params.get('is_available_for_tele_expertise')
+        accepting = self.request.query_params.get('is_accepting_new_patients')
+
+        if hospital_id:
             queryset = queryset.filter(hospital_id=hospital_id)
         if is_telemed is not None:
-            is_telemed_bool = str(is_telemed).lower() in ['true', '1', 't', 'y', 'yes']
-            queryset = queryset.filter(is_available_for_telemedicine=is_telemed_bool)
+            queryset = queryset.filter(
+                is_available_for_telemedicine=is_telemed.lower() in ['true', '1']
+            )
+        if is_active is not None:
+            queryset = queryset.filter(
+                is_active=is_active.lower() in ['true', '1']
+            )
+        if is_diaspora is not None:
+            queryset = queryset.filter(
+                is_diaspora=is_diaspora.lower() in ['true', '1']
+            )
+        if is_tele_expertise is not None:
+            queryset = queryset.filter(
+                is_available_for_tele_expertise=is_tele_expertise.lower() in ['true', '1']
+            )
+        if accepting is not None:
+            queryset = queryset.filter(
+                is_accepting_new_patients=accepting.lower() in ['true', '1']
+            )
         return queryset
 
     @transaction.atomic
@@ -95,9 +254,20 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop('partial', True)
         instance = self.get_object()
         data = request.data.copy()
+
+        # Injection automatique de l'ID utilisateur si absent
+        if 'user' not in data:
+            data['user'] = instance.user.id
+
+        # Nettoyage et sécurisation du consultation_fee
+        if 'consultation_fee' in data:
+            try:
+                data['consultation_fee'] = float(data['consultation_fee']) if data['consultation_fee'] != '' else 0.0
+            except (ValueError, TypeError):
+                data['consultation_fee'] = 0.0
 
         # Mise à jour des informations de l'utilisateur associé
         user = instance.user
@@ -154,35 +324,229 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 class AppointmentViewSet(viewsets.ModelViewSet):
+    """Workflow complet des rendez-vous — Module 01.5 avec isolation Multi-Tenant SaaS"""
     serializer_class = AppointmentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        if hasattr(user, 'doctor_profile'):
+        if user.role == 'SUPER_ADMIN':
+            queryset = Appointment.objects.all()
+        elif hasattr(user, 'doctor_profile'):
             queryset = Appointment.objects.filter(doctor=user.doctor_profile)
+        elif user.role == 'BUSINESS_OWNER':
+            queryset = Appointment.objects.filter(hospital__owner=user)
+        elif BusinessEmployee.objects.filter(user=user).exists():
+            queryset = Appointment.objects.filter(hospital__employees__user=user)
         else:
             queryset = Appointment.objects.filter(patient=user)
-            
-        status = self.request.query_params.get('status', None)
-        consultation_type = self.request.query_params.get('consultation_type', None)
-        
-        if status:
-            queryset = queryset.filter(status=status)
+
+        appt_status = self.request.query_params.get('status')
+        consultation_type = self.request.query_params.get('consultation_type')
+        hospital_id = self.request.query_params.get('hospital')
+        upcoming = self.request.query_params.get('upcoming')  # ?upcoming=true
+
+        if appt_status:
+            queryset = queryset.filter(status=appt_status)
         if consultation_type:
             queryset = queryset.filter(consultation_type=consultation_type)
-            
+        if hospital_id:
+            queryset = queryset.filter(hospital_id=hospital_id)
+        if upcoming and upcoming.lower() in ['true', '1']:
+            queryset = queryset.filter(
+                appointment_date__gte=timezone.now(),
+                status__in=['PENDING', 'CONFIRMED']
+            ).order_by('appointment_date')
+
         return queryset
 
     def perform_create(self, serializer):
         serializer.save(patient=self.request.user)
 
+    # -----------------------------------------------------------------------
+    # Actions de workflow (Module 01.5 — Sections 5 & 13)
+    # -----------------------------------------------------------------------
+
+    @action(detail=True, methods=['post'])
+    def confirm(self, request, pk=None):
+        """
+        Confirme un rendez-vous en attente.
+        Transition valide : PENDING → CONFIRMED
+        """
+        appointment = self.get_object()
+        if not appointment.can_transition_to('CONFIRMED'):
+            return Response(
+                {'error': f'Impossible de confirmer un RDV avec le statut "{appointment.get_status_display()}"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        appointment.confirm()
+        # Notification au patient
+        Notification.objects.create(
+            user=appointment.patient,
+            notification_type='APPOINTMENT_REMINDER',
+            title='Rendez-vous confirmé',
+            message=(
+                f'Votre rendez-vous du {appointment.appointment_date.strftime("%d/%m/%Y à %H:%M")} '
+                f'avec {appointment.doctor.user.get_full_name()} a été confirmé.'
+            ),
+            appointment=appointment
+        )
+        return Response(AppointmentSerializer(appointment).data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """
+        Marque un rendez-vous comme terminé.
+        Transition valide : IN_PROGRESS → COMPLETED
+        Body optionnel : {"notes": "..."}
+        """
+        appointment = self.get_object()
+        notes = request.data.get('notes')
+        if not appointment.can_transition_to('COMPLETED'):
+            return Response(
+                {'error': f'Impossible de terminer un RDV avec le statut "{appointment.get_status_display()}"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        appointment.complete(notes=notes)
+        return Response(AppointmentSerializer(appointment).data)
+
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
+        """
+        Annule un rendez-vous.
+        Transitions valides : PENDING | CONFIRMED | RESCHEDULED → CANCELLED
+        Body optionnel : {"reason": "..."}
+        """
         appointment = self.get_object()
-        appointment.status = 'CANCELLED'
-        appointment.save()
-        return Response({'status': 'appointment cancelled'})
+        reason = request.data.get('reason')
+        if not appointment.can_transition_to('CANCELLED'):
+            return Response(
+                {'error': f'Impossible d\'annuler un RDV avec le statut "{appointment.get_status_display()}"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        appointment.cancel(reason=reason, cancelled_by=request.user)
+        # Notification au patient si annulé par un autre
+        if appointment.patient != request.user:
+            Notification.objects.create(
+                user=appointment.patient,
+                notification_type='GENERAL',
+                title='Rendez-vous annulé',
+                message=f'Votre rendez-vous du {appointment.appointment_date.strftime("%d/%m/%Y à %H:%M")} a été annulé.',
+                appointment=appointment
+            )
+        return Response(AppointmentSerializer(appointment).data)
+
+    @action(detail=True, methods=['post'])
+    def reschedule(self, request, pk=None):
+        """
+        Reprogramme un rendez-vous (crée un nouveau RDV lié).
+        Transition valide : CONFIRMED → RESCHEDULED
+        Body requis : {"new_date": "2026-09-01T10:00:00Z", "reason": "..."}
+        """
+        appointment = self.get_object()
+        new_date = request.data.get('new_date')
+        reason = request.data.get('reason', '')
+
+        if not appointment.can_transition_to('RESCHEDULED'):
+            return Response(
+                {'error': f'Impossible de reprogrammer un RDV avec le statut "{appointment.get_status_display()}"'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not new_date:
+            return Response(
+                {'error': 'Le paramètre new_date est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            # Créer le nouveau RDV
+            new_appointment = Appointment.objects.create(
+                patient=appointment.patient,
+                doctor=appointment.doctor,
+                hospital=appointment.hospital,
+                appointment_date=new_date,
+                consultation_type=appointment.consultation_type,
+                reason=appointment.reason,
+                status='PENDING',
+            )
+            # Marquer l'ancien comme reprogrammé
+            appointment.status = 'RESCHEDULED'
+            appointment.rescheduled_to = new_appointment
+            appointment.cancellation_reason = reason
+            appointment.save(update_fields=['status', 'rescheduled_to', 'cancellation_reason', 'updated_at'])
+
+        # Notification au patient
+        Notification.objects.create(
+            user=appointment.patient,
+            notification_type='APPOINTMENT_REMINDER',
+            title='Rendez-vous reprogrammé',
+            message=(
+                f'Votre rendez-vous a été reprogrammé au '
+                f'{new_appointment.appointment_date.strftime("%d/%m/%Y à %H:%M")}. '
+                f'Motif : {reason}'
+            ),
+            appointment=new_appointment
+        )
+        return Response({
+            'old_appointment': AppointmentSerializer(appointment).data,
+            'new_appointment': AppointmentSerializer(new_appointment).data,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        """
+        Transition de statut générique avec validation du workflow.
+        Body requis : {"status": "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | ...}
+        """
+        appointment = self.get_object()
+        new_status = request.data.get('status')
+        if not new_status:
+            return Response(
+                {'error': 'Le champ status est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not appointment.can_transition_to(new_status):
+            valid = appointment.VALID_TRANSITIONS.get(appointment.status, [])
+            return Response(
+                {
+                    'error': f'Transition invalide: {appointment.status} → {new_status}',
+                    'valid_transitions': valid,
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        appointment.status = new_status
+        appointment.save(update_fields=['status', 'updated_at'])
+        return Response(AppointmentSerializer(appointment).data)
+
+    @action(detail=True, methods=['post'])
+    def set_telemedicine_link(self, request, pk=None):
+        """
+        Définit le lien de téléconsultation pour un RDV.
+        Body requis : {"telemedicine_link": "https://...", "room_id": "..."}
+        """
+        appointment = self.get_object()
+        link = request.data.get('telemedicine_link')
+        room_id = request.data.get('room_id', '')
+
+        if not link:
+            return Response(
+                {'error': 'Le champ telemedicine_link est requis'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        appointment.telemedicine_link = link
+        appointment.telemedicine_room_id = room_id
+        appointment.save(update_fields=['telemedicine_link', 'telemedicine_room_id', 'updated_at'])
+
+        # Notification au patient avec le lien
+        Notification.objects.create(
+            user=appointment.patient,
+            notification_type='APPOINTMENT_REMINDER',
+            title='Lien de téléconsultation disponible',
+            message=f'Votre lien de téléconsultation est prêt : {link}',
+            appointment=appointment
+        )
+        return Response(AppointmentSerializer(appointment).data)
+
 
 class MedicalServiceViewSet(viewsets.ModelViewSet):
     queryset = MedicalService.objects.all()
@@ -260,7 +624,7 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
 class MedicalRecordViewSet(viewsets.ModelViewSet):
     """
     Secret Médical & Téléconsultation:
-    Seuls le patient concerné, le médecin assigné, ou le spécialiste téléconsultation ont accès.
+    Seuls le patient concerné, le médecin assigné, ou le personnel autorisé de cet hôpital ont accès.
     """
     serializer_class = MedicalRecordSerializer
     permission_classes = [permissions.IsAuthenticated, IsMedicalRecordViewer]
@@ -271,12 +635,14 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
             return MedicalRecord.objects.all()
         if hasattr(user, 'role') and user.role == 'CUSTOMER':
             return MedicalRecord.objects.filter(patient=user)
+        if user.role == 'BUSINESS_OWNER':
+            return MedicalRecord.objects.filter(hospital__owner=user)
         return MedicalRecord.objects.filter(hospital__employees__user=user)
 
 class LabResultViewSet(viewsets.ModelViewSet):
     """
     Accès Laboratoire:
-    Enregistrement et validation des résultats d'examens avec workflow de sécurité élevée.
+    Enregistrement et validation des résultats d'examens avec workflow de sécurité élevée et isolation multi-tenant.
     """
     serializer_class = LabResultSerializer
     permission_classes = [permissions.IsAuthenticated, IsLabTechnician]
@@ -289,6 +655,8 @@ class LabResultViewSet(viewsets.ModelViewSet):
         if user.role == 'CUSTOMER':
             # Les patients ne voient que les résultats validés ou communiqués
             return LabResult.objects.filter(patient=user, status__in=['VALIDATED', 'COMMUNICATED'])
+        if user.role == 'BUSINESS_OWNER':
+            return LabResult.objects.filter(hospital__owner=user)
         return LabResult.objects.filter(hospital__employees__user=user)
 
     @action(detail=True, methods=['post'])
@@ -392,21 +760,23 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
     """
     Gestion des prescriptions médicales et examens.
     Accessible par les médecins pour prescrire et par les patients pour voir leurs prescriptions.
+    Multi-tenant isolation stricte.
     """
     serializer_class = PrescriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        if user.role == 'PROFESSIONAL':
-            # Le médecin voit ses prescriptions
+        if user.role == 'SUPER_ADMIN':
+            return Prescription.objects.all()
+        elif user.role == 'BUSINESS_OWNER':
+            return Prescription.objects.filter(hospital__owner=user)
+        elif BusinessEmployee.objects.filter(user=user).exists():
+            return Prescription.objects.filter(hospital__employees__user=user)
+        elif user.role == 'PROFESSIONAL':
             return Prescription.objects.filter(doctor__user=user)
         elif user.role == 'CUSTOMER':
-            # Le patient voit ses prescriptions
             return Prescription.objects.filter(patient=user)
-        elif user.role in ['BUSINESS_OWNER', 'SUPER_ADMIN']:
-            # L'admin voit toutes les prescriptions de son hôpital
-            return Prescription.objects.all()
         return Prescription.objects.none()
 
     def perform_create(self, serializer):
@@ -424,7 +794,7 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
 class InvoiceViewSet(viewsets.ModelViewSet):
     """
     Accès Caissier & Facturation:
-    Sans accès aux données médicales cliniques.
+    Isolation stricte par établissement de santé / hôpital.
     """
     serializer_class = InvoiceSerializer
     permission_classes = [permissions.IsAuthenticated, IsCashier]
@@ -433,6 +803,11 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.role == 'SUPER_ADMIN':
             return Invoice.objects.all()
+        if user.role == 'CUSTOMER':
+            return Invoice.objects.filter(patient=user)
+        if user.role == 'BUSINESS_OWNER':
+            return Invoice.objects.filter(hospital__owner=user)
+        return Invoice.objects.filter(hospital__employees__user=user)
         if user.role == 'CUSTOMER':
             return Invoice.objects.filter(patient=user)
         return Invoice.objects.filter(hospital__employees__user=user)

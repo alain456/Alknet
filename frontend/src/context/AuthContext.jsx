@@ -54,12 +54,44 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const getRedirectPath = (role) => {
-    switch (role) {
+  const getRedirectPath = (userOrRole) => {
+    // Si un objet user est passé
+    if (typeof userOrRole === 'object' && userOrRole !== null) {
+      const { role, staff_category, system_access_level, email } = userOrRole;
+      const userEmail = (email || '').toLowerCase();
+      const category = (staff_category || '').toUpperCase();
+      const accessLevel = (system_access_level || '').toUpperCase();
+
+      if (role === 'SUPER_ADMIN') return '/admin';
+      if (role === 'BUSINESS_OWNER') return '/hospital/admin';
+
+      if (role === 'PROFESSIONAL' || category || accessLevel) {
+        if (accessLevel === 'RECEPTIONIST_ACCESS' || category === 'RECEPTIONIST' || category === 'ACCUEIL' || userEmail.includes('accueil') || userEmail.includes('reception')) {
+          return '/hospital/staff/receptionist';
+        }
+        if (accessLevel === 'LAB_ACCESS' || category === 'LAB' || category === 'LABORANTIN' || userEmail.includes('labo') || userEmail.includes('lab')) {
+          return '/hospital/staff/lab-technician';
+        }
+        if (accessLevel === 'CASHIER_ACCESS' || category === 'CASHIER' || category === 'CAISSE' || userEmail.includes('caissier') || userEmail.includes('cashier')) {
+          return '/hospital/staff/cashier';
+        }
+        if (category === 'NURSE' || category === 'INFIRMIER' || userEmail.includes('infirmier') || userEmail.includes('nurse')) {
+          return '/hospital/staff/nurse';
+        }
+        if (category === 'DOCTOR' || category === 'SPECIALIST' || category === 'MEDECIN' || userEmail.includes('medecin') || userEmail.includes('doctor')) {
+          return '/hospital/staff/doctor';
+        }
+        return '/hospital/staff/doctor';
+      }
+      return '/dashboard';
+    }
+
+    // Si une string role est passée
+    switch (userOrRole) {
       case 'SUPER_ADMIN':
         return '/admin';
       case 'BUSINESS_OWNER':
-        return '/business';
+        return '/hospital/admin';
       case 'PROFESSIONAL':
         return '/hospital/staff/doctor';
       case 'CUSTOMER':
@@ -112,36 +144,50 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('alknet_user');
   };
 
+  // Variable globale pour éviter les requêtes de rafraîchissement multiples simultanées
+  let refreshPromise = null;
+
   /**
    * Tente de renouveler l'access token via le refresh token.
+   * Utilise une promesse partagée pour éviter les appels concurrents.
    * Retourne le nouvel access token ou null si échec.
    */
   const refreshAccessToken = async () => {
     const refreshToken = localStorage.getItem('alknet_refresh_token');
     if (!refreshToken) return null;
 
-    try {
-      const res = await fetch('/api/v1/accounts/refresh/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh: refreshToken }),
-      });
+    if (refreshPromise) {
+      return refreshPromise;
+    }
 
-      if (res.ok) {
-        const data = await res.json();
-        const newToken = data.access;
-        setToken(newToken);
-        localStorage.setItem('alknet_token', newToken);
-        return newToken;
-      } else {
-        // Refresh token invalide ou expiré → déconnexion
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch('/api/v1/accounts/refresh/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh: refreshToken }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const newToken = data.access;
+          setToken(newToken);
+          localStorage.setItem('alknet_token', newToken);
+          return newToken;
+        } else {
+          // Refresh token invalide ou expiré → déconnexion
+          logout();
+          return null;
+        }
+      } catch {
         logout();
         return null;
+      } finally {
+        refreshPromise = null;
       }
-    } catch {
-      logout();
-      return null;
-    }
+    })();
+
+    return refreshPromise;
   };
 
   /**

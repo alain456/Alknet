@@ -28,6 +28,8 @@ export default function ProtectedRoute({ allowedRoles }) {
       return <Navigate to="/admin" replace />;
     } else if (user?.role === 'BUSINESS_OWNER') {
       return <Navigate to="/business" replace />;
+    } else if (user?.role === 'PROFESSIONAL') {
+      return <Navigate to="/hospital/staff/doctor" replace />;
     } else {
       return <Navigate to="/dashboard" replace />;
     }

@@ -12,7 +12,7 @@ const STATUS_CHOICES = [
 ];
 
 export default function ManageLabResults() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [labResults, setLabResults] = useState([]);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -38,7 +38,7 @@ export default function ManageLabResults() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -63,7 +63,7 @@ export default function ManageLabResults() {
 
   const fetchLabResults = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/lab-results/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/lab-results/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -78,7 +78,7 @@ export default function ManageLabResults() {
 
   const fetchPatients = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/accounts/users/', {
+      const res = await authFetch('http://localhost:8000/api/v1/accounts/admin/users/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -92,7 +92,7 @@ export default function ManageLabResults() {
 
   const fetchDoctors = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
       if (res.ok) {
         setDoctors(await res.json());
       }
@@ -104,7 +104,7 @@ export default function ManageLabResults() {
   const handleCreateResult = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/lab-results/', {
+      const res = await authFetch('http://localhost:8000/api/v1/hospital/lab-results/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ export default function ManageLabResults() {
 
   const handleStatusUpdate = async (resultId, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/lab-results/${resultId}/update_status/`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/lab-results/${resultId}/update_status/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

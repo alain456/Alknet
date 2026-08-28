@@ -12,7 +12,7 @@ const STATUS_CHOICES = [
 ];
 
 export default function LabTechnicianDashboard() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [labResults, setLabResults] = useState([]);
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function LabTechnicianDashboard() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -63,7 +63,7 @@ export default function LabTechnicianDashboard() {
 
   const fetchLabResults = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/lab-results/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/lab-results/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -87,7 +87,7 @@ export default function LabTechnicianDashboard() {
 
   const handleStatusUpdate = async (resultId, newStatus) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/lab-results/${resultId}/update_status/`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/lab-results/${resultId}/update_status/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

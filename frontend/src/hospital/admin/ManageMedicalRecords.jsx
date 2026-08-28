@@ -3,7 +3,7 @@ import { FileText, User, Stethoscope, Calendar, Search, Plus, Eye, Edit3, AlertC
 import { useAuth } from '../../context/AuthContext';
 
 export default function ManageMedicalRecords() {
-  const { token } = useAuth();
+  const { token , authFetch} = useAuth();
   const [records, setRecords] = useState([]);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -26,7 +26,7 @@ export default function ManageMedicalRecords() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await fetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -51,7 +51,7 @@ export default function ManageMedicalRecords() {
 
   const fetchRecords = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`, {
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -66,7 +66,7 @@ export default function ManageMedicalRecords() {
 
   const fetchPatients = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/accounts/users/', {
+      const res = await authFetch('http://localhost:8000/api/v1/accounts/admin/users/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -80,7 +80,7 @@ export default function ManageMedicalRecords() {
 
   const fetchDoctors = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
+      const res = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
       if (res.ok) {
         setDoctors(await res.json());
       }
@@ -92,7 +92,7 @@ export default function ManageMedicalRecords() {
   const handleCreateRecord = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/medical-records/', {
+      const res = await authFetch('http://localhost:8000/api/v1/hospital/medical-records/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

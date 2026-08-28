@@ -4,7 +4,7 @@ import { User, Star, Video, Clock, ChevronRight, Award, Globe, CreditCard, Shiel
 export default function DoctorCard({ doctor, onBook }) {
   const name = doctor.user_details 
     ? `${doctor.user_details.first_name} ${doctor.user_details.last_name}`
-    : doctor.name || 'Médecin';
+    : doctor.full_name || doctor.name || 'Médecin';
 
   const mainSpecialty = (doctor.specialties && doctor.specialties.length > 0)
     ? doctor.specialties[0].name
