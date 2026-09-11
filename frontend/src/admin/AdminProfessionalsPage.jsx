@@ -12,7 +12,7 @@ export default function AdminProfessionalsPage() {
   useEffect(() => {
     const fetchProfessionals = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/accounts/admin/professionals/', {
+        const response = await fetch('/api/v1/accounts/admin/professionals/', {
           headers: {
             'Authorization': `Bearer ${token}`
           }

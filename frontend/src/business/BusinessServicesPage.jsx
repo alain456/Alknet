@@ -24,7 +24,7 @@ export default function BusinessServicesPage() {
 
   const fetchServices = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/services/me/', {
+      const response = await fetch('/api/v1/services/me/', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -43,7 +43,7 @@ export default function BusinessServicesPage() {
     e.preventDefault();
     setSubmitError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/services/me/', {
+      const response = await fetch('/api/v1/services/me/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

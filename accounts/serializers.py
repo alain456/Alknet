@@ -36,7 +36,10 @@ class UserSerializer(serializers.ModelSerializer):
                 'id': str(owned.id),
                 'name': owned.name,
                 'relationship': 'OWNER',
-                'role_name': 'Propriétaire'
+                'role_name': 'Propriétaire',
+                'permissions': ['*'],
+                'category_name': owned.primary_category.name if owned.primary_category_id else '',
+                'category_slug': owned.primary_category.slug if owned.primary_category_id else '',
             }
         emp = obj.employments.first() if hasattr(obj, 'employments') else None
         if emp and emp.business:
@@ -44,7 +47,11 @@ class UserSerializer(serializers.ModelSerializer):
                 'id': str(emp.business.id),
                 'name': emp.business.name,
                 'relationship': 'EMPLOYEE',
-                'role_name': emp.role.name if emp.role else (emp.position or 'Employé')
+                'role_name': emp.role.name if emp.role else (emp.position or 'Employé'),
+                'system_access_level': emp.role.system_access_level if emp.role else None,
+                'permissions': emp.role.permissions if emp.role else [],
+                'category_name': emp.business.primary_category.name if emp.business.primary_category_id else '',
+                'category_slug': emp.business.primary_category.slug if emp.business.primary_category_id else '',
             }
         if hasattr(obj, 'doctor_profile') and obj.doctor_profile and obj.doctor_profile.hospital:
             h = obj.doctor_profile.hospital
@@ -52,7 +59,8 @@ class UserSerializer(serializers.ModelSerializer):
                 'id': str(h.id),
                 'name': h.name,
                 'relationship': 'DOCTOR',
-                'role_name': obj.doctor_profile.staff_category or 'Médecin'
+                'role_name': obj.doctor_profile.staff_category or 'Médecin',
+                'category_name': h.primary_category.name if h.primary_category_id else 'Santé',
             }
         return None
 

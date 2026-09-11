@@ -4,6 +4,8 @@ import {
   Building2, Users, Briefcase, Key, RefreshCw, AlertCircle, LayoutGrid, List, Lock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../shared/api';
+import PasswordInput from '../shared/components/PasswordInput';
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -13,6 +15,7 @@ export default function AdminUsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBusinessFilter, setSelectedBusinessFilter] = useState('ALL'); // 'ALL', 'INDEPENDENT', or business_id
   const [viewMode, setViewMode] = useState('LIST'); // 'LIST' or 'GROUPED'
+  const [passwordMinLength, setPasswordMinLength] = useState(8);
 
   // User Create / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,6 +46,12 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (token) {
       fetchUsersAndBusinesses();
+      api.get('cms/admin/settings/', { auth: true })
+        .then((settings) => {
+          const s = Array.isArray(settings) ? settings[0] : settings;
+          if (s?.password_min_length) setPasswordMinLength(Number(s.password_min_length));
+        })
+        .catch(() => {});
     }
   }, [token]);
 
@@ -51,7 +60,7 @@ export default function AdminUsersPage() {
     setError(null);
     try {
       // 1. Fetch Users (dynamic real-time data)
-      const usersRes = await fetch('http://localhost:8000/api/v1/accounts/admin/users/', {
+      const usersRes = await fetch('/api/v1/accounts/admin/users/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (usersRes.status === 401) {
@@ -64,13 +73,13 @@ export default function AdminUsersPage() {
       // 2. Fetch Businesses
       let bizData = [];
       try {
-        const bizRes = await fetch('http://localhost:8000/api/v1/businesses/admin/list/', {
+        const bizRes = await fetch('/api/v1/businesses/admin/list/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (bizRes.ok) {
           bizData = await bizRes.json();
         } else {
-          const pubRes = await fetch('http://localhost:8000/api/v1/businesses/');
+          const pubRes = await fetch('/api/v1/businesses/');
           if (pubRes.ok) bizData = await pubRes.json();
         }
       } catch (e) {
@@ -92,8 +101,8 @@ export default function AdminUsersPage() {
     setIsSubmitting(true);
     try {
       const url = editingUser 
-        ? `http://localhost:8000/api/v1/accounts/admin/users/${editingUser.id}/`
-        : 'http://localhost:8000/api/v1/accounts/admin/users/create/';
+        ? `/api/v1/accounts/admin/users/${editingUser.id}/`
+        : '/api/v1/accounts/admin/users/create/';
       const method = editingUser ? 'PATCH' : 'POST';
 
       const payload = { ...formData };
@@ -138,7 +147,7 @@ export default function AdminUsersPage() {
     setPasswordSuccessMsg(null);
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/accounts/admin/users/${targetPasswordUser.id}/`, {
+      const response = await fetch(`/api/v1/accounts/admin/users/${targetPasswordUser.id}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -214,7 +223,7 @@ export default function AdminUsersPage() {
   const handleDeleteUser = async (id) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.")) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/accounts/admin/users/${id}/`, {
+      const response = await fetch(`/api/v1/accounts/admin/users/${id}/`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -229,7 +238,7 @@ export default function AdminUsersPage() {
     const actionName = user.is_active ? 'suspendre' : 'activer';
     if (!window.confirm(`Êtes-vous sûr de vouloir ${actionName} cet utilisateur ?`)) return;
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/accounts/admin/users/${user.id}/`, {
+      const response = await fetch(`/api/v1/accounts/admin/users/${user.id}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -752,16 +761,17 @@ export default function AdminUsersPage() {
                 <label className="block text-xs font-semibold text-gray-700 dark:text-green-100/90 mb-1">
                   Mot de passe (Réinitialisation Directe Super Admin)
                 </label>
-                <input 
-                  type="text" required={!editingUser}
-                  value={formData.password} 
+                <PasswordInput
+                  required={!editingUser}
+                  value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-green-600"
-                  placeholder={editingUser ? "Saisir un nouveau mot de passe pour le remplacer..." : "Minimum 8 caractères"}
+                  autoComplete="new-password"
+                  className="px-3 py-2 text-xs bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-green-600"
+                  placeholder={editingUser ? "Saisir un nouveau mot de passe pour le remplacer..." : `Minimum ${passwordMinLength} caractères`}
                 />
                 <p className="text-[11px] text-gray-500 dark:text-green-100/60 mt-1 flex items-center gap-1">
                   <Lock className="w-3 h-3 text-amber-500 shrink-0" />
-                  Saisir une valeur ici remplacera immédiatement le mot de passe de l'utilisateur.
+                  Minimum {passwordMinLength} caractères (réglable dans Paramètres plateforme).
                 </p>
               </div>
 
@@ -899,12 +909,12 @@ export default function AdminUsersPage() {
                 <label className="block text-xs font-semibold text-gray-700 dark:text-green-100/90 mb-1">
                   Nouveau Mot de Passe
                 </label>
-                <input 
-                  type="text" 
+                <PasswordInput
                   required
                   value={newPasswordValue}
                   onChange={(e) => setNewPasswordValue(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-600 font-mono"
+                  autoComplete="new-password"
+                  className="px-3 py-2 text-xs bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white outline-none focus:border-amber-600 font-mono"
                   placeholder="ex: NouveauPass2026!"
                 />
               </div>

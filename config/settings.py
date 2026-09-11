@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -30,7 +31,16 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-@va@2#7tz!m!b=0bedv^s
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'
 
-ALLOWED_HOSTS = ['*']
+_allowed = os.environ.get('ALLOWED_HOSTS', '*').strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()] or ['*']
+
+# Origines CORS (prod : liste explicite ; DEBUG : ouvert)
+_cors = os.environ.get('CORS_ALLOWED_ORIGINS', '').strip()
+if _cors:
+    CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors.split(',') if o.strip()]
+    CORS_ALLOW_ALL_ORIGINS = False
+else:
+    CORS_ALLOW_ALL_ORIGINS = DEBUG or os.environ.get('CORS_ALLOW_ALL', '1') == '1'
 
 
 # Application definition
@@ -44,11 +54,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'accounts',
     'roles',
     'permissions',
     'business_categories',
-    'businesses',
+    'businesses.apps.BusinessesConfig',
     'profiles',
     'service_categories',
     'services',
@@ -58,6 +69,11 @@ INSTALLED_APPS = [
     'analytics',
     'locations',
     'hospital',
+    'wholesale',
+    'retail',
+    'bookings',
+    'orders',
+    'site_content',
     'corsheaders',
 ]
 
@@ -68,11 +84,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'businesses.middleware.ActiveSubscriptionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS défini plus haut selon l'environnement
 
 ROOT_URLCONF = 'config.urls'
 
@@ -108,6 +125,16 @@ DATABASES = {
     }
 }
 
+# SQLite pour les tests unitaires (sans PostgreSQL)
+import sys
+if 'test' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -117,7 +144,7 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'NAME': 'accounts.password_validation.ConfigurableMinimumLengthValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -150,26 +177,103 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173').strip().strip('"')
+BACKEND_URL = os.environ.get('BACKEND_URL', 'http://localhost:8000').strip().strip('"')
+
+# --- OAuth social (Google / Facebook / GitHub) ---
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', '').strip()
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', '').strip()
+FACEBOOK_OAUTH_CLIENT_ID = os.environ.get('FACEBOOK_OAUTH_CLIENT_ID', '').strip()
+FACEBOOK_OAUTH_CLIENT_SECRET = os.environ.get('FACEBOOK_OAUTH_CLIENT_SECRET', '').strip()
+GITHUB_OAUTH_CLIENT_ID = os.environ.get('GITHUB_OAUTH_CLIENT_ID', '').strip()
+GITHUB_OAUTH_CLIENT_SECRET = os.environ.get('GITHUB_OAUTH_CLIENT_SECRET', '').strip()
+
+# Email — SMTP si EMAIL_HOST est défini, sinon console (logs Docker)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '').strip().strip('"')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '1') in ('1', 'true', 'True', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', '0') in ('1', 'true', 'True', 'yes')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '').strip().strip('"')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '').strip().strip('"')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@isokohub.bi').strip().strip('"')
+EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '30'))
+
+if EMAIL_HOST:
+    EMAIL_BACKEND = os.environ.get(
+        'EMAIL_BACKEND',
+        'django.core.mail.backends.smtp.EmailBackend',
+    )
+else:
+    EMAIL_BACKEND = os.environ.get(
+        'EMAIL_BACKEND',
+        'django.core.mail.backends.console.EmailBackend',
+    )
+
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Limitation de débit — protège l'API à grande échelle
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.environ.get('THROTTLE_ANON', '60/min'),
+        'user': os.environ.get('THROTTLE_USER', '300/min'),
+    },
 }
 
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('JWT_ACCESS_MINUTES', '30'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_REFRESH_DAYS', '7'))),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
 
+# --- Sécurité SaaS (chiffrement en transit / cookies / headers) ---
+# Activé automatiquement hors DEBUG. Forcer avec SECURE_SSL=1 même en DEBUG.
+_secure = (not DEBUG) or os.environ.get('SECURE_SSL', '0') in ('1', 'true', 'True')
+SECURE_SSL_REDIRECT = _secure and os.environ.get('SECURE_SSL_REDIRECT', '1') in ('1', 'true', 'True')
+SESSION_COOKIE_SECURE = _secure
+CSRF_COOKIE_SECURE = _secure
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'same-origin'
+if _secure:
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Répertoire des sauvegardes opérationnelles (hors volume DB)
+BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', str(BASE_DIR / 'backups')))
+BACKUP_RETENTION_DAYS = int(os.environ.get('BACKUP_RETENTION_DAYS', '14'))
+
+# --- Lumicash (abonnements SaaS → compte marchand Isoko Hub) ---
+LUMICASH_STUB = os.environ.get('LUMICASH_STUB', '1') in ('1', 'true', 'True', 'yes')
+LUMICASH_MERCHANT_ACCOUNT = os.environ.get('LUMICASH_MERCHANT_ACCOUNT', 'ISOKO_HUB_MERCHANT').strip()
+LUMICASH_API_URL = os.environ.get('LUMICASH_API_URL', '').strip()
+LUMICASH_API_KEY = os.environ.get('LUMICASH_API_KEY', '').strip()
+LUMICASH_WEBHOOK_SECRET = os.environ.get('LUMICASH_WEBHOOK_SECRET', '').strip()
+# Prod : stub interdit sauf override explicite (LUMICASH_ALLOW_STUB_IN_PROD=1)
+if (not DEBUG) and LUMICASH_STUB and os.environ.get('LUMICASH_ALLOW_STUB_IN_PROD', '0') not in (
+    '1', 'true', 'True', 'yes',
+):
+    raise ImproperlyConfigured(
+        'LUMICASH_STUB=1 est interdit hors DEBUG. '
+        'Configurez LUMICASH_API_URL/KEY et LUMICASH_STUB=0, '
+        'ou forcez LUMICASH_ALLOW_STUB_IN_PROD=1 uniquement pour un staging contrôlé.'
+    )
+
 # Allow large payloads (e.g. Base64 images)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760 # 10 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB

@@ -39,7 +39,7 @@ export default function AdminLocationsPage() {
   const fetchLocationsTree = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/locations/tree/');
+      const response = await fetch('/api/v1/locations/tree/');
       if (response.ok) {
         const data = await response.json();
         setTreeData(data);
@@ -100,7 +100,7 @@ export default function AdminLocationsPage() {
     if (!window.confirm("Voulez-vous ré-initialiser la hiérarchie officielle du Burundi (Province -> Commune -> Zone -> Quartier -> Avenue) ?")) return;
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/v1/locations/seed/', { method: 'POST' });
+      const res = await fetch('/api/v1/locations/seed/', { method: 'POST' });
       const data = await res.json();
       setActionMessage({ type: 'success', text: data.message });
       fetchLocationsTree();
@@ -148,7 +148,7 @@ export default function AdminLocationsPage() {
     let bodyData = {};
 
     if (modalMode.includes('province')) {
-      url = selectedItem ? `http://localhost:8000/api/v1/locations/provinces/${selectedItem.id}/` : `http://localhost:8000/api/v1/locations/provinces/`;
+      url = selectedItem ? `/api/v1/locations/provinces/${selectedItem.id}/` : `/api/v1/locations/provinces/`;
       bodyData = { name: formData.name, code: formData.code, is_active: formData.is_active };
     } else if (modalMode.includes('commune')) {
       if (!formData.province_id) {
@@ -156,7 +156,7 @@ export default function AdminLocationsPage() {
         setIsSubmitting(false);
         return;
       }
-      url = selectedItem ? `http://localhost:8000/api/v1/locations/communes/${selectedItem.id}/` : `http://localhost:8000/api/v1/locations/communes/`;
+      url = selectedItem ? `/api/v1/locations/communes/${selectedItem.id}/` : `/api/v1/locations/communes/`;
       bodyData = { province: formData.province_id, name: formData.name, is_active: formData.is_active };
     } else if (modalMode.includes('zone')) {
       if (!formData.commune_id) {
@@ -164,7 +164,7 @@ export default function AdminLocationsPage() {
         setIsSubmitting(false);
         return;
       }
-      url = selectedItem ? `http://localhost:8000/api/v1/locations/zones/${selectedItem.id}/` : `http://localhost:8000/api/v1/locations/zones/`;
+      url = selectedItem ? `/api/v1/locations/zones/${selectedItem.id}/` : `/api/v1/locations/zones/`;
       bodyData = { commune: formData.commune_id, name: formData.name, is_active: formData.is_active };
     } else if (modalMode.includes('quartier')) {
       if (!formData.zone_id) {
@@ -172,7 +172,7 @@ export default function AdminLocationsPage() {
         setIsSubmitting(false);
         return;
       }
-      url = selectedItem ? `http://localhost:8000/api/v1/locations/quartiers/${selectedItem.id}/` : `http://localhost:8000/api/v1/locations/quartiers/`;
+      url = selectedItem ? `/api/v1/locations/quartiers/${selectedItem.id}/` : `/api/v1/locations/quartiers/`;
       bodyData = { zone: formData.zone_id, name: formData.name, is_active: formData.is_active };
     } else if (modalMode.includes('avenue')) {
       if (!formData.quartier_id) {
@@ -180,7 +180,7 @@ export default function AdminLocationsPage() {
         setIsSubmitting(false);
         return;
       }
-      url = selectedItem ? `http://localhost:8000/api/v1/locations/avenues/${selectedItem.id}/` : `http://localhost:8000/api/v1/locations/avenues/`;
+      url = selectedItem ? `/api/v1/locations/avenues/${selectedItem.id}/` : `/api/v1/locations/avenues/`;
       bodyData = { quartier: formData.quartier_id, name: formData.name, is_active: formData.is_active };
     }
 
@@ -211,7 +211,7 @@ export default function AdminLocationsPage() {
   const handleDelete = async (type, id, name) => {
     if (!window.confirm(`Êtes-vous sûr de vouloir supprimer "${name}" ?`)) return;
 
-    let url = `http://localhost:8000/api/v1/locations/${type}s/${id}/`;
+    let url = `/api/v1/locations/${type}s/${id}/`;
     try {
       const res = await fetch(url, { method: 'DELETE' });
       if (res.ok) {

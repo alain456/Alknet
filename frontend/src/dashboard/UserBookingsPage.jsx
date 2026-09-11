@@ -1,223 +1,204 @@
-import React, { useState } from 'react';
-import { Calendar, MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Search, Filter } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, MapPin, Clock, CheckCircle2, XCircle, ChevronRight, Search, Stethoscope } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import hospitalService, { APPOINTMENT_STATUS_LABELS } from '../hospital/hospitalService';
+import api from '../shared/api';
+
+const STATUS_LABELS = APPOINTMENT_STATUS_LABELS;
+
+const STATUS_STYLE = {
+  CONFIRMED: 'bg-green-100 text-green-700',
+  PENDING: 'bg-orange-100 text-orange-700',
+  REQUEST_SENT: 'bg-sky-100 text-sky-700',
+  PATIENT_ARRIVED: 'bg-emerald-100 text-emerald-700',
+  WAITING_ROOM: 'bg-purple-100 text-purple-700',
+  IN_PROGRESS: 'bg-indigo-100 text-indigo-700',
+  COMPLETED: 'bg-blue-100 text-blue-700',
+  CANCELLED: 'bg-red-100 text-red-700',
+  REJECTED: 'bg-red-100 text-red-700',
+  NO_SHOW: 'bg-gray-100 text-gray-700',
+  RESCHEDULED: 'bg-orange-100 text-orange-700',
+};
 
 export default function UserBookingsPage() {
   const [activeTab, setActiveTab] = useState('upcoming');
+  const [appointments, setAppointments] = useState([]);
+  const [serviceBookings, setServiceBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
-  const bookings = [
-    { 
-      id: 1, 
-      service: 'Safari Adventure Tour', 
-      business: 'WildQuest Kenya', 
-      date: 'Oct 12, 2026', 
-      time: '08:00 AM',
-      status: 'Confirmed',
-      location: 'Maasai Mara, Kenya',
-      price: '$125.00',
-      image: 'https://images.unsplash.com/photo-1547471080-7cb2cb6a5a36?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-      type: 'upcoming'
-    },
-    { 
-      id: 2, 
-      service: 'Executive Suite Stay', 
-      business: 'Hotel Azura', 
-      date: 'Oct 20, 2026', 
-      time: '14:00 PM',
-      status: 'Pending',
-      location: 'Kigali, Rwanda',
-      price: '$350.00',
-      image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-      type: 'upcoming'
-    },
-    { 
-      id: 3, 
-      service: 'Spa & Wellness Package', 
-      business: 'Serenity Spa', 
-      date: 'Sep 15, 2026', 
-      time: '10:00 AM',
-      status: 'Completed',
-      location: 'Bujumbura, Burundi',
-      price: '$85.00',
-      image: 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-      type: 'past'
-    },
-    { 
-      id: 4, 
-      service: 'City Tour Guide', 
-      business: 'Kigali Explorers', 
-      date: 'Aug 05, 2026', 
-      time: '09:00 AM',
-      status: 'Cancelled',
-      location: 'Kigali, Rwanda',
-      price: '$45.00',
-      image: 'https://images.unsplash.com/photo-1590422749909-5b79e76162a0?ixlib=rb-4.0.3&auto=format&fit=crop&w=500&q=80',
-      type: 'past'
+  useEffect(() => {
+    loadBookings();
+  }, []);
+
+  const loadBookings = async () => {
+    setLoading(true);
+    try {
+      const [appts, bookings] = await Promise.all([
+        hospitalService.getAppointments({}, true),
+        api.get('bookings/', { auth: true }).catch(() => []),
+      ]);
+      setAppointments(Array.isArray(appts) ? appts : []);
+      setServiceBookings(Array.isArray(bookings) ? bookings : []);
+    } catch (err) {
+      setError(err.message || 'Erreur de chargement');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const filteredBookings = bookings.filter(booking => 
-    activeTab === 'all' ? true : booking.type === activeTab
-  );
+  const handleCancelAppointment = async (id) => {
+    if (!window.confirm('Annuler ce rendez-vous ?')) return;
+    try {
+      await hospitalService.cancelAppointment(id);
+      await loadBookings();
+    } catch (err) {
+      alert(err.message || 'Impossible d\'annuler');
+    }
+  };
+
+  const now = new Date();
+  const allItems = [
+    ...appointments.map((a) => ({
+      id: a.id,
+      type: 'appointment',
+      title: a.doctor_details?.user_details
+        ? `${a.doctor_details.user_details.first_name} ${a.doctor_details.user_details.last_name}`
+        : 'Consultation médicale',
+      business: a.hospital_name,
+      date: new Date(a.appointment_date),
+      bookedAt: a.created_at ? new Date(a.created_at) : null,
+      status: a.status,
+      statusLabel: a.status_display || STATUS_LABELS[a.status],
+      reason: a.reason,
+      referenceCode: a.reference_code,
+      queueNumber: a.queue_number,
+      consultationType: a.consultation_type_display,
+    })),
+    ...serviceBookings.map((b) => ({
+      id: b.id,
+      type: 'booking',
+      title: b.service_title || 'Réservation service',
+      business: b.business_name,
+      date: new Date(b.scheduled_date),
+      status: b.status,
+      statusLabel: b.status_display || b.status,
+      reason: b.notes,
+    })),
+  ].sort((a, b) => b.date - a.date);
+
+  const filtered = allItems.filter((item) => {
+    const isUpcoming = item.date >= now && !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status);
+    const isPast = item.date < now || ['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status);
+    if (activeTab === 'upcoming' && !isUpcoming) return false;
+    if (activeTab === 'past' && !isPast) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return item.title.toLowerCase().includes(q) || (item.business || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
-      
-      {/* Header */}
+    <div className="w-full max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Bookings</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your upcoming and past reservations.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Mes rendez-vous</h1>
+          <p className="text-gray-500 mt-1">Consultations médicales et réservations de services.</p>
         </div>
-        
         <div className="flex items-center gap-3">
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search bookings..." 
-              className="pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none dark:text-white w-full md:w-64"
-            />
+            <input type="text" placeholder="Rechercher..." value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-4 py-2 border rounded-lg text-sm w-full md:w-64" />
           </div>
-          <button className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-            <Filter className="w-5 h-5" />
-          </button>
+          <Link to="/hospital/book-appointment"
+            className="px-4 py-2 bg-teal-600 text-white text-sm font-medium rounded-lg whitespace-nowrap">
+            Nouveau RDV
+          </Link>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-4 border-b border-gray-200 dark:border-gray-800">
-        <button 
-          onClick={() => setActiveTab('upcoming')}
-          className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'upcoming' 
-              ? 'text-primary dark:text-teal-400' 
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-          }`}
-        >
-          Upcoming
-          {activeTab === 'upcoming' && (
-            <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary dark:bg-teal-400 rounded-t-full"></span>
-          )}
-        </button>
-        <button 
-          onClick={() => setActiveTab('past')}
-          className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'past' 
-              ? 'text-primary dark:text-teal-400' 
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-          }`}
-        >
-          Past Bookings
-          {activeTab === 'past' && (
-            <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary dark:bg-teal-400 rounded-t-full"></span>
-          )}
-        </button>
-        <button 
-          onClick={() => setActiveTab('all')}
-          className={`pb-3 text-sm font-medium transition-colors relative ${
-            activeTab === 'all' 
-              ? 'text-primary dark:text-teal-400' 
-              : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-          }`}
-        >
-          All
-          {activeTab === 'all' && (
-            <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary dark:bg-teal-400 rounded-t-full"></span>
-          )}
-        </button>
+      <div className="flex gap-4 border-b">
+        {['upcoming', 'past', 'all'].map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)}
+            className={`pb-3 text-sm font-medium capitalize ${activeTab === tab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500'}`}>
+            {tab === 'upcoming' ? 'À venir' : tab === 'past' ? 'Passés' : 'Tous'}
+          </button>
+        ))}
       </div>
 
-      {/* Bookings List */}
-      <div className="space-y-4">
-        {filteredBookings.length > 0 ? (
-          filteredBookings.map((booking) => (
-            <div key={booking.id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row gap-6 group">
-              
-              {/* Image */}
-              <div className="w-full md:w-48 h-48 md:h-auto rounded-lg overflow-hidden shrink-0">
-                <img src={booking.image} alt={booking.service} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              </div>
+      {error && <div className="p-4 bg-red-50 text-red-700 rounded-xl text-sm">{error}</div>}
 
-              {/* Content */}
-              <div className="flex-1 flex flex-col">
-                <div className="flex flex-wrap justify-between items-start gap-4 mb-2">
+      {loading ? (
+        <div className="text-center py-20 text-gray-500">Chargement...</div>
+      ) : filtered.length > 0 ? (
+        <div className="space-y-4">
+          {filtered.map((item) => (
+            <div key={`${item.type}-${item.id}`}
+              className="bg-white dark:bg-gray-800 border rounded-xl p-6 shadow-sm flex flex-col md:flex-row gap-4">
+              <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center shrink-0">
+                {item.type === 'appointment' ? <Stethoscope className="w-6 h-6 text-teal-600" /> : <Calendar className="w-6 h-6 text-teal-600" />}
+              </div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start gap-4">
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1 group-hover:text-primary transition-colors">{booking.service}</h2>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">{booking.business}</p>
+                    <h2 className="text-lg font-bold">{item.title}</h2>
+                    <p className="text-sm text-gray-500">{item.business}</p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-gray-900 dark:text-white">{booking.price}</div>
-                    <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                      booking.status === 'Confirmed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
-                      booking.status === 'Pending' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
-                      booking.status === 'Completed' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                      'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                    }`}>
-                      {booking.status === 'Confirmed' || booking.status === 'Completed' ? <CheckCircle2 className="w-3 h-3" /> : 
-                       booking.status === 'Cancelled' ? <XCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                      {booking.status}
-                    </div>
-                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLE[item.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {item.statusLabel}
+                  </span>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 mb-6">
-                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
-                    <div className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg shrink-0">
-                      <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Date & Time</p>
-                      <p className="font-medium">{booking.date} at {booking.time}</p>
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 shrink-0" />
+                    <span>
+                      <span className="text-gray-500">RDV : </span>
+                      {item.date.toLocaleDateString('fr-FR')} à {item.date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
-                    <div className="p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg shrink-0">
-                      <MapPin className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  {item.bookedAt && (
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 shrink-0" />
+                      <span>
+                        <span className="text-gray-500">Demande : </span>
+                        {item.bookedAt.toLocaleDateString('fr-FR')} à {item.bookedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-0.5">Location</p>
-                      <p className="font-medium line-clamp-1">{booking.location}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="mt-auto flex flex-wrap gap-3 pt-4 border-t border-gray-100 dark:border-gray-700">
-                  {booking.type === 'upcoming' && (
-                    <>
-                      <button className="px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg transition">
-                        Reschedule
-                      </button>
-                      <button className="px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium rounded-lg transition">
-                        Cancel
-                      </button>
-                    </>
                   )}
-                  {booking.type === 'past' && booking.status === 'Completed' && (
-                    <button className="px-4 py-2 bg-gray-50 hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg transition">
-                      Leave a Review
+                </div>
+                {item.reason && <p className="text-xs text-gray-500 mt-2">{item.reason}</p>}
+                {item.referenceCode && (
+                  <p className="text-xs font-mono text-teal-700 mt-2 font-semibold">
+                    N° suivi : {item.referenceCode}
+                    {item.queueNumber ? ` · Ordre #${item.queueNumber}` : ''}
+                  </p>
+                )}
+                {item.type === 'appointment' && ['PENDING', 'CONFIRMED'].includes(item.status) && item.date >= now && (
+                  <div className="mt-4 pt-4 border-t">
+                    <button onClick={() => handleCancelAppointment(item.id)}
+                      className="text-sm text-red-600 hover:underline">
+                      Annuler le rendez-vous
                     </button>
-                  )}
-                  <button className="px-4 py-2 ml-auto bg-primary hover:bg-secondary text-white text-sm font-medium rounded-lg transition flex items-center gap-2">
-                    View Details <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             </div>
-          ))
-        ) : (
-          <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Calendar className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">No bookings found</h3>
-            <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-              You don't have any {activeTab === 'all' ? '' : activeTab} bookings at the moment. Explore services to make your first reservation!
-            </p>
-          </div>
-        )}
-      </div>
-
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-20 bg-white rounded-xl border border-dashed">
+          <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <h3 className="text-lg font-bold mb-2">Aucun rendez-vous</h3>
+          <p className="text-gray-500 mb-4">Prenez votre premier rendez-vous médical.</p>
+          <Link to="/hospital/book-appointment" className="text-teal-600 font-semibold hover:underline">
+            Réserver maintenant →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

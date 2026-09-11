@@ -25,7 +25,7 @@ export default function AdminCategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/business-categories/');
+      const response = await fetch('/api/v1/business-categories/');
       if (!response.ok) throw new Error('Failed to fetch categories');
       const data = await response.json();
       setCategories(data);
@@ -92,7 +92,7 @@ export default function AdminCategoriesPage() {
     if (!window.confirm(warningMsg)) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/business-categories/${category.id}/`, {
+      const response = await fetch(`/api/v1/business-categories/${category.id}/`, {
         method: 'DELETE',
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
@@ -121,8 +121,8 @@ export default function AdminCategoriesPage() {
       };
 
       const url = editingCategory 
-        ? `http://localhost:8000/api/v1/business-categories/${editingCategory.id}/`
-        : 'http://localhost:8000/api/v1/business-categories/create/';
+        ? `/api/v1/business-categories/${editingCategory.id}/`
+        : '/api/v1/business-categories/create/';
       
       const method = editingCategory ? 'PATCH' : 'POST';
 

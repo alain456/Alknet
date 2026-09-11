@@ -1,14 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  HeartPulse, Users, Calendar, DollarSign, TrendingUp, 
-  Stethoscope, Clock, CheckCircle, AlertCircle, Activity 
+import { Link } from 'react-router-dom';
+import {
+  HeartPulse, Users, Calendar, DollarSign, TrendingUp,
+  Stethoscope, Clock, CheckCircle, AlertCircle, Activity
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import hospitalService from '../hospitalService';
+import { ApiError } from '../../shared/api';
+
+const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
+
+function doctorLabel(apt) {
+  if (apt?.doctor_name) return `Dr. ${apt.doctor_name}`;
+  const d = apt?.doctor_details;
+  if (!d) return '—';
+  if (d.full_name) return `Dr. ${d.full_name}`;
+  const first = d.user_details?.first_name || '';
+  const last = d.user_details?.last_name || '';
+  const name = `${first} ${last}`.trim();
+  return name ? `Dr. ${name}` : '—';
+}
 
 export default function HospitalDashboard() {
-  const { token , authFetch} = useAuth();
+  const { token, isAuthenticated } = useAuth();
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [stats, setStats] = useState({
     totalDoctors: 0,
     totalServices: 0,
@@ -25,91 +42,77 @@ export default function HospitalDashboard() {
 
   useEffect(() => {
     const init = async () => {
+      if (!isAuthenticated || !token) {
+        setLoading(false);
+        return;
+      }
+      setLoadError('');
       try {
-        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (busRes.ok) {
-          const businesses = await busRes.json();
-          if (businesses.length > 0) {
-            const hid = businesses[0].id;
-            setHospitalId(hid);
-            fetchDashboardData(hid);
-          } else {
-            const allBusRes = await authFetch('http://localhost:8000/api/v1/businesses/');
-            if (allBusRes.ok) {
-              const allBus = await allBusRes.json();
-              const list = Array.isArray(allBus) ? allBus : (allBus.results || []);
-              if (list.length > 0) {
-                const hid = list[0].id;
-                setHospitalId(hid);
-                fetchDashboardData(hid);
-                return;
-              }
-            }
-            setLoading(false);
-          }
+        const businesses = await hospitalService.getMyHospital();
+        const list = Array.isArray(businesses) ? businesses : [];
+        if (list.length === 0) {
+          setHospitalId(null);
+          setLoading(false);
+          return;
         }
+        const hid = list[0].id;
+        setHospitalId(hid);
+        await fetchDashboardData(hid);
       } catch (err) {
         console.error(err);
+        setLoadError(err?.message || 'Impossible de charger le dashboard');
         setLoading(false);
       }
     };
-    if (token) init();
-  }, [token]);
+    init();
+  }, [token, isAuthenticated]);
 
   const fetchDashboardData = async (hid) => {
     try {
-      // Récupérer les médecins
-      const docsRes = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
-      const doctors = docsRes.ok ? await docsRes.json() : [];
+      const [docsRaw, svcRaw, aptStats, recentAptsRaw, invRaw, recRaw] = await Promise.all([
+        hospitalService.getDoctors({ hospital: hid }),
+        hospitalService.getServices(hid, true),
+        hospitalService.getStats(hid),
+        hospitalService.getAppointments({ hospital: hid, ordering: '-appointment_date', limit: '8' }),
+        hospitalService.getInvoices(hid),
+        hospitalService.getMedicalRecords(hid),
+      ]);
 
-      // Récupérer les services
-      const svcRes = await authFetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
-      const services = svcRes.ok ? await svcRes.json() : [];
-
-      // Récupérer les rendez-vous
-      const aptRes = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`);
-      const appointments = aptRes.ok ? await aptRes.json() : [];
-
-      // Récupérer les factures
-      const invRes = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`);
-      const invoices = invRes.ok ? await invRes.json() : [];
-
-      // Récupérer les dossiers médicaux
-      const recRes = await authFetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`);
-      const records = recRes.ok ? await recRes.json() : [];
-
-      // Calculer les statistiques
-      const today = new Date().toDateString();
-      const todayApts = appointments.filter(apt => 
-        new Date(apt.appointment_date).toDateString() === today
-      );
+      const doctors = normalizeList(docsRaw);
+      const services = normalizeList(svcRaw);
+      const appointments = normalizeList(recentAptsRaw).slice(0, 8);
+      const invoices = normalizeList(invRaw);
+      const records = normalizeList(recRaw);
 
       const totalRevenue = invoices
-        .filter(inv => inv.status === 'PAID')
+        .filter((inv) => inv.status === 'PAID')
         .reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0);
 
       const pendingRevenue = invoices
-        .filter(inv => inv.status === 'PENDING')
+        .filter((inv) => inv.status === 'PENDING')
         .reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0);
 
       setStats({
         totalDoctors: doctors.length,
         totalServices: services.length,
-        todayAppointments: todayApts.length,
-        pendingAppointments: appointments.filter(apt => apt.status === 'PENDING').length,
-        completedAppointments: appointments.filter(apt => apt.status === 'COMPLETED').length,
+        todayAppointments: aptStats?.today_total ?? 0,
+        pendingAppointments: aptStats?.pending ?? aptStats?.pending_confirmations ?? 0,
+        completedAppointments: aptStats?.completed_today ?? 0,
         totalRevenue,
         pendingRevenue,
-        totalPatients: [...new Set(appointments.map(apt => apt.patient))].length,
-        activeMedicalRecords: records.length
+        totalPatients: aptStats?.unique_patients ?? [...new Set(appointments.map((a) => a.patient))].length,
+        activeMedicalRecords: records.length,
       });
 
       setRecentAppointments(appointments.slice(0, 5));
       setRecentInvoices(invoices.slice(0, 5));
     } catch (err) {
       console.error(err);
+      if (err instanceof ApiError && err.status === 401) {
+        setLoadError('Session expirée — reconnectez-vous.');
+      } else {
+        setLoadError(err?.message || 'Erreur de chargement');
+      }
     } finally {
       setLoading(false);
     }
@@ -146,192 +149,140 @@ export default function HospitalDashboard() {
         <p className="text-gray-500 text-sm mt-1">Vue d'ensemble de l'activité de votre établissement.</p>
       </div>
 
-      {!hospitalId && (
-        <div className="p-4 bg-yellow-50 text-yellow-800 rounded-xl border border-yellow-200">
-          Vous n'avez pas encore configuré votre hôpital.
+      {loadError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+          {loadError}
+        </div>
+      )}
+
+      {!hospitalId && !loadError && (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-gray-600">
+          Aucun hôpital associé à votre compte.
         </div>
       )}
 
       {hospitalId && (
         <>
-          {/* Statistiques principales */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               icon={Stethoscope}
-              title="Médecins Actifs"
+              title="Médecins"
               value={stats.totalDoctors}
-              subtitle="Professionnels enregistrés"
-              color="bg-blue-100 text-blue-600"
+              color="bg-teal-50 text-teal-600"
+            />
+            <StatCard
+              icon={Activity}
+              title="Services"
+              value={stats.totalServices}
+              color="bg-blue-50 text-blue-600"
             />
             <StatCard
               icon={Calendar}
-              title="Rendez-vous Aujourd'hui"
+              title="RDV aujourd'hui"
               value={stats.todayAppointments}
-              subtitle={`${stats.pendingAppointments} en attente`}
-              color="bg-purple-100 text-purple-600"
-            />
-            <StatCard
-              icon={DollarSign}
-              title="Revenu du Mois"
-              value={formatCurrency(stats.totalRevenue)}
-              subtitle={`${formatCurrency(stats.pendingRevenue)} en attente`}
-              color="bg-green-100 text-green-600"
-            />
-            <StatCard
-              icon={Users}
-              title="Patients Uniques"
-              value={stats.totalPatients}
-              subtitle={`${stats.activeMedicalRecords} dossiers médicaux`}
-              color="bg-orange-100 text-orange-600"
-            />
-          </div>
-
-          {/* Statistiques détaillées */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard
-              icon={Activity}
-              title="Services Actifs"
-              value={stats.totalServices}
-              subtitle="Départements opérationnels"
-              color="bg-teal-100 text-teal-600"
-            />
-            <StatCard
-              icon={CheckCircle}
-              title="Rendez-vous Terminés"
-              value={stats.completedAppointments}
-              subtitle="Ce mois"
-              color="bg-emerald-100 text-emerald-600"
+              color="bg-indigo-50 text-indigo-600"
             />
             <StatCard
               icon={Clock}
-              title="Taux de Complétion"
-              value={stats.totalAppointments > 0 
-                ? Math.round((stats.completedAppointments / stats.totalAppointments) * 100) + '%'
-                : '0%'}
-              subtitle="Des rendez-vous"
-              color="bg-indigo-100 text-indigo-600"
+              title="En attente"
+              value={stats.pendingAppointments}
+              color="bg-amber-50 text-amber-600"
+            />
+            <StatCard
+              icon={CheckCircle}
+              title="Terminés (jour)"
+              value={stats.completedAppointments}
+              color="bg-green-50 text-green-600"
+            />
+            <StatCard
+              icon={Users}
+              title="Patients (récents)"
+              value={stats.totalPatients}
+              color="bg-purple-50 text-purple-600"
+            />
+            <StatCard
+              icon={DollarSign}
+              title="Revenus encaissés"
+              value={formatCurrency(stats.totalRevenue)}
+              color="bg-emerald-50 text-emerald-600"
+            />
+            <StatCard
+              icon={TrendingUp}
+              title="Factures en attente"
+              value={formatCurrency(stats.pendingRevenue)}
+              color="bg-rose-50 text-rose-600"
             />
           </div>
 
-          {/* Activité récente */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Rendez-vous récents */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-teal-600" />
-                  Rendez-vous Récents
-                </h3>
-                <span className="text-xs text-gray-500">5 derniers</span>
+                <h2 className="font-semibold text-gray-900">Rendez-vous récents</h2>
+                <Link to="/hospital/appointments" className="text-sm text-teal-600 hover:underline">
+                  Voir tout
+                </Link>
               </div>
-              <div className="space-y-3">
-                {recentAppointments.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">Aucun rendez-vous récent</p>
-                ) : (
-                  recentAppointments.map(apt => (
-                    <div key={apt.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
-                          {apt.patient_name?.[0] || 'P'}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{apt.patient_name}</p>
-                          <p className="text-xs text-gray-500">
-                            Dr. {apt.doctor_details?.user_details?.first_name} {apt.doctor_details?.user_details?.last_name}
-                          </p>
-                        </div>
+              {recentAppointments.length === 0 ? (
+                <p className="text-sm text-gray-500">Aucun rendez-vous.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {recentAppointments.map((apt) => (
+                    <li key={apt.id} className="flex items-start justify-between gap-3 text-sm border-b border-gray-50 pb-3 last:border-0">
+                      <div>
+                        <p className="font-medium text-gray-900">{apt.patient_name || 'Patient'}</p>
+                        <p className="text-gray-500">{doctorLabel(apt)}</p>
                       </div>
-                      <div className="text-right">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                          apt.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
-                          apt.status === 'CONFIRMED' ? 'bg-blue-100 text-blue-700' :
-                          apt.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {apt.status === 'PENDING' ? <Clock className="w-3 h-3" /> :
-                           apt.status === 'COMPLETED' ? <CheckCircle className="w-3 h-3" /> :
-                           <AlertCircle className="w-3 h-3" />}
-                          {apt.status === 'PENDING' ? 'En attente' :
-                           apt.status === 'CONFIRMED' ? 'Confirmé' :
-                           apt.status === 'COMPLETED' ? 'Terminé' : 'Annulé'}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                      <span className="text-xs text-gray-500 whitespace-nowrap">
+                        {apt.status_display || apt.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
-            {/* Factures récentes */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-teal-600" />
-                  Factures Récentes
-                </h3>
-                <span className="text-xs text-gray-500">5 dernières</span>
+                <h2 className="font-semibold text-gray-900">Factures récentes</h2>
+                <Link to="/hospital/invoices" className="text-sm text-teal-600 hover:underline">
+                  Voir tout
+                </Link>
               </div>
-              <div className="space-y-3">
-                {recentInvoices.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">Aucune facture récente</p>
-                ) : (
-                  recentInvoices.map(inv => (
-                    <div key={inv.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold">
-                          <DollarSign className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{inv.patient_name}</p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(inv.issued_at).toLocaleDateString('fr-FR')}
-                          </p>
-                        </div>
+              {recentInvoices.length === 0 ? (
+                <p className="text-sm text-gray-500">Aucune facture.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {recentInvoices.map((inv) => (
+                    <li key={inv.id} className="flex items-start justify-between gap-3 text-sm border-b border-gray-50 pb-3 last:border-0">
+                      <div>
+                        <p className="font-medium text-gray-900">{inv.patient_name || inv.invoice_number || 'Facture'}</p>
+                        <p className="text-gray-500">{inv.status}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">{formatCurrency(inv.amount)}</p>
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
-                          inv.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                          inv.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
-                          {inv.status === 'PAID' ? <CheckCircle className="w-3 h-3" /> :
-                           inv.status === 'PENDING' ? <Clock className="w-3 h-3" /> :
-                           <AlertCircle className="w-3 h-3" />}
-                          {inv.status === 'PAID' ? 'Payée' :
-                           inv.status === 'PENDING' ? 'En attente' : 'Annulée'}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                      <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
+                        {formatCurrency(inv.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
-          {/* Actions rapides */}
-          <div className="bg-gradient-to-r from-teal-900 to-slate-900 rounded-2xl p-6 text-white">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
-              Actions Rapides
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <button className="flex items-center gap-2 bg-white/10 hover:bg white/20 p-3 rounded-xl transition">
-                <Calendar className="w-5 h-5" />
-                <span className="text-sm font-medium">Nouveau RDV</span>
-              </button>
-              <button className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
-                <Users className="w-5 h-5" />
-                <span className="text-sm font-medium">Ajouter Patient</span>
-              </button>
-              <button className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
-                <DollarSign className="w-5 h-5" />
-                <span className="text-sm font-medium">Créer Facture</span>
-              </button>
-              <button className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
-                <Stethoscope className="w-5 h-5" />
-                <span className="text-sm font-medium">Gérer Médecins</span>
-              </button>
+          <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-6 text-white">
+            <h2 className="font-semibold mb-3">Accès rapide</h2>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/hospital/appointments" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+                <Calendar className="w-4 h-4" /> Rendez-vous
+              </Link>
+              <Link to="/hospital/doctors" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+                <Stethoscope className="w-4 h-4" /> Médecins
+              </Link>
+              <Link to="/hospital/patients" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+                <Users className="w-4 h-4" /> Patients
+              </Link>
+              <Link to="/hospital/services" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+                <AlertCircle className="w-4 h-4" /> Services
+              </Link>
             </div>
           </div>
         </>

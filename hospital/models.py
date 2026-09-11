@@ -71,7 +71,15 @@ class HospitalProfile(models.Model):
     # --- Champs d'identité spécifiques à un hôpital ---
     acronym = models.CharField(
         max_length=20, blank=True, null=True,
-        help_text="Sigle de l'établissement (ex: CHU, CHUK, HBB)"
+        help_text="Sigle de l'établissement (ex: BAHO, CHU, CHUK) — utilisé dans les références RDV"
+    )
+    appointment_reference_prefix = models.CharField(
+        max_length=15, default='RDV', blank=True,
+        help_text="Préfixe des numéros de suivi (ex: RDV → RDV-BAHO-2026-000128)"
+    )
+    appointment_request_ack_message = models.TextField(
+        blank=True, default='',
+        help_text="Message email envoyé au patient après sa demande de RDV (variables : {patient_name}, {reference}, …)"
     )
     hospital_type = models.CharField(
         max_length=20, choices=HOSPITAL_TYPE_CHOICES, default='PRIVATE',
@@ -265,6 +273,7 @@ class DoctorProfile(models.Model):
         ('SPECIALIST', 'Médecin Spécialiste'),
         ('DOCTOR', 'Docteur / Généraliste'),
         ('NURSE', 'Infirmier(e) / Soignant(e)'),
+        ('RECEPTIONIST', 'Agent d\'accueil'),
     )
 
     GENDER_CHOICES = (
@@ -344,9 +353,9 @@ class DoctorProfile(models.Model):
         blank=True, null=True,
         help_text="Biographie courte visible par le patient"
     )
-    photo_url = models.URLField(
+    photo_url = models.TextField(
         blank=True, null=True,
-        help_text="URL de la photo professionnelle du médecin"
+        help_text="URL ou image Base64 de la photo professionnelle (publique)"
     )
 
     # --- Modes de consultation ---
@@ -367,6 +376,10 @@ class DoctorProfile(models.Model):
     is_active = models.BooleanField(
         default=True,
         help_text="Décocher pour masquer le médecin du répertoire sans supprimer son profil"
+    )
+    is_public_directory = models.BooleanField(
+        default=True,
+        help_text="Si False, le profil n'apparaît pas dans l'annuaire client (ex: agent d'accueil)"
     )
     is_accepting_new_patients = models.BooleanField(
         default=True,
@@ -457,6 +470,28 @@ class DoctorProfile(models.Model):
             modes.append('Télé-expertise')
         return modes
 
+    def related_services_queryset(self, *, active_only=True):
+        """
+        Tous les services liés au médecin :
+        M2M assignés + services dont il est chef + affectations ServiceAssignment.
+        """
+        service_ids = set(self.services.values_list('pk', flat=True))
+        service_ids.update(self.headed_services.values_list('pk', flat=True))
+        if self.user_id and self.hospital_id:
+            service_ids.update(
+                ServiceAssignment.objects.filter(
+                    user_id=self.user_id,
+                    hospital_id=self.hospital_id,
+                    is_active=True,
+                ).values_list('service_id', flat=True)
+            )
+        qs = MedicalService.objects.filter(pk__in=service_ids)
+        if self.hospital_id:
+            qs = qs.filter(hospital_id=self.hospital_id)
+        if active_only:
+            qs = qs.filter(is_active=True)
+        return qs.order_by('display_order', 'name')
+
 
 # ---------------------------------------------------------------------------
 # 01.5 — MODULE RENDEZ-VOUS & CRENEAUX ADMIN
@@ -512,7 +547,7 @@ class AppointmentSlot(models.Model):
         max_length=20, choices=STATUS_CHOICES, default='OPEN'
     )
     is_active = models.BooleanField(
-        default=True, help_text="Permet à l'admin d'activer/désactiver la visibilité du rendez-vous côté patient"
+        default=False, help_text="Publier le créneau côté patient (activé par l'admin)"
     )
     notes = models.TextField(blank=True, null=True)
     created_by = models.ForeignKey(
@@ -553,13 +588,33 @@ class Appointment(models.Model):
     """
 
     STATUS_CHOICES = (
+        ('DRAFT', 'Brouillon'),
+        ('REQUEST_SENT', 'Demande envoyée'),
         ('PENDING', 'En attente de confirmation'),
         ('CONFIRMED', 'Confirmé'),
-        ('IN_PROGRESS', 'En cours'),
+        ('PATIENT_ARRIVED', 'Patient arrivé'),
+        ('WAITING_ROOM', 'En salle d\'attente'),
+        ('PRESENT', 'Présent'),
+        ('IN_PROGRESS', 'En consultation'),
         ('COMPLETED', 'Terminé'),
-        ('RESCHEDULED', 'Reprogrammé'),
+        ('REJECTED', 'Refusé'),
         ('CANCELLED', 'Annulé'),
+        ('RESCHEDULED', 'Reprogrammé'),
         ('NO_SHOW', 'Patient absent'),
+    )
+
+    SOURCE_CHOICES = (
+        ('APPLICATION_PATIENT', 'Application patient'),
+        ('RECEPTION', 'Agent d\'accueil'),
+        ('ADMINISTRATION', 'Administration'),
+    )
+
+    APPOINTMENT_CATEGORY_CHOICES = (
+        ('GENERAL', 'Consultation générale'),
+        ('SPECIALIZED', 'Consultation spécialisée'),
+        ('FOLLOW_UP', 'Contrôle / suivi'),
+        ('EMERGENCY', 'Urgence'),
+        ('EXAM', 'Examen'),
     )
 
     TYPE_CHOICES = (
@@ -568,14 +623,20 @@ class Appointment(models.Model):
         ('TELE_EXPERTISE', 'Télé-expertise (entre médecins)'),
     )
 
-    # Transitions de statut valides (workflow)
+    # Machine d'état professionnelle — aucune suppression, historique conservé
     VALID_TRANSITIONS = {
-        'PENDING': ['CONFIRMED', 'CANCELLED'],
-        'CONFIRMED': ['IN_PROGRESS', 'RESCHEDULED', 'CANCELLED'],
-        'IN_PROGRESS': ['COMPLETED', 'NO_SHOW'],
-        'RESCHEDULED': ['CONFIRMED', 'CANCELLED'],
+        'DRAFT': ['REQUEST_SENT', 'CANCELLED'],
+        'REQUEST_SENT': ['PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED'],
+        'PENDING': ['CONFIRMED', 'REJECTED', 'CANCELLED'],
+        'CONFIRMED': ['PATIENT_ARRIVED', 'PRESENT', 'CANCELLED', 'RESCHEDULED', 'NO_SHOW'],
+        'PATIENT_ARRIVED': ['WAITING_ROOM', 'PRESENT', 'IN_PROGRESS', 'NO_SHOW', 'CANCELLED'],
+        'WAITING_ROOM': ['PRESENT', 'IN_PROGRESS', 'NO_SHOW', 'CANCELLED'],
+        'PRESENT': ['COMPLETED', 'NO_SHOW'],
+        'IN_PROGRESS': ['COMPLETED', 'NO_SHOW', 'PRESENT'],
         'COMPLETED': [],
+        'REJECTED': [],
         'CANCELLED': [],
+        'RESCHEDULED': [],
         'NO_SHOW': [],
     }
 
@@ -591,6 +652,14 @@ class Appointment(models.Model):
         null=True, blank=True,
         help_text="Numéro d'ordre du patient selon l'ordre de postulation"
     )
+    reference_code = models.CharField(
+        max_length=30,
+        unique=True,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text="Numéro de suivi patient (ex: RDV-2026-00042)"
+    )
 
     # Parties prenantes
     patient = models.ForeignKey(
@@ -602,6 +671,48 @@ class Appointment(models.Model):
     )
     hospital = models.ForeignKey(
         Business, on_delete=models.CASCADE, related_name='appointments'
+    )
+    service = models.ForeignKey(
+        'MedicalService', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='appointments',
+        help_text="Service médical associé au rendez-vous"
+    )
+
+    # Métadonnées SaaS
+    source = models.CharField(
+        max_length=30, choices=SOURCE_CHOICES, default='APPLICATION_PATIENT',
+        help_text="Origine de la demande de rendez-vous"
+    )
+    appointment_category = models.CharField(
+        max_length=30, choices=APPOINTMENT_CATEGORY_CHOICES, default='GENERAL',
+        help_text="Type de consultation (motif métier)"
+    )
+    duration_minutes = models.PositiveIntegerField(
+        default=30, help_text="Durée prévue de la consultation en minutes"
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_appointments',
+        help_text="Utilisateur ayant créé la demande"
+    )
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='confirmed_appointments',
+        help_text="Agent ou admin ayant confirmé le rendez-vous"
+    )
+
+    # Coordonnées saisies par le patient lors de la réservation (prioritaires côté admin)
+    patient_contact_name = models.CharField(
+        max_length=200, blank=True, default='',
+        help_text="Nom complet saisi lors de la prise de rendez-vous"
+    )
+    patient_contact_phone = models.CharField(
+        max_length=30, blank=True, default='',
+        help_text="Téléphone saisi lors de la prise de rendez-vous"
+    )
+    patient_contact_email = models.EmailField(
+        blank=True, default='',
+        help_text="Email saisi lors de la prise de rendez-vous"
     )
 
     # Date et type
@@ -649,7 +760,11 @@ class Appointment(models.Model):
     )
     cancellation_reason = models.TextField(
         blank=True, null=True,
-        help_text="Motif d'annulation ou de reprogrammation"
+        help_text="Motif d'annulation ou de refus"
+    )
+    reschedule_reason = models.TextField(
+        blank=True, null=True,
+        help_text="Motif de reprogrammation"
     )
     cancelled_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -673,6 +788,14 @@ class Appointment(models.Model):
         null=True, blank=True,
         help_text="Date de confirmation du rendez-vous"
     )
+    checked_in_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Date d'arrivée du patient à l'accueil"
+    )
+    started_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Date de début de la consultation"
+    )
     completed_at = models.DateTimeField(
         null=True, blank=True,
         help_text="Date de clôture du rendez-vous"
@@ -681,6 +804,59 @@ class Appointment(models.Model):
         null=True, blank=True,
         help_text="Date d'annulation"
     )
+
+    # --- Demande de déplacement RDV (patient → admin) : anticiper OU reporter ---
+    ANTICIPATION_STATUS_CHOICES = (
+        ('NONE', 'Aucune'),
+        ('PENDING', 'En attente de réponse'),
+        ('ACCEPTED', 'Acceptée'),
+        ('REFUSED', 'Refusée'),
+    )
+    anticipation_status = models.CharField(
+        max_length=20,
+        choices=ANTICIPATION_STATUS_CHOICES,
+        default='NONE',
+        db_index=True,
+        help_text="Demande patient pour anticiper ou reporter le rendez-vous",
+    )
+    anticipation_preferred_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Nouvelle date/heure souhaitée par le patient (plus tôt ou plus tard)",
+    )
+    anticipation_reason = models.TextField(
+        blank=True, default='',
+        help_text="Motif de la demande de déplacement (anticipation ou report)",
+    )
+    anticipation_admin_note = models.TextField(
+        blank=True, default='',
+        help_text="Réponse / note de l'administration",
+    )
+    anticipation_requested_at = models.DateTimeField(null=True, blank=True)
+    anticipation_resolved_at = models.DateTimeField(null=True, blank=True)
+
+    # --- Paiement consultation (patient → marchand hôpital, tarif médecin) ---
+    PAYMENT_STATUS_CHOICES = (
+        ('UNPAID', 'Non payé'),
+        ('AWAITING_PIN', 'En attente validation PIN'),
+        ('PAID', 'Payé'),
+        ('FAILED', 'Échoué'),
+        ('WAIVED', 'Exonéré'),
+        ('REFUNDED', 'Remboursé'),
+    )
+    consultation_fee_amount = models.PositiveIntegerField(
+        default=0,
+        help_text="Montant consultation figé à la réservation (BIF) — source: DoctorProfile.consultation_fee",
+    )
+    consultation_fee_currency = models.CharField(max_length=10, default='BIF')
+    payment_status = models.CharField(
+        max_length=20, choices=PAYMENT_STATUS_CHOICES, default='UNPAID', db_index=True,
+    )
+    payment_method = models.CharField(max_length=40, blank=True, default='')
+    payer_phone = models.CharField(max_length=40, blank=True, default='')
+    payment_provider_reference = models.CharField(max_length=120, blank=True, default='')
+    payment_merchant_account = models.CharField(max_length=80, blank=True, default='')
+    paid_at = models.DateTimeField(null=True, blank=True)
+    payment_note = models.CharField(max_length=255, blank=True, default='')
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -711,14 +887,81 @@ class Appointment(models.Model):
         """Vérifie si la transition de statut est valide selon le workflow défini."""
         return new_status in self.VALID_TRANSITIONS.get(self.status, [])
 
-    def confirm(self, save=True):
+    def confirm(self, save=True, confirmed_by=None):
         """Confirme le rendez-vous et enregistre la date de confirmation."""
         from django.utils import timezone
         if self.can_transition_to('CONFIRMED'):
             self.status = 'CONFIRMED'
             self.confirmed_at = timezone.now()
+            if confirmed_by:
+                self.confirmed_by = confirmed_by
+            fields = ['status', 'confirmed_at', 'updated_at']
+            if confirmed_by:
+                fields.append('confirmed_by')
             if save:
-                self.save(update_fields=['status', 'confirmed_at', 'updated_at'])
+                self.save(update_fields=fields)
+            return True
+        return False
+
+    def check_in(self, save=True):
+        from django.utils import timezone
+        if self.can_transition_to('PATIENT_ARRIVED'):
+            self.status = 'PATIENT_ARRIVED'
+            self.checked_in_at = timezone.now()
+            if save:
+                self.save(update_fields=['status', 'checked_in_at', 'updated_at'])
+            return True
+        return False
+
+    def move_to_waiting_room(self, save=True):
+        if self.can_transition_to('WAITING_ROOM'):
+            self.status = 'WAITING_ROOM'
+            if save:
+                self.save(update_fields=['status', 'updated_at'])
+            return True
+        return False
+
+    def start_consultation(self, save=True):
+        """Médecin : marque le patient présent pour le rendez-vous (statut PRESENT)."""
+        from django.utils import timezone
+        if self.can_transition_to('PRESENT'):
+            self.status = 'PRESENT'
+            self.started_at = timezone.now()
+            if save:
+                self.save(update_fields=['status', 'started_at', 'updated_at'])
+            return True
+        # Compatibilité anciens RDV déjà « En consultation »
+        if self.status == 'IN_PROGRESS':
+            self.status = 'PRESENT'
+            if not self.started_at:
+                self.started_at = timezone.now()
+            if save:
+                self.save(update_fields=['status', 'started_at', 'updated_at'])
+            return True
+        return False
+
+    def mark_no_show(self, save=True):
+        if self.can_transition_to('NO_SHOW'):
+            self.status = 'NO_SHOW'
+            if save:
+                self.save(update_fields=['status', 'updated_at'])
+            return True
+        return False
+
+    def reject(self, reason=None, rejected_by=None, save=True):
+        from django.utils import timezone
+        if self.can_transition_to('REJECTED'):
+            self.status = 'REJECTED'
+            self.cancelled_at = timezone.now()
+            if reason:
+                self.cancellation_reason = reason
+            if rejected_by:
+                self.cancelled_by = rejected_by
+            if save:
+                self.save(update_fields=[
+                    'status', 'cancelled_at', 'cancellation_reason',
+                    'cancelled_by', 'updated_at',
+                ])
             return True
         return False
 
@@ -755,6 +998,83 @@ class Appointment(models.Model):
             return True
         return False
 
+
+
+class AppointmentEvent(models.Model):
+    """Historique des changements de statut et actions sur un rendez-vous."""
+    EVENT_TYPE_CHOICES = (
+        ('CREATED', 'Demande créée'),
+        ('CONFIRMED', 'Rendez-vous confirmé'),
+        ('REJECTED', 'Demande refusée'),
+        ('CHECK_IN', 'Patient arrivé'),
+        ('WAITING_ROOM', 'En salle d\'attente'),
+        ('STARTED', 'Patient marqué présent / consultation démarrée'),
+        ('PRESENT', 'Patient présent'),
+        ('COMPLETED', 'Rendez-vous terminé'),
+        ('CANCELLED', 'Rendez-vous annulé'),
+        ('RESCHEDULED', 'Créneau reprogrammé'),
+        ('NO_SHOW', 'Patient absent'),
+        ('ANTICIPATION_REQUESTED', 'Demande de déplacement (anticiper / reporter)'),
+        ('ANTICIPATION_ACCEPTED', 'Déplacement accepté'),
+        ('ANTICIPATION_REFUSED', 'Déplacement refusé'),
+        ('NOTIFICATION_SENT', 'Notification envoyée'),
+        ('STATUS_CHANGED', 'Changement de statut'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    appointment = models.ForeignKey(
+        Appointment, on_delete=models.CASCADE, related_name='events'
+    )
+    event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES)
+    previous_status = models.CharField(max_length=20, blank=True, default='')
+    new_status = models.CharField(max_length=20, blank=True, default='')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='appointment_events'
+    )
+    comment = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['appointment', 'created_at'], name='idx_appt_event_time'),
+        ]
+
+    def __str__(self):
+        return f'{self.event_type} — {self.appointment.reference_code or self.appointment_id}'
+
+
+class AppointmentNotificationLog(models.Model):
+    """Traçabilité des notifications liées à un rendez-vous."""
+    CHANNEL_CHOICES = (
+        ('INTERNAL', 'Notification interne'),
+        ('EMAIL', 'Email'),
+        ('SMS', 'SMS'),
+    )
+    STATUS_CHOICES = (
+        ('PENDING', 'En attente'),
+        ('SENT', 'Envoyé'),
+        ('FAILED', 'Échec'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    appointment = models.ForeignKey(
+        Appointment, on_delete=models.CASCADE, related_name='notification_logs'
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='appointment_notification_logs'
+    )
+    channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default='INTERNAL')
+    notification_type = models.CharField(max_length=50)
+    destination = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SENT')
+    error_message = models.TextField(blank=True, default='')
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-sent_at']
 
 
 class ServiceCategory(models.Model):
@@ -874,6 +1194,11 @@ class MedicalService(models.Model):
     category = models.CharField(
         max_length=20, choices=CATEGORY_CHOICES, default='GENERAL',
         help_text="Catégorie principale du service"
+    )
+    prestation_category = models.ForeignKey(
+        'ServiceCategory', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='medical_services',
+        help_text="Catégorie personnalisée créée par l'hôpital"
     )
     service_type = models.CharField(
         max_length=30, choices=SERVICE_TYPE_CHOICES, default='OTHER',
@@ -1023,10 +1348,66 @@ class ServiceAssignment(models.Model):
     def __str__(self):
         return f"{self.user.get_full_name()} -> {self.service.name} ({self.get_role_in_service_display()})"
 
-        """Retourne le tarif formaté pour l'affichage."""
-        if self.indicative_cost == 0:
-            return "Tarif à définir"
-        return f"{self.indicative_cost:,.0f} {self.currency}"
+
+class HospitalExam(models.Model):
+    """Examen médical / analyse proposé par un hôpital, avec tarif visible côté client."""
+
+    CATEGORY_CHOICES = (
+        ('LABORATORY', 'Laboratoire / Analyses'),
+        ('IMAGING', 'Imagerie (Radio, Echo, Scanner…)'),
+        ('CARDIOLOGY', 'Examens cardiologiques'),
+        ('OTHER', 'Autre examen'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='hospital_exams',
+        help_text="Hôpital proposant cet examen",
+    )
+    name = models.CharField(max_length=200, help_text="Nom de l'examen affiché au patient")
+    category = models.CharField(
+        max_length=20, choices=CATEGORY_CHOICES, default='LABORATORY',
+    )
+    description = models.TextField(blank=True, help_text="Description courte pour le patient")
+    price = models.DecimalField(
+        max_digits=12, decimal_places=2, default=0,
+        help_text="Tarif de l'examen",
+    )
+    currency = models.CharField(max_length=10, default='BIF')
+    price_notes = models.CharField(
+        max_length=300, blank=True,
+        help_text="Ex: Tarif assuré INSS, préparation à jeun…",
+    )
+    preparation = models.TextField(
+        blank=True,
+        help_text="Consignes de préparation (à jeun, etc.)",
+    )
+    is_active = models.BooleanField(default=True)
+    is_public = models.BooleanField(
+        default=True,
+        help_text="Afficher cet examen sur la fiche publique de l'hôpital",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Examen hospitalier"
+        verbose_name_plural = "Examens hospitaliers"
+        ordering = ['display_order', 'category', 'name']
+        indexes = [
+            models.Index(fields=['hospital', 'is_active', 'is_public'], name='idx_exam_hospital_public'),
+        ]
+
+    def __str__(self):
+        return f"{self.name} — {self.hospital.name} ({self.price} {self.currency})"
+
+    @property
+    def formatted_price(self):
+        if self.price is None or self.price == 0:
+            return "Tarif à confirmer"
+        return f"{self.price:,.0f} {self.currency}"
+
 
 class DoctorSchedule(models.Model):
     """Horaires de disponibilité d'un médecin dans un hôpital spécifique"""
@@ -1083,6 +1464,14 @@ class LabResult(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='lab_results')
     hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='lab_results')
+    appointment = models.ForeignKey(
+        'Appointment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lab_results',
+        help_text="RDV associé — le patient doit être Présent (après confirmation et arrivée)",
+    )
     ordered_by = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordered_labs')
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_labs')
     validated_by = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_labs')

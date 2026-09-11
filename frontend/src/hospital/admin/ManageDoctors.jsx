@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Stethoscope, Plus, Mail, CreditCard, Video, Clock, Shield, HeartPulse, Edit2, Trash2 } from 'lucide-react';
+import { Stethoscope, Plus, Mail, CreditCard, Video, Clock, Shield, HeartPulse, Edit2, Trash2, Upload, User, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import hospitalService from '../hospitalService';
+import { readImageAsDataUrl } from '../../shared/imageUpload';
+import PasswordInput from '../../shared/components/PasswordInput';
 
 export default function ManageDoctors() {
   const [doctors, setDoctors] = useState([]);
@@ -21,30 +24,35 @@ export default function ManageDoctors() {
     staff_category: 'DOCTOR',
     medical_license_number: '', consultation_fee: 0, 
     is_available_for_telemedicine: false, bio: '',
+    photo_url: '',
+    languages_spoken: 'Français, Kirundi',
+    experience_years: 0,
+    qualifications: '',
     specialty_ids: [], service_ids: [], role_id: ''
   });
+  const [photoError, setPhotoError] = useState('');
+  const [photoUploading, setPhotoUploading] = useState(false);
   
   const [activeCategoryTab, setActiveCategoryTab] = useState('ALL');
   
-  const { token, authFetch } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
+
+  const selectedRole = roles.find((r) => r.id === formData.role_id);
+  const isReceptionistRole = selectedRole?.system_access_level === 'RECEPTIONIST_ACCESS'
+    || (selectedRole?.name || '').toLowerCase().includes('accueil');
 
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
-        if (busRes.ok) {
-          const businesses = await busRes.json();
-          if (businesses.length > 0) {
-            const hid = businesses[0].id;
-            setHospitalId(hid);
-            fetchDoctors(hid);
-            fetchSpecialties();
-            fetchServices(hid);
-            fetchRoles();
-          } else {
-            setLoading(false);
-          }
+        const businesses = await hospitalService.getMyHospital();
+        if (businesses.length > 0) {
+          const hid = businesses[0].id;
+          setHospitalId(hid);
+          fetchDoctors(hid);
+          fetchSpecialties();
+          fetchServices(hid);
+          fetchRoles();
         } else {
           setLoading(false);
         }
@@ -58,12 +66,8 @@ export default function ManageDoctors() {
 
   const fetchRoles = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/businesses/my-business/roles/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setRoles(await res.json());
-      }
+      const data = await hospitalService.getBusinessRoles();
+      setRoles(data);
     } catch (err) {
       console.error(err);
     }
@@ -71,10 +75,8 @@ export default function ManageDoctors() {
 
   const fetchSpecialties = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/specialties/');
-      if (res.ok) {
-        setSpecialties(await res.json());
-      }
+      const data = await hospitalService.getSpecialties();
+      setSpecialties(data);
     } catch (err) {
       console.error(err);
     }
@@ -82,10 +84,8 @@ export default function ManageDoctors() {
 
   const fetchServices = async (hid) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
-      if (res.ok) {
-        setServices(await res.json());
-      }
+      const data = await hospitalService.getServices(hid, true);
+      setServices(data);
     } catch (err) {
       console.error(err);
     }
@@ -94,10 +94,8 @@ export default function ManageDoctors() {
   const fetchDoctors = async (hid) => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
-      if (res.ok) {
-        setDoctors(await res.json());
-      }
+      const data = await hospitalService.getDoctors({ hospital: hid });
+      setDoctors(data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -105,40 +103,74 @@ export default function ManageDoctors() {
     }
   };
 
-  // Open Modal for Creating Doctor
   const openCreateModal = () => {
     setEditingDoctorId(null);
+    setPhotoError('');
     setFormData({ 
       first_name: '', last_name: '', email: '', password: '', 
       staff_category: 'DOCTOR',
       medical_license_number: '', consultation_fee: 0, 
       is_available_for_telemedicine: false, bio: '',
+      photo_url: '',
+      languages_spoken: 'Français, Kirundi',
+      experience_years: 0,
+      qualifications: '',
       specialty_ids: [], service_ids: [], role_id: ''
     });
     setIsModalOpen(true);
   };
 
   // Open Modal for Editing Doctor
-  const openEditModal = (doc) => {
+  const openEditModal = async (doc) => {
     setEditingDoctorId(doc.id);
-    const existingServiceIds = doc.services ? doc.services.map(s => s.id) : [];
-    const existingSpecialtyIds = doc.specialties ? doc.specialties.map(s => s.id) : [];
+    setPhotoError('');
+    let source = doc;
+    // Si la liste n'a pas renvoyé la photo (trop lourde), charger le détail
+    if (doc.has_photo && !(doc.photo_url || doc.public_photo_url)) {
+      try {
+        source = await hospitalService.getDoctor(doc.id);
+      } catch {
+        source = doc;
+      }
+    }
+    const existingServiceIds = source.services ? source.services.map((s) => s.id) : [];
+    const existingSpecialtyIds = source.specialties ? source.specialties.map((s) => s.id) : [];
 
-    setFormData({ 
-      first_name: doc.user_details?.first_name || '', 
-      last_name: doc.user_details?.last_name || '', 
-      email: doc.user_details?.email || '', 
-      password: '', // Optionnel lors de la modification
-      staff_category: doc.staff_category || 'DOCTOR',
-      medical_license_number: doc.medical_license_number || '', 
-      consultation_fee: doc.consultation_fee || 0, 
-      is_available_for_telemedicine: doc.is_available_for_telemedicine || false, 
-      bio: doc.bio || '',
-      specialty_ids: existingSpecialtyIds, 
-      service_ids: existingServiceIds, 
-      role_id: doc.user_details?.role_id || ''
+    setFormData({
+      first_name: source.user_details?.first_name || '',
+      last_name: source.user_details?.last_name || '',
+      email: source.user_details?.email || '',
+      password: '',
+      staff_category: source.staff_category || 'DOCTOR',
+      medical_license_number: source.medical_license_number || '',
+      consultation_fee: source.consultation_fee || 0,
+      is_available_for_telemedicine: source.is_available_for_telemedicine || false,
+      bio: source.bio || '',
+      photo_url: source.photo_url || source.public_photo_url || '',
+      languages_spoken: source.languages_spoken || 'Français, Kirundi',
+      experience_years: source.experience_years ?? 0,
+      qualifications: source.qualifications || '',
+      specialty_ids: existingSpecialtyIds,
+      service_ids: existingServiceIds,
+      role_id: source.user_details?.role_id || '',
     });
     setIsModalOpen(true);
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhotoError('');
+    setPhotoUploading(true);
+    try {
+      const dataUrl = await readImageAsDataUrl(file);
+      setFormData((prev) => ({ ...prev, photo_url: dataUrl }));
+    } catch (err) {
+      setPhotoError(err.message || 'Upload impossible');
+    } finally {
+      setPhotoUploading(false);
+    }
   };
 
   // Delete Doctor Profile
@@ -147,17 +179,11 @@ export default function ManageDoctors() {
       return;
     }
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/doctors/${id}/`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        fetchDoctors(hospitalId);
-      } else {
-        alert("Erreur lors de la suppression du médecin.");
-      }
+      await hospitalService.deleteDoctor(id);
+      fetchDoctors(hospitalId);
     } catch (err) {
       console.error(err);
+      alert("Erreur lors de la suppression du médecin.");
     }
   };
 
@@ -165,39 +191,30 @@ export default function ManageDoctors() {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
-      const url = editingDoctorId
-        ? `http://localhost:8000/api/v1/hospital/doctors/${editingDoctorId}/`
-        : 'http://localhost:8000/api/v1/hospital/doctors/';
-      
-      const method = editingDoctorId ? 'PUT' : 'POST';
-
       const payload = {
         ...formData,
         hospital: hospitalId
       };
 
-      // Si c'est une édition et que le mot de passe est vide, on ne l'envoie pas
       if (editingDoctorId && !payload.password) {
         delete payload.password;
       }
-
-      const res = await authFetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        setIsModalOpen(false);
-        fetchDoctors(hospitalId);
-      } else {
-        const err = await res.json();
-        alert("Erreur lors de l'enregistrement : " + JSON.stringify(err));
+      // Ne pas envoyer photo_url vide à la mise à jour (préserve la photo existante)
+      if (editingDoctorId && !payload.photo_url) {
+        delete payload.photo_url;
       }
+
+      if (editingDoctorId) {
+        await hospitalService.updateDoctor(editingDoctorId, payload);
+      } else {
+        await hospitalService.createDoctor(payload);
+      }
+
+      setIsModalOpen(false);
+      fetchDoctors(hospitalId);
     } catch (err) {
       console.error(err);
+      alert("Erreur lors de l'enregistrement : " + (err.message || String(err)));
     }
   };
 
@@ -234,7 +251,8 @@ export default function ManageDoctors() {
           { key: 'ALL', label: 'Tout le Personnel' },
           { key: 'SPECIALIST', label: 'Médecins Spécialistes' },
           { key: 'DOCTOR', label: 'Docteurs / Généralistes' },
-          { key: 'NURSE', label: 'Infirmiers & Soignants' }
+          { key: 'NURSE', label: 'Infirmiers & Soignants' },
+          { key: 'RECEPTIONIST', label: 'Agents d\'accueil' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -270,19 +288,32 @@ export default function ManageDoctors() {
             .map(doc => {
             const docFullName = `${doc.user_details?.first_name || ''} ${doc.user_details?.last_name || ''}`;
             const isNurse = doc.staff_category === 'NURSE';
+            const isReceptionist = doc.staff_category === 'RECEPTIONIST' || doc.is_public_directory === false
+              || (doc.user_details?.role_name || '').toLowerCase().includes('accueil');
             return (
               <div key={doc.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between space-y-4">
                 <div>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 flex items-center justify-center font-extrabold text-lg border border-teal-200 dark:border-teal-800 shrink-0">
-                        {doc.user_details?.first_name?.[0] || 'D'}
+                      <div className="w-14 h-14 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 flex items-center justify-center font-extrabold text-lg border border-teal-200 dark:border-teal-800 shrink-0 overflow-hidden">
+                        {(doc.photo_url || doc.public_photo_url) ? (
+                          <img
+                            src={doc.photo_url || doc.public_photo_url}
+                            alt={docFullName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span>{doc.user_details?.first_name?.[0] || 'D'}</span>
+                        )}
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-900 dark:text-white text-base">
                           {docFullName}
                         </h3>
                         <p className="text-xs text-gray-400 font-mono">Licence: {doc.medical_license_number}</p>
+                        {(doc.photo_url || doc.public_photo_url) && !isReceptionist && !isNurse && (
+                          <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Photo publique annuaire</p>
+                        )}
                       </div>
                     </div>
 
@@ -312,10 +343,17 @@ export default function ManageDoctors() {
                         ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200'
                         : isNurse
                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200'
+                        : isReceptionist
+                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200'
                         : 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200'
                     }`}>
-                      {doc.staff_category_display || (isNurse ? 'Infirmier(e)' : 'Médecin')}
+                      {doc.staff_category_display || (isReceptionist ? 'Agent d\'accueil' : isNurse ? 'Infirmier(e)' : 'Médecin')}
                     </span>
+                    {isReceptionist && (
+                      <span className="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                        Non publié côté client
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
                       <Shield className="w-3.5 h-3.5 text-gray-500" />
                       {doc.user_details?.role_name || 'Personnel'}
@@ -340,8 +378,8 @@ export default function ManageDoctors() {
                       )}
                     </p>
                     {doc.is_available_for_telemedicine && (
-                      <p className="flex items-center gap-2 text-teal-600 dark:text-teal-400 font-medium">
-                        <Video className="w-3.5 h-3.5" /> Téléconsultation (Vidéo) active
+                      <p className="flex items-center gap-2 text-gray-500 dark:text-gray-400 font-medium text-xs">
+                        <Video className="w-3.5 h-3.5" /> Téléconsultation — bientôt disponible
                       </p>
                     )}
                   </div>
@@ -441,13 +479,13 @@ export default function ManageDoctors() {
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     {editingDoctorId ? 'Mot de passe (Laisser vide si inchangé)' : 'Mot de passe temporaire'}
                   </label>
-                  <input 
-                    type="password" 
+                  <PasswordInput
                     required={!editingDoctorId}
-                    value={formData.password} 
-                    onChange={e => setFormData({...formData, password: e.target.value})} 
-                    className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600" 
-                    placeholder="••••••••" 
+                    value={formData.password}
+                    onChange={e => setFormData({...formData, password: e.target.value})}
+                    autoComplete="new-password"
+                    className="px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                    placeholder="••••••••"
                   />
                 </div>
                 <div>
@@ -482,17 +520,148 @@ export default function ManageDoctors() {
                 >
                   <option value="">-- Sélectionner un Rôle (Optionnel) --</option>
                   {roles.map(r => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
+                    <option key={r.id} value={r.id}>{r.name}{r.system_access_level === 'RECEPTIONIST_ACCESS' ? ' (accueil — non publié client)' : ''}</option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Définit les droits du médecin (Consulter dossiers, prescriptions, téléexpertise...)</p>
+                {isReceptionistRole && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200">
+                    Ce personnel sera enregistré comme <strong>agent d&apos;accueil</strong> et n&apos;apparaîtra pas dans l&apos;annuaire public ni dans la réservation en ligne.
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Définit les droits du personnel (dossiers, accueil, prescriptions...)</p>
               </div>
 
               <div>
-                <label className="flex items-center gap-2 cursor-pointer mt-2">
-                  <input type="checkbox" checked={formData.is_available_for_telemedicine} onChange={e => setFormData({...formData, is_available_for_telemedicine: e.target.checked})} className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500" />
-                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ce médecin effectue des téléconsultations (Vidéo)</span>
+                <label className="flex items-center gap-2 mt-2 opacity-60 cursor-not-allowed">
+                  <input type="checkbox" checked={false} disabled readOnly className="w-4 h-4 text-teal-600 border-gray-300 rounded cursor-not-allowed" />
+                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Téléconsultations (Vidéo)
+                    <span className="ml-2 text-[10px] font-bold uppercase bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded">Bientôt</span>
+                  </span>
                 </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Langues parlées</label>
+                  <input
+                    type="text"
+                    value={formData.languages_spoken}
+                    onChange={(e) => setFormData({ ...formData, languages_spoken: e.target.value })}
+                    className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                    placeholder="ex: Français, Kirundi, Anglais"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Années d&apos;expérience</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.experience_years}
+                    onChange={(e) => setFormData({ ...formData, experience_years: Number(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Photo professionnelle (publique)
+                </label>
+                <div className="flex flex-col sm:flex-row gap-4 items-start">
+                  <div className="w-24 h-24 rounded-2xl border border-teal-100 bg-teal-50 overflow-hidden flex items-center justify-center shrink-0">
+                    {formData.photo_url ? (
+                      <img src={formData.photo_url} alt="Aperçu" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10 text-teal-400" />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-2 w-full">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold cursor-pointer transition inline-flex items-center gap-1.5">
+                        <Upload className="w-4 h-4" />
+                        {photoUploading ? 'Traitement…' : 'Téléverser une image'}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          className="hidden"
+                          disabled={photoUploading}
+                          onChange={handlePhotoUpload}
+                        />
+                      </label>
+                      {formData.photo_url && (
+                        <button
+                          type="button"
+                          onClick={() => { setFormData({ ...formData, photo_url: '' }); setPhotoError(''); }}
+                          className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold rounded-lg inline-flex items-center gap-1"
+                        >
+                          <X className="w-4 h-4" /> Retirer
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      value={formData.photo_url?.startsWith('data:') ? '' : (formData.photo_url || '')}
+                      onChange={(e) => setFormData({ ...formData, photo_url: e.target.value })}
+                      className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600 text-sm"
+                      placeholder="Ou coller une URL d'image (https://…)"
+                    />
+                    {photoError && <p className="text-xs text-red-600">{photoError}</p>}
+                    <p className="text-[11px] text-gray-400">
+                      Visible côté client dans l&apos;annuaire des médecins spécialistes (si le praticien est publié).
+                      JPG/PNG/WebP, max 5 Mo — l&apos;image est automatiquement compressée.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Biographie (visible dans l&apos;annuaire client)</label>
+                <textarea
+                  rows={3}
+                  value={formData.bio}
+                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                  className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                  placeholder="Présentation courte du praticien..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Qualifications & diplômes</label>
+                <textarea
+                  rows={2}
+                  value={formData.qualifications}
+                  onChange={(e) => setFormData({ ...formData, qualifications: e.target.value })}
+                  className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                  placeholder="ex: Doctorat en Médecine, Spécialisation en cardiologie..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Spécialités médicales</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto border border-gray-200 dark:border-gray-800 rounded-xl p-3 bg-gray-50/50 dark:bg-gray-800/40">
+                  {specialties.length === 0 ? (
+                    <p className="text-xs text-gray-400 col-span-full italic">Aucune spécialité disponible.</p>
+                  ) : (
+                    specialties.map((spec) => (
+                      <label key={spec.id} className="flex items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.specialty_ids.includes(spec.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, specialty_ids: [...formData.specialty_ids, spec.id] });
+                            } else {
+                              setFormData({ ...formData, specialty_ids: formData.specialty_ids.filter((id) => id !== spec.id) });
+                            }
+                          }}
+                          className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                        />
+                        {spec.name}
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
 
               {/* Sélection des Services */}

@@ -15,7 +15,7 @@ export default function Notifications() {
 
   const fetchNotifications = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/notifications/', {
+      const res = await fetch('/api/v1/hospital/notifications/', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -32,7 +32,7 @@ export default function Notifications() {
 
   const handleMarkAsRead = async (notificationId) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/hospital/notifications/${notificationId}/mark_as_read/`, {
+      const res = await fetch(`/api/v1/hospital/notifications/${notificationId}/mark_as_read/`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -46,7 +46,7 @@ export default function Notifications() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/v1/hospital/notifications/mark_all_as_read/', {
+      const res = await fetch('/api/v1/hospital/notifications/mark_all_as_read/', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });

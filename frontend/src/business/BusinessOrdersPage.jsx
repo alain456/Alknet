@@ -1,102 +1,111 @@
-import React, { useState } from 'react';
-import { ShoppingBag, Eye, MoreVertical } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShoppingBag } from 'lucide-react';
 import DataGrid from '../admin/components/DataGrid';
+import api from '../shared/api';
+
+const STATUS_MAP = {
+  PENDING: 'En attente',
+  CONFIRMED: 'Confirmée',
+  COMPLETED: 'Terminée',
+  CANCELLED: 'Annulée',
+};
 
 export default function BusinessOrdersPage() {
-  const [orders, setOrders] = useState([
-    { id: 'ORD-2091', customer: 'Alice Johnson', amount: 125.00, items: 3, date: '2026-10-15', status: 'Pending' },
-    { id: 'ORD-2090', customer: 'Marc Dupont', amount: 45.00, items: 1, date: '2026-10-14', status: 'Processing' },
-    { id: 'ORD-2089', customer: 'Sarah Connor', amount: 210.50, items: 5, date: '2026-10-14', status: 'Completed' },
-    { id: 'ORD-2088', customer: 'John Smith', amount: 89.99, items: 2, date: '2026-10-12', status: 'Completed' },
-    { id: 'ORD-2087', customer: 'Emma Davis', amount: 15.00, items: 1, date: '2026-10-11', status: 'Cancelled' },
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await api.get('orders/', { auth: true });
+      setOrders(
+        (data || []).map((o) => ({
+          id: String(o.id).slice(0, 8).toUpperCase(),
+          fullId: o.id,
+          customer: o.customer_name,
+          amount: Number(o.total_amount),
+          items: o.items?.length || 0,
+          date: o.created_at?.split('T')[0],
+          status: STATUS_MAP[o.status] || o.status,
+          rawStatus: o.status,
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirm = async (id) => {
+    try {
+      await api.post(`orders/${id}/confirm/`, {}, { auth: true });
+      loadOrders();
+    } catch (err) {
+      alert(err.message || 'Erreur');
+    }
+  };
 
   const columns = [
-    { 
-      key: 'id', 
-      label: 'Order ID',
-      render: (val) => <span className="font-semibold text-gray-900 dark:text-white">{val}</span>
+    { key: 'id', label: 'N° Commande', render: (val) => <span className="font-semibold">{val}</span> },
+    { key: 'customer', label: 'Client' },
+    { key: 'date', label: 'Date' },
+    {
+      key: 'amount',
+      label: 'Montant',
+      render: (val) => <span className="font-medium">{val.toLocaleString()} BIF</span>,
     },
-    { 
-      key: 'customer', 
-      label: 'Customer',
+    { key: 'items', label: 'Articles' },
+    {
+      key: 'status',
+      label: 'Statut',
       render: (val) => (
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-            {val.charAt(0)}
-          </div>
-          <span className="text-gray-700 dark:text-gray-300 font-medium text-sm">{val}</span>
-        </div>
-      )
-    },
-    { 
-      key: 'date', 
-      label: 'Date',
-      render: (val) => <span className="text-gray-500 dark:text-gray-400 text-sm">{val}</span>
-    },
-    { 
-      key: 'amount', 
-      label: 'Amount',
-      render: (val, row) => (
-        <div>
-          <div className="font-semibold text-gray-900 dark:text-white">${val.toFixed(2)}</div>
-          <div className="text-xs text-gray-500">{row.items} item(s)</div>
-        </div>
-      )
-    },
-    { 
-      key: 'status', 
-      label: 'Status',
-      render: (val) => {
-        let styles = 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400';
-        if (val === 'Completed') styles = 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
-        if (val === 'Processing') styles = 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-        if (val === 'Pending') styles = 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400';
-        if (val === 'Cancelled') styles = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
-        
-        return (
-          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${styles}`}>
-            {val}
-          </span>
-        );
-      }
+        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+          val === 'Confirmée' ? 'bg-green-100 text-green-700'
+            : val === 'En attente' ? 'bg-orange-100 text-orange-700'
+            : val === 'Terminée' ? 'bg-blue-100 text-blue-700'
+            : 'bg-red-100 text-red-700'
+        }`}>{val}</span>
+      ),
     },
     {
       key: 'actions',
       label: 'Actions',
-      render: () => (
-        <div className="flex items-center gap-2">
-          <button className="p-1.5 text-gray-500 hover:text-primary transition bg-gray-50 hover:bg-primary/10 rounded-md">
-            <Eye className="w-4 h-4" />
+      render: (_, row) =>
+        row.rawStatus === 'PENDING' ? (
+          <button onClick={() => handleConfirm(row.fullId)}
+            className="text-xs text-teal-600 font-semibold hover:underline">
+            Confirmer
           </button>
-          <button className="p-1.5 text-gray-500 hover:text-gray-700 transition">
-            <MoreVertical className="w-4 h-4" />
-          </button>
-        </div>
-      )
-    }
+        ) : null,
+    },
   ];
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <ShoppingBag className="w-6 h-6 text-primary" />
-            Orders Management
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Track, manage and fulfill customer orders.</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <ShoppingBag className="w-7 h-7 text-teal-600" /> Commandes
+        </h1>
+        <p className="text-gray-500 text-sm mt-1">Gestion des commandes produits de votre entreprise.</p>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
-        <DataGrid 
-          columns={columns}
-          data={orders}
-          searchPlaceholder="Search orders by ID or customer..."
-          searchableKeys={['id', 'customer']}
-        />
-      </div>
+      {loading ? (
+        <div className="text-center py-12 text-gray-500">Chargement...</div>
+      ) : orders.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-dashed">
+          <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500">Aucune commande pour le moment.</p>
+          <p className="text-xs text-gray-400 mt-1">Les commandes apparaîtront ici lorsque des clients achèteront vos produits.</p>
+        </div>
+      ) : (
+        <DataGrid columns={columns} data={orders} emptyMessage="Aucune commande." />
+      )}
     </div>
   );
 }

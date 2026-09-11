@@ -1,8 +1,9 @@
 import React from 'react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { canAccessZone } from './roleAccess';
 
-export default function ProtectedRoute({ allowedRoles }) {
+export default function ProtectedRoute({ allowedRoles, forbiddenRoles = [] }) {
   const { user, isAuthenticated, isLoading, getRedirectPath } = useAuth();
 
   if (isLoading) {
@@ -23,7 +24,7 @@ export default function ProtectedRoute({ allowedRoles }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user?.role)) {
+  if (!canAccessZone(user, { allowedRoles, forbiddenRoles })) {
     return <Navigate to={getRedirectPath(user)} replace />;
   }
 

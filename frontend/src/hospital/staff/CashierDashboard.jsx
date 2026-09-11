@@ -19,7 +19,7 @@ export default function CashierDashboard() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -42,7 +42,7 @@ export default function CashierDashboard() {
 
   const fetchInvoices = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`, {
+      const res = await authFetch(`/api/v1/hospital/invoices/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -69,7 +69,7 @@ export default function CashierDashboard() {
 
   const handlePaymentStatusUpdate = async (invoiceId, newStatus) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/${invoiceId}/`, {
+      const res = await authFetch(`/api/v1/hospital/invoices/${invoiceId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

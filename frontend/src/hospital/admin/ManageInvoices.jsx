@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Receipt, DollarSign, User, Calendar, CheckCircle, XCircle, Clock, Search, Plus, Download, Printer } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import hospitalService from '../hospitalService';
 
 export default function ManageInvoices() {
   const { token , authFetch} = useAuth();
@@ -23,7 +24,7 @@ export default function ManageInvoices() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -32,7 +33,7 @@ export default function ManageInvoices() {
             const hid = businesses[0].id;
             setHospitalId(hid);
             fetchInvoices(hid);
-            fetchPatients();
+            fetchPatients(hid);
             fetchAppointments(hid);
           } else {
             setLoading(false);
@@ -48,7 +49,7 @@ export default function ManageInvoices() {
 
   const fetchInvoices = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/?hospital=${hid}`, {
+      const res = await authFetch(`/api/v1/hospital/invoices/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -61,23 +62,19 @@ export default function ManageInvoices() {
     }
   };
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (hid) => {
     try {
-      const res = await authFetch('http://localhost:8000/api/v1/accounts/admin/users/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const users = await res.json();
-        setPatients(users.filter(u => u.role === 'CUSTOMER'));
-      }
+      const data = await hospitalService.getPatientsRegistry(hid);
+      setPatients(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
+      setPatients([]);
     }
   };
 
   const fetchAppointments = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}&status=COMPLETED`, {
+      const res = await authFetch(`/api/v1/hospital/appointments/?hospital=${hid}&status=COMPLETED`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -91,7 +88,7 @@ export default function ManageInvoices() {
   const handleCreateInvoice = async (e) => {
     e.preventDefault();
     try {
-      const res = await authFetch('http://localhost:8000/api/v1/hospital/invoices/', {
+      const res = await authFetch('/api/v1/hospital/invoices/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -119,7 +116,7 @@ export default function ManageInvoices() {
 
   const handleStatusChange = async (invoiceId, newStatus) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/invoices/${invoiceId}/`, {
+      const res = await authFetch(`/api/v1/hospital/invoices/${invoiceId}/`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

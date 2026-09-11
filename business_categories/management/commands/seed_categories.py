@@ -25,6 +25,8 @@ class Command(BaseCommand):
                 "description": "Centres de santé, hôpitaux, pharmacies et cabinets médicaux.",
                 "children": [
                     {"name": "Clinique", "icon": "Building2", "description": "Établissement de soins et hospitalisation."},
+                    {"name": "Pharmacie de gros", "icon": "Pill", "description": "Distribution pharmaceutique en gros (B2B)."},
+                    {"name": "Pharmacie de détail", "icon": "Pill", "description": "Officine de vente au détail / client B2B."},
                     {"name": "Pharmacie", "icon": "Pill", "description": "Vente de médicaments et fournitures médicales."},
                     {"name": "Laboratoire", "icon": "Stethoscope", "description": "Analyses médicales et biologiques."},
                     {"name": "Cabinet médical", "icon": "Stethoscope", "description": "Consultations spécialisées et soins de santé."},

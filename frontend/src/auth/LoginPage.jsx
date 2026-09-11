@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import SocialLogins from '../shared/components/SocialLogins';
+import PasswordInput from '../shared/components/PasswordInput';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
@@ -10,6 +11,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const { login, getRedirectPath } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.state?.from;
+  const infoMessage = location.state?.message;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,10 +23,11 @@ export default function LoginPage() {
     try {
       const loggedUser = await login(email, password);
       setIsLoading(false);
-      
-      // Role-based redirection using getRedirectPath
-      const redirectPath = getRedirectPath(loggedUser);
-      navigate(redirectPath);
+      if (returnTo && typeof returnTo === 'string' && returnTo.startsWith('/')) {
+        navigate(returnTo);
+        return;
+      }
+      navigate(getRedirectPath(loggedUser));
     } catch (err) {
       setIsLoading(false);
       setError(err.message || 'Unable to sign in. Please check your credentials.');
@@ -36,6 +41,12 @@ export default function LoginPage() {
         <p className="text-gray-500 dark:text-gray-400">Please enter your details to sign in.</p>
       </div>
 
+      {infoMessage && (
+        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md text-sm text-blue-700 dark:text-blue-300">
+          {infoMessage}
+        </div>
+      )}
+
       {error && (
         <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-600 dark:text-red-400">
           {error}
@@ -45,8 +56,8 @@ export default function LoginPage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Email</label>
-          <input 
-            type="email" 
+          <input
+            type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -54,16 +65,15 @@ export default function LoginPage() {
             placeholder="Enter your email"
           />
         </div>
-        
+
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Password</label>
-          <input 
-            type="password" 
+          <PasswordInput
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
-            placeholder=""
+            autoComplete="current-password"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
           />
         </div>
 
@@ -77,8 +87,8 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={isLoading}
           className="w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
         >
@@ -91,7 +101,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <SocialLogins />
+      <SocialLogins nextPath={typeof returnTo === 'string' ? returnTo : undefined} />
 
       <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
         Don't have an account?{' '}
@@ -102,4 +112,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

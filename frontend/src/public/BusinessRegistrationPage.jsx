@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Store, ArrowRight, ShieldCheck, Star, Building2, User, Lock, Mail, ChevronRight } from 'lucide-react';
 import SectorSpecificFields from '../shared/components/SectorSpecificFields';
 import LocationSelector from '../shared/components/LocationSelector';
+import PasswordInput from '../shared/components/PasswordInput';
 
 export default function BusinessRegistrationPage() {
   const navigate = useNavigate();
@@ -23,7 +24,11 @@ export default function BusinessRegistrationPage() {
     address: '',
     province: 'Bujumbura Mairie',
     commune: 'Mukaza',
+    zone: '',
     quartier: 'Rohero',
+    avenue: '',
+    latitude: '',
+    longitude: '',
     description: '',
     primary_category: '',
     category_ids: [],
@@ -31,7 +36,7 @@ export default function BusinessRegistrationPage() {
   });
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/v1/business-categories/')
+    fetch('/api/v1/business-categories/')
       .then(res => res.json())
       .then(data => {
         setCategories(data);
@@ -55,10 +60,34 @@ export default function BusinessRegistrationPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/businesses/register/', {
+      if (!formData.latitude || !formData.longitude) {
+        throw new Error('Veuillez renseigner les coordonnées GPS (latitude et longitude), via « Capturer GPS » ou un lien Google Maps.');
+      }
+      const selectedCat = categories.find((c) => c.id === formData.primary_category);
+      const catName = `${selectedCat?.name || ''} ${selectedCat?.parent_name || ''}`.toLowerCase();
+      const isCommerce = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique']
+        .some((k) => catName.includes(k));
+      if (isCommerce) {
+        const a = formData.extra_attributes || {};
+        if (!a.nif_number?.trim()) {
+          throw new Error('Commerce : renseignez le numéro NIF (OBR).');
+        }
+        if (!a.nif_document) {
+          throw new Error('Commerce : joignez le scan du NIF (PDF ou image).');
+        }
+      }
+      const payload = {
+        ...formData,
+        email: formData.owner_email_input,
+        latitude: Number(formData.latitude),
+        longitude: Number(formData.longitude),
+        nif_number: formData.extra_attributes?.nif_number,
+        nif_document: formData.extra_attributes?.nif_document,
+      };
+      const response = await fetch('/api/v1/businesses/register/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Erreur lors de la soumission.');
@@ -132,7 +161,14 @@ export default function BusinessRegistrationPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-teal-100/70 mb-1 flex items-center gap-1"><Lock className="w-4 h-4"/> Mot de passe</label>
-                <input type="password" required value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-2 bg-[#12221A] border border-teal-800/50 rounded-lg focus:ring-1 focus:ring-gold-500 focus:border-gold-500 text-white outline-none" />
+                <PasswordInput
+                  required
+                  value={formData.password}
+                  onChange={e => setFormData({...formData, password: e.target.value})}
+                  autoComplete="new-password"
+                  className="px-4 py-2 bg-[#12221A] border border-teal-800/50 rounded-lg focus:ring-1 focus:ring-gold-500 focus:border-gold-500 text-white outline-none"
+                  toggleClassName="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-teal-200/70 hover:text-white transition cursor-pointer"
+                />
               </div>
             </div>
           </div>
@@ -181,9 +217,14 @@ export default function BusinessRegistrationPage() {
               {/* Note: If LocationSelector uses white internally, we might need to style it later, but let's assume it inherits or uses defaults */}
               <div className="bg-[#12221A]/50 p-4 rounded-xl border border-teal-800/30">
                 <LocationSelector 
-                  province={formData.province} commune={formData.commune}
-                  zone={formData.zone} quartier={formData.quartier}
-                  avenue={formData.avenue} address={formData.address}
+                  province={formData.province}
+                  commune={formData.commune}
+                  zone={formData.zone}
+                  quartier={formData.quartier}
+                  avenue={formData.avenue}
+                  address={formData.address}
+                  latitude={formData.latitude}
+                  longitude={formData.longitude}
                   onChange={(loc) => setFormData({...formData, ...loc})}
                 />
               </div>

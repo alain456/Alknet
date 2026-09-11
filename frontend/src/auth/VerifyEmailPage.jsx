@@ -1,22 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import { api } from '../shared/api';
 
 export default function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error'
 
   useEffect(() => {
-    // Simulate API call to verify token
+    const uid = searchParams.get('uid');
     const token = searchParams.get('token');
-    
-    setTimeout(() => {
-      if (token) {
-        setStatus('success');
-      } else {
-        setStatus('error'); // Error state if no token provided for demo purposes
+
+    if (!uid || !token) {
+      setStatus('error');
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await api.post('accounts/verify-email/', { uid, token });
+        if (!cancelled) setStatus('success');
+      } catch {
+        if (!cancelled) setStatus('error');
       }
-    }, 2000);
+    })();
+
+    return () => { cancelled = true; };
   }, [searchParams]);
 
   return (

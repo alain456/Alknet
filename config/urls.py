@@ -32,4 +32,9 @@ urlpatterns = [
     path('api/v1/analytics/', include('analytics.urls')),
     path('api/v1/locations/', include('locations.urls')),
     path('api/v1/hospital/', include('hospital.urls')),
+    path('api/v1/bookings/', include('bookings.urls')),
+    path('api/v1/orders/', include('orders.urls')),
+    path('api/v1/cms/', include('site_content.urls')),
+    path('api/v1/wholesale/', include('wholesale.urls')),
+    path('api/v1/retail/', include('retail.urls')),
 ]

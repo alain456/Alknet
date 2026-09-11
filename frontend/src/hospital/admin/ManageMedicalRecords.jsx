@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, User, Stethoscope, Calendar, Search, Plus, Eye, Edit3, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import hospitalService from '../hospitalService';
 
 export default function ManageMedicalRecords() {
   const { token , authFetch} = useAuth();
@@ -26,7 +27,7 @@ export default function ManageMedicalRecords() {
   useEffect(() => {
     const init = async () => {
       try {
-        const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/', {
+        const busRes = await authFetch('/api/v1/businesses/me/', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (busRes.ok) {
@@ -35,7 +36,7 @@ export default function ManageMedicalRecords() {
             const hid = businesses[0].id;
             setHospitalId(hid);
             fetchRecords(hid);
-            fetchPatients();
+            fetchPatients(hid);
             fetchDoctors(hid);
           } else {
             setLoading(false);
@@ -51,7 +52,7 @@ export default function ManageMedicalRecords() {
 
   const fetchRecords = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/medical-records/?hospital=${hid}`, {
+      const res = await authFetch(`/api/v1/hospital/medical-records/?hospital=${hid}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -64,23 +65,19 @@ export default function ManageMedicalRecords() {
     }
   };
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (hid) => {
     try {
-      const res = await authFetch('http://localhost:8000/api/v1/accounts/admin/users/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const users = await res.json();
-        setPatients(users.filter(u => u.role === 'CUSTOMER'));
-      }
+      const data = await hospitalService.getPatientsRegistry(hid);
+      setPatients(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
+      setPatients([]);
     }
   };
 
   const fetchDoctors = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}`);
+      const res = await authFetch(`/api/v1/hospital/doctors/?hospital=${hid}`);
       if (res.ok) {
         setDoctors(await res.json());
       }
@@ -92,7 +89,7 @@ export default function ManageMedicalRecords() {
   const handleCreateRecord = async (e) => {
     e.preventDefault();
     try {
-      const res = await authFetch('http://localhost:8000/api/v1/hospital/medical-records/', {
+      const res = await authFetch('/api/v1/hospital/medical-records/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

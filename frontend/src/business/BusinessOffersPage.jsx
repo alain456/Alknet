@@ -24,7 +24,7 @@ export default function BusinessOffersPage() {
 
   const fetchOffers = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/offers/my-business/', {
+      const response = await fetch('/api/v1/offers/my-business/', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -43,7 +43,7 @@ export default function BusinessOffersPage() {
     e.preventDefault();
     setSubmitError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/offers/my-business/', {
+      const response = await fetch('/api/v1/offers/my-business/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

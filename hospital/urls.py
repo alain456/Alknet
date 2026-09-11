@@ -4,7 +4,8 @@ from .views import (
     SpecialtyViewSet, DoctorProfileViewSet, AppointmentViewSet, AppointmentSlotViewSet,
     MedicalServiceViewSet, DoctorScheduleViewSet, MedicalRecordViewSet,
     LabResultViewSet, InvoiceViewSet, NotificationViewSet, PrescriptionViewSet,
-    HospitalProfileViewSet, ServiceAssignmentViewSet, ServiceCategoryViewSet
+    HospitalProfileViewSet, ServiceAssignmentViewSet, ServiceCategoryViewSet,
+    HospitalExamViewSet,
 )
 
 router = DefaultRouter()
@@ -15,6 +16,7 @@ router.register(r'appointments', AppointmentViewSet, basename='appointment')
 router.register(r'appointment-slots', AppointmentSlotViewSet, basename='appointment-slot')
 router.register(r'service-categories', ServiceCategoryViewSet, basename='service-category')
 router.register(r'services', MedicalServiceViewSet, basename='medical-service')
+router.register(r'exams', HospitalExamViewSet, basename='hospital-exam')
 router.register(r'service-assignments', ServiceAssignmentViewSet, basename='service-assignment')
 router.register(r'schedules', DoctorScheduleViewSet, basename='doctor-schedule')
 router.register(r'medical-records', MedicalRecordViewSet, basename='medical-record')

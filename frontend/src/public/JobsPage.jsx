@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Briefcase, Filter, DollarSign, Clock, Building2, Calendar, ArrowRight } from 'lucide-react';
+import { api } from '../shared/api';
 
 export default function JobsPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -15,13 +16,12 @@ export default function JobsPage() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/offers/');
-        if (response.ok) {
-          const data = await response.json();
-          setJobs(data);
-        }
+        const data = await api.get('offers/');
+        const list = Array.isArray(data) ? data : (data?.results || []);
+        setJobs(list);
       } catch (error) {
         console.error('Error fetching jobs:', error);
+        setJobs([]);
       } finally {
         setLoading(false);
       }

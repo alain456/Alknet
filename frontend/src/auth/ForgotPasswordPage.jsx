@@ -1,19 +1,38 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { api, ApiError } from '../shared/api';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await api.post('accounts/password-reset/', { email: email.trim() });
       setIsSent(true);
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible d\'envoyer le lien. Réessayez.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setError('');
+    setIsLoading(true);
+    try {
+      await api.post('accounts/password-reset/', { email: email.trim() });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de renvoyer le lien.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,14 +51,22 @@ export default function ForgotPasswordPage() {
         </p>
       </div>
 
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-3 text-sm text-red-600 dark:text-red-400 mb-4">
+          {error}
+        </div>
+      )}
+
       {isSent ? (
         <div className="space-y-6">
           <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 text-sm text-green-700 dark:text-green-400">
             Check your inbox at <strong>{email}</strong> and click the link to reset your password.
           </div>
           <button 
-            onClick={() => setIsSent(false)}
-            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2.5 rounded-md shadow-sm transition cursor-pointer"
+            type="button"
+            onClick={handleResend}
+            disabled={isLoading}
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold py-2.5 rounded-md shadow-sm transition cursor-pointer disabled:opacity-70"
           >
             Didn't receive the email? Click to resend
           </button>

@@ -25,7 +25,7 @@ export default function BusinessProductsPage() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/v1/products/my-business/', {
+      const response = await fetch('/api/v1/products/my-business/', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -44,7 +44,7 @@ export default function BusinessProductsPage() {
     e.preventDefault();
     setSubmitError(null);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/products/my-business/', {
+      const response = await fetch('/api/v1/products/my-business/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

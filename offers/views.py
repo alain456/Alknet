@@ -9,7 +9,7 @@ class CanManageOffers(permissions.BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
         # Rôles autorisés à créer des offres pour leur entreprise
-        allowed = ['BUSINESS_OWNER', 'SUPER_ADMIN']
+        allowed = ['BUSINESS_OWNER']
         return request.user.role in allowed
 
 class OfferListView(generics.ListAPIView):

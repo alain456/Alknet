@@ -1,6 +1,7 @@
 from django.contrib import admin
 from .models import (
     HospitalProfile, MedicalService, DoctorProfile, DoctorSchedule,
+    HospitalExam,
     Appointment, MedicalRecord, LabResult, Notification, Prescription,
     Invoice, Specialty,
 )
@@ -84,32 +85,44 @@ class MedicalServiceAdmin(admin.ModelAdmin):
     readonly_fields = ('id', 'created_at', 'updated_at')
     ordering = ('display_order', 'category', 'name')
     fieldsets = (
-        ('📋 Identification', {
+        ('Identification', {
             'fields': ('hospital', 'name', 'category', 'service_type', 'description', 'display_order')
         }),
-        ('👨‍⚕️ Responsable', {
+        ('Responsable', {
             'fields': ('head_doctor',)
         }),
-        ('📞 Contact Direct', {
+        ('Contact Direct', {
             'fields': ('contact_phone', 'contact_email')
         }),
-        ('🕐 Disponibilité & Horaires', {
+        ('Disponibilité & Horaires', {
             'fields': ('availability', 'operating_hours')
         }),
-        ('💰 Tarification', {
+        ('Tarification', {
             'fields': ('indicative_cost', 'currency', 'cost_notes')
         }),
-        ('🔑 Conditions d\'accès', {
+        ("Conditions d'accès", {
             'fields': ('access_conditions',)
         }),
-        ('💻 Options Numériques', {
+        ('Options Numériques', {
             'fields': ('telemedicine_available', 'online_booking_available', 'is_active')
         }),
-        ('ℹ️ Métadonnées', {
+        ('Métadonnées', {
             'fields': ('id', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(HospitalExam)
+class HospitalExamAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'hospital', 'category', 'formatted_price',
+        'is_active', 'is_public', 'display_order',
+    )
+    list_filter = ('category', 'is_active', 'is_public', 'currency')
+    search_fields = ('name', 'hospital__name', 'description')
+    list_editable = ('is_active', 'is_public', 'display_order')
+    readonly_fields = ('id', 'created_at', 'updated_at')
 
 
 # ---------------------------------------------------------------------------

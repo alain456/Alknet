@@ -1,17 +1,24 @@
-import React, { useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, Calendar, FileText, Users, 
-  Settings, Menu, X, LogOut, Stethoscope, Bell, HeartPulse, UserCheck, CheckCircle2, Clock, Shield
+import React, { useState, useEffect } from 'react';
+import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
+import {
+  LayoutDashboard, Calendar, FileText, Users,
+  Settings, Menu, X, LogOut, Stethoscope, Bell, HeartPulse, UserCheck, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { canAccessZone, ZONE_ACCESS, getStaffNavItems, getStaffHomePath, isReceptionist } from '../auth/roleAccess';
+import hospitalService from '../hospital/hospitalService';
+
+const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
 export default function HospitalStaffLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [staffNotifications, setStaffNotifications] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, getRedirectPath, authFetch } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -19,10 +26,11 @@ export default function HospitalStaffLayout() {
   };
 
   // Détection du rôle/espace actuel à partir de l'URL
+  const isReception = location.pathname.includes('/receptionist');
+  const isDoctor = location.pathname.includes('/doctor');
   const isNurse = location.pathname.includes('/nurse');
   const isLab = location.pathname.includes('/lab-technician');
   const isCashier = location.pathname.includes('/cashier');
-  const isReception = location.pathname.includes('/receptionist');
 
   let spaceTitle = "Espace Médecin";
   if (isReception) spaceTitle = "Accueil & Admissions";
@@ -30,31 +38,82 @@ export default function HospitalStaffLayout() {
   if (isLab) spaceTitle = "Espace Laboratoire";
   if (isCashier) spaceTitle = "Espace Caisse";
 
-  const navItems = [
-    { name: 'Accueil & Admissions', icon: UserCheck, path: '/hospital/staff/receptionist' },
-    { name: 'Médecins', icon: Stethoscope, path: '/hospital/staff/doctor' },
-    { name: 'Infirmiers / Soins', icon: HeartPulse, path: '/hospital/staff/nurse' },
-    { name: 'Laboratoire', icon: FileText, path: '/hospital/staff/lab-technician' },
-    { name: 'Caisse & Reçus', icon: Calendar, path: '/hospital/staff/cashier' },
-  ];
+  const navItems = getStaffNavItems(user).map((item) => ({
+    name: item.name,
+    icon: item.key === 'receptionist' ? UserCheck : item.key === 'doctor' ? Stethoscope : item.key === 'nurse' ? HeartPulse : item.key === 'lab' ? FileText : Calendar,
+    path: item.path,
+  }));
 
-  // Exemples de notifications hospitalières en temps réel
-  const staffNotifications = [
-    { id: 1, title: "Nouveau patient à l'accueil", desc: "Nduwimana Jean est arrivé pour le service de Pédiatrie.", time: "Il y a 5 min", type: "reception" },
-    { id: 2, title: "Constantes vitale enregistrées", desc: "Infirmière A. a mis à jour les constantes de K. Marie.", time: "Il y a 12 min", type: "nurse" },
-    { id: 3, title: "Analyse Labo Validée", desc: "Bilan hématologique validé par le technicien.", time: "Il y a 25 min", type: "lab" },
-    { id: 4, title: "Paiement Confirmé", desc: "Facture #INV-2026-089 réglée par Lumicash.", time: "Il y a 40 min", type: "cashier" },
-  ];
+  useEffect(() => {
+    const loadNotifications = async () => {
+      if (!user) return;
+      setNotificationsLoading(true);
+      try {
+        const data = await hospitalService.getNotifications();
+        const list = normalizeList(data).slice(0, 20).map((n) => ({
+          id: n.id,
+          title: n.title,
+          desc: n.message,
+          time: n.created_at
+            ? new Date(n.created_at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+            : '',
+          isRead: n.is_read,
+        }));
+        setStaffNotifications(list);
+      } catch {
+        setStaffNotifications([]);
+      } finally {
+        setNotificationsLoading(false);
+      }
+    };
+    loadNotifications();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !authFetch) return;
+    authFetch('/api/v1/businesses/me/')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const biz = Array.isArray(data) && data[0] ? data[0] : null;
+        setSubscriptionBlocked(Boolean(biz?.subscription?.is_blocked));
+      })
+      .catch(() => setSubscriptionBlocked(false));
+  }, [user, authFetch]);
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
-  const isAdminOrOwner = 
-    user?.role === 'SUPER_ADMIN' || 
-    user?.role === 'BUSINESS_OWNER' ||
-    user?.email?.toLowerCase().includes('admin') ||
-    user?.system_access_level?.includes('ADMIN') ||
-    user?.business_info?.role_name?.toLowerCase().includes('admin') ||
-    user?.business_info?.role_name?.toLowerCase().includes('directeur');
+  if (user && isReceptionist(user) && !isReception) {
+    return <Navigate to={getStaffHomePath(user)} replace />;
+  }
+
+  if (user && !canAccessZone(user, ZONE_ACCESS.hospitalStaff)) {
+    return <Navigate to={getRedirectPath(user)} replace />;
+  }
+
+  if (subscriptionBlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-6">
+        <div className="max-w-md text-center space-y-4 border border-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-xl p-6">
+          <p className="font-semibold text-amber-950 dark:text-amber-100">
+            Abonnement Isoko Hub inactif
+          </p>
+          <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
+            Les opérations de cet établissement sont suspendues. Contactez l&apos;administrateur
+            de l&apos;hôpital pour renouveler l&apos;abonnement plateforme.
+          </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold"
+          >
+            Déconnexion
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isAdminOrOwner = user?.role === 'BUSINESS_OWNER';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">
@@ -113,7 +172,7 @@ export default function HospitalStaffLayout() {
           <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
             {isAdminOrOwner && (
               <Link
-                to="/hospital/admin"
+                to="/hospital/dashboard"
                 onClick={closeSidebar}
                 className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white transition-colors"
               >
@@ -212,21 +271,27 @@ export default function HospitalStaffLayout() {
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
-              {staffNotifications.map((n) => (
-                <div key={n.id} className="p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="font-bold text-xs text-gray-900 dark:text-white">{n.title}</span>
-                    <span className="text-[10px] text-gray-400 shrink-0 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {n.time}
-                    </span>
+              {notificationsLoading ? (
+                <div className="p-6 text-center text-xs text-gray-500">Chargement...</div>
+              ) : staffNotifications.length === 0 ? (
+                <div className="p-6 text-center text-xs text-gray-500">Aucune notification pour le moment.</div>
+              ) : (
+                staffNotifications.map((n) => (
+                  <div key={n.id} className={`p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition ${n.isRead ? 'opacity-70' : ''}`}>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="font-bold text-xs text-gray-900 dark:text-white">{n.title}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {n.time}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{n.desc}</p>
                   </div>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">{n.desc}</p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="p-2.5 bg-gray-50 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 text-center">
               <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
-                Toutes les alertes sont synchronisées en temps réel
+                Notifications depuis la base de données
               </span>
             </div>
           </div>

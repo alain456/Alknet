@@ -25,7 +25,7 @@ export default function ManageServiceCategories() {
 
   const initHospitalData = async () => {
     try {
-      const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
+      const busRes = await authFetch('/api/v1/businesses/me/');
       if (busRes.ok) {
         const businesses = await busRes.json();
         if (businesses.length > 0) {
@@ -48,7 +48,7 @@ export default function ManageServiceCategories() {
   const fetchCategories = async (hid) => {
     try {
       setLoading(true);
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/service-categories/?hospital=${hid}`);
+      const res = await authFetch(`/api/v1/hospital/service-categories/?hospital=${hid}`);
       if (res.ok) {
         setCategories(await res.json());
       }
@@ -61,7 +61,7 @@ export default function ManageServiceCategories() {
 
   const fetchServices = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
+      const res = await authFetch(`/api/v1/hospital/services/?hospital=${hid}`);
       if (res.ok) {
         setServices(await res.json());
       }
@@ -95,8 +95,8 @@ export default function ManageServiceCategories() {
 
     try {
       const url = editingCategory
-        ? `http://localhost:8000/api/v1/hospital/service-categories/${editingCategory.id}/`
-        : 'http://localhost:8000/api/v1/hospital/service-categories/';
+        ? `/api/v1/hospital/service-categories/${editingCategory.id}/`
+        : '/api/v1/hospital/service-categories/';
       
       const method = editingCategory ? 'PATCH' : 'POST';
 
@@ -128,7 +128,7 @@ export default function ManageServiceCategories() {
   const handleDelete = async (id) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette catégorie de prestation ?")) return;
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/service-categories/${id}/`, {
+      const res = await authFetch(`/api/v1/hospital/service-categories/${id}/`, {
         method: 'DELETE'
       });
       if (res.ok) fetchCategories(hospitalId);

@@ -3,7 +3,7 @@ from .models import (
     Specialty, DoctorProfile, Appointment, AppointmentSlot, MedicalService,
     DoctorSchedule, MedicalRecord, LabResult, Invoice,
     Notification, Prescription, HospitalProfile, ServiceAssignment,
-    ServiceCategory
+    ServiceCategory, HospitalExam
 )
 
 
@@ -52,7 +52,7 @@ class HospitalProfileSerializer(serializers.ModelSerializer):
             'latitude', 'longitude', 'province', 'commune',
             'google_maps_url', 'waze_url',
             # Identité hôpital
-            'acronym', 'hospital_type', 'operational_status', 'level', 'reference_level',
+            'acronym', 'appointment_reference_prefix', 'hospital_type', 'operational_status', 'level', 'reference_level',
             'display_type_level',
             # Urgences & disponibilité
             'emergency_available', 'emergency_phone', 'is_open_now',
@@ -157,6 +157,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     hospital_longitude = serializers.FloatField(source='hospital.longitude', read_only=True)
     full_name = serializers.SerializerMethodField()
     schedules = serializers.SerializerMethodField()
+    public_photo_url = serializers.SerializerMethodField()
     # Champs calculés
     formatted_fee = serializers.SerializerMethodField()
     consultation_modes = serializers.SerializerMethodField()
@@ -179,12 +180,12 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
             'professional_title', 'professional_title_display',
             'gender', 'medical_license_number',
             'languages_spoken', 'qualifications', 'experience_years',
-            'bio', 'photo_url',
+            'bio', 'photo_url', 'public_photo_url',
             # Modes de consultation
             'is_physical_consultation', 'is_available_for_telemedicine',
             'is_available_for_tele_expertise', 'consultation_modes',
             # Disponibilité
-            'is_active', 'is_accepting_new_patients',
+            'is_active', 'is_public_directory', 'is_accepting_new_patients',
             # Tarif
             'consultation_fee', 'consultation_fee_currency',
             'accepted_payment_methods', 'formatted_fee',
@@ -200,21 +201,34 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     def get_user_details(self, obj):
         role_name = "Non attribué"
         role_id = None
+        avatar = None
         if obj.hospital:
             emp = obj.user.employments.filter(business=obj.hospital).first()
             if emp and emp.role:
                 role_name = emp.role.name
                 role_id = str(emp.role.id)
+        profile = getattr(obj.user, 'profile', None)
+        if profile and profile.avatar:
+            avatar = profile.avatar
         return {
             "first_name": obj.user.first_name,
             "last_name": obj.user.last_name,
             "email": obj.user.email,
             "role_name": role_name,
             "role_id": role_id,
+            "avatar": avatar,
         }
 
+    def get_public_photo_url(self, obj):
+        if obj.photo_url:
+            return obj.photo_url
+        profile = getattr(obj.user, 'profile', None)
+        if profile and profile.avatar:
+            return profile.avatar
+        return None
+
     def get_services(self, obj):
-        return MedicalServiceSerializer(obj.services.all(), many=True).data
+        return MedicalServiceSerializer(obj.related_services_queryset(), many=True).data
 
     def get_schedules(self, obj):
         return DoctorScheduleSerializer(obj.schedules.all(), many=True).data
@@ -228,23 +242,119 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     def get_consultation_modes(self, obj):
         return obj.consultation_modes
 
+    def validate_photo_url(self, value):
+        if value in (None, ''):
+            return value
+        value = str(value).strip()
+        if value.startswith('data:image/'):
+            # ~1.4 Mo base64 ≈ image compressée raisonnable pour l'annuaire public
+            if len(value) > 1_800_000:
+                raise serializers.ValidationError(
+                    "Photo trop volumineuse. Compressez l'image (max ~1 Mo) avant l'envoi."
+                )
+            return value
+        if value.startswith('http://') or value.startswith('https://'):
+            return value
+        raise serializers.ValidationError(
+            "La photo doit être une URL https://… ou une image téléversée."
+        )
+
+    def update(self, instance, validated_data):
+        # Ne pas effacer la photo si le front renvoie '' (liste allégée sans data:image)
+        if 'photo_url' in validated_data and not (validated_data.get('photo_url') or '').strip():
+            validated_data.pop('photo_url', None)
+        return super().update(instance, validated_data)
+
+
+def _safe_image_ref(value, *, max_data_len=400_000):
+    """
+    Retourne une référence image affichable.
+    - http(s) /media /static : toujours OK
+    - data:image/… : OK si taille raisonnable (photos compressées côté client)
+    Les data: trop volumineux sont exclus des listes pour éviter les 502.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    v = value.strip()
+    if not v:
+        return None
+    if v.startswith(('http://', 'https://', '/media/', '/static/')):
+        return v
+    if v.startswith('data:image/') and len(v) <= max_data_len:
+        return v
+    return None
+
 
 class DoctorProfileListSerializer(serializers.ModelSerializer):
     """Version allégée pour les listes d'annuaire."""
     full_name = serializers.SerializerMethodField()
     hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    hospital_id = serializers.UUIDField(source='hospital.id', read_only=True)
+    user_details = serializers.SerializerMethodField()
     specialties = SpecialtySerializer(many=True, read_only=True)
+    services = serializers.SerializerMethodField()
     formatted_fee = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
+    public_photo_url = serializers.SerializerMethodField()
+    has_photo = serializers.SerializerMethodField()
+    staff_category_display = serializers.CharField(
+        source='get_staff_category_display', read_only=True
+    )
+    professional_title_display = serializers.CharField(
+        source='get_professional_title_display', read_only=True
+    )
 
     class Meta:
         model = DoctorProfile
         fields = [
-            'id', 'full_name', 'photo_url', 'hospital_name',
-            'professional_title', 'specialties', 'sub_specialty',
+            'id', 'full_name', 'user_details', 'photo_url', 'public_photo_url', 'has_photo',
+            'hospital_id', 'hospital_name',
+            'staff_category', 'staff_category_display',
+            'professional_title', 'professional_title_display',
+            'specialties', 'sub_specialty', 'services',
+            'languages_spoken', 'qualifications', 'experience_years', 'bio',
+            'medical_license_number',
             'is_physical_consultation', 'is_available_for_telemedicine',
-            'is_accepting_new_patients', 'is_active',
-            'formatted_fee', 'consultation_fee_currency',
+            'is_accepting_new_patients', 'is_active', 'is_public_directory',
+            'consultation_fee', 'formatted_fee', 'consultation_fee_currency',
             'is_diaspora', 'diaspora_country',
+        ]
+
+    def get_user_details(self, obj):
+        profile = getattr(obj.user, 'profile', None)
+        avatar = _safe_image_ref(getattr(profile, 'avatar', None) if profile else None)
+        return {
+            'first_name': obj.user.first_name,
+            'last_name': obj.user.last_name,
+            'avatar': avatar,
+        }
+
+    def get_photo_url(self, obj):
+        return _safe_image_ref(obj.photo_url)
+
+    def get_public_photo_url(self, obj):
+        url = _safe_image_ref(obj.photo_url)
+        if url:
+            return url
+        profile = getattr(obj.user, 'profile', None)
+        return _safe_image_ref(getattr(profile, 'avatar', None) if profile else None)
+
+    def get_has_photo(self, obj):
+        if obj.photo_url:
+            return True
+        profile = getattr(obj.user, 'profile', None)
+        return bool(profile and profile.avatar)
+
+    def get_services(self, obj):
+        # Tous les services (M2M + chef de service + affectations) pour l'annuaire client
+        return [
+            {
+                'id': str(s.id),
+                'name': s.name,
+                'formatted_cost': s.formatted_cost,
+                'online_booking_available': s.online_booking_available,
+            }
+            for s in obj.related_services_queryset()
         ]
 
     def get_full_name(self, obj):
@@ -277,6 +387,9 @@ class DoctorScheduleSerializer(serializers.ModelSerializer):
 class AppointmentSlotSerializer(serializers.ModelSerializer):
     doctor_name = serializers.SerializerMethodField()
     doctor_title = serializers.SerializerMethodField()
+    consultation_fee = serializers.SerializerMethodField()
+    consultation_fee_currency = serializers.SerializerMethodField()
+    formatted_consultation_fee = serializers.SerializerMethodField()
     hospital_name = serializers.CharField(source='hospital.name', read_only=True)
     service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
     booked_count = serializers.IntegerField(read_only=True)
@@ -287,11 +400,45 @@ class AppointmentSlotSerializer(serializers.ModelSerializer):
         model = AppointmentSlot
         fields = [
             'id', 'hospital', 'hospital_name', 'doctor', 'doctor_name', 'doctor_title',
+            'consultation_fee', 'consultation_fee_currency', 'formatted_consultation_fee',
             'service', 'service_name', 'title', 'slot_date', 'start_time', 'end_time',
             'consultation_type', 'max_patients', 'booked_count', 'remaining_slots',
             'is_full', 'status', 'is_active', 'notes', 'created_by', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_by', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'service': {'required': True, 'allow_null': False},
+        }
+
+    def validate_service(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                'Le service médical est obligatoire. Le patient doit pouvoir choisir un RDV par service.'
+            )
+        return value
+
+    def validate(self, attrs):
+        doctor = attrs.get('doctor') or getattr(self.instance, 'doctor', None)
+        service = attrs.get('service') or getattr(self.instance, 'service', None)
+        if doctor and service:
+            # Médecin doit être affecté au service (ou chef de service)
+            assigned = doctor.services.filter(pk=service.pk).exists()
+            is_head = getattr(service, 'head_doctor_id', None) == doctor.id
+            if not assigned and not is_head:
+                # Autoriser quand même mais avertir via auto-affectation douce
+                doctor.services.add(service)
+
+        max_patients = attrs.get('max_patients')
+        if self.instance is not None and max_patients is not None:
+            booked = self.instance.booked_count
+            if max_patients < booked:
+                raise serializers.ValidationError({
+                    'max_patients': (
+                        f'La capacité ({max_patients}) ne peut pas être inférieure '
+                        f'au nombre d\'inscrits ({booked}).'
+                    )
+                })
+        return attrs
 
     def get_doctor_name(self, obj):
         return obj.doctor.user.get_full_name()
@@ -299,12 +446,154 @@ class AppointmentSlotSerializer(serializers.ModelSerializer):
     def get_doctor_title(self, obj):
         return obj.doctor.get_staff_category_display()
 
+    def get_consultation_fee(self, obj):
+        from .appointment_payment import fee_from_doctor
+        amount, _ = fee_from_doctor(obj.doctor)
+        return amount
+
+    def get_consultation_fee_currency(self, obj):
+        return getattr(obj.doctor, 'consultation_fee_currency', None) or 'BIF'
+
+    def get_formatted_consultation_fee(self, obj):
+        amount = self.get_consultation_fee(obj)
+        currency = self.get_consultation_fee_currency(obj)
+        if amount <= 0:
+            return 'Gratuit'
+        return f'{amount:,.0f} {currency}'.replace(',', ' ')
+
+
+class AppointmentEventSerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+
+    class Meta:
+        from .models import AppointmentEvent
+        model = AppointmentEvent
+        fields = [
+            'id', 'event_type', 'event_type_display', 'previous_status', 'new_status',
+            'actor', 'actor_name', 'comment', 'created_at',
+        ]
+
+    def get_actor_name(self, obj):
+        if obj.actor:
+            return obj.actor.get_full_name() or obj.actor.email
+        return 'Système'
+
+
+class AppointmentListSerializer(serializers.ModelSerializer):
+    """
+    Liste / file d'attente — sans photos base64 ni events (évite payloads multi-Mo → 502).
+    """
+    doctor_name = serializers.SerializerMethodField()
+    doctor_details = serializers.SerializerMethodField()
+    patient_name = serializers.SerializerMethodField()
+    patient_phone = serializers.SerializerMethodField()
+    patient_email = serializers.SerializerMethodField()
+    hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    consultation_type_display = serializers.CharField(
+        source='get_consultation_type_display', read_only=True
+    )
+    service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
+    valid_transitions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Appointment
+        fields = [
+            'id', 'patient', 'patient_name', 'patient_phone', 'patient_email',
+            'doctor', 'doctor_name', 'doctor_details',
+            'slot', 'queue_number', 'reference_code',
+            'service', 'service_name', 'source', 'appointment_category', 'duration_minutes',
+            'hospital', 'hospital_name',
+            'appointment_date', 'status', 'status_display',
+            'consultation_type', 'consultation_type_display',
+            'reason', 'notes', 'location_notes',
+            'telemedicine_link', 'telemedicine_room_id',
+            'confirmed_at', 'checked_in_at', 'started_at', 'completed_at',
+            'consultation_fee_amount', 'consultation_fee_currency',
+            'payment_status', 'payment_method', 'payer_phone',
+            'payment_provider_reference', 'payment_merchant_account',
+            'paid_at', 'payment_note',
+            'anticipation_status', 'anticipation_preferred_at', 'anticipation_reason',
+            'anticipation_admin_note', 'anticipation_requested_at', 'anticipation_resolved_at',
+            'valid_transitions',
+            'created_at', 'updated_at',
+        ]
+
+    def get_doctor_name(self, obj):
+        if not obj.doctor_id:
+            return None
+        user = getattr(obj.doctor, 'user', None)
+        if user:
+            name = user.get_full_name()
+            return name.strip() if name and name.strip() else user.email
+        return str(obj.doctor_id)
+
+    def get_doctor_details(self, obj):
+        """Minimal — pas de photo_url / avatar base64."""
+        if not obj.doctor_id:
+            return None
+        doc = obj.doctor
+        user = getattr(doc, 'user', None)
+        full = self.get_doctor_name(obj)
+        return {
+            'id': str(doc.id),
+            'full_name': full,
+            'user_details': {
+                'first_name': getattr(user, 'first_name', '') or '',
+                'last_name': getattr(user, 'last_name', '') or '',
+                'avatar': None,
+            },
+            'staff_category': getattr(doc, 'staff_category', None),
+            'staff_category_display': (
+                doc.get_staff_category_display() if hasattr(doc, 'get_staff_category_display') else None
+            ),
+            'professional_title': getattr(doc, 'professional_title', None),
+            'professional_title_display': (
+                doc.get_professional_title_display()
+                if hasattr(doc, 'get_professional_title_display') else None
+            ),
+        }
+
+    def get_patient_name(self, obj):
+        if obj.patient_contact_name and obj.patient_contact_name.strip():
+            return obj.patient_contact_name.strip()
+        if obj.patient:
+            full = obj.patient.get_full_name()
+            return full.strip() if full and full.strip() else obj.patient.email
+        return 'Patient'
+
+    def get_patient_phone(self, obj):
+        if obj.patient_contact_phone and obj.patient_contact_phone.strip():
+            return obj.patient_contact_phone.strip()
+        return getattr(obj.patient, 'phone_number', '') or ''
+
+    def get_patient_email(self, obj):
+        if obj.patient_contact_email and obj.patient_contact_email.strip():
+            return obj.patient_contact_email.strip()
+        return obj.patient.email if obj.patient else ''
+
+    def get_valid_transitions(self, obj):
+        return obj.VALID_TRANSITIONS.get(obj.status, [])
+
 
 class AppointmentSerializer(serializers.ModelSerializer):
     """Rendez-vous complet avec workflow et téléconsultation — Module 01.5"""
     doctor_details = DoctorProfileListSerializer(source='doctor', read_only=True)
     slot_details = AppointmentSlotSerializer(source='slot', read_only=True)
     patient_name = serializers.SerializerMethodField()
+    patient_phone = serializers.SerializerMethodField()
+    patient_email = serializers.SerializerMethodField()
+    # Champs écriture (réservation publique)
+    patient_name_input = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, source='patient_contact_name'
+    )
+    patient_phone_input = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, source='patient_contact_phone'
+    )
+    patient_email_input = serializers.EmailField(
+        write_only=True, required=False, allow_blank=True, source='patient_contact_email'
+    )
     hospital_name = serializers.CharField(source='hospital.name', read_only=True)
     # Géolocalisation de l'hôpital du RDV
     hospital_latitude = serializers.FloatField(source='hospital.latitude', read_only=True)
@@ -313,15 +602,25 @@ class AppointmentSerializer(serializers.ModelSerializer):
     consultation_type_display = serializers.CharField(
         source='get_consultation_type_display', read_only=True
     )
-    # Transitions valides depuis le statut actuel
+    service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
+    events = AppointmentEventSerializer(many=True, read_only=True)
     valid_transitions = serializers.SerializerMethodField()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Liste : sans events (N+1 / payload lourd) — disponible via retrieve ou /history/
+        if self.context.get('exclude_events'):
+            self.fields.pop('events', None)
 
     class Meta:
         model = Appointment
         fields = [
-            'id', 'patient', 'patient_name',
+            'id', 'patient', 'patient_name', 'patient_phone', 'patient_email',
+            'patient_name_input', 'patient_phone_input', 'patient_email_input',
             'doctor', 'doctor_details',
-            'slot', 'slot_details', 'queue_number',
+            'slot', 'slot_details', 'queue_number', 'reference_code',
+            'service', 'service_name', 'source', 'appointment_category', 'duration_minutes',
+            'created_by', 'confirmed_by',
             'hospital', 'hospital_name', 'hospital_latitude', 'hospital_longitude',
             'appointment_date', 'status', 'status_display',
             'consultation_type', 'consultation_type_display',
@@ -329,22 +628,65 @@ class AppointmentSerializer(serializers.ModelSerializer):
             # Téléconsultation
             'telemedicine_link', 'telemedicine_room_id',
             # Reprogrammation
-            'rescheduled_to', 'cancellation_reason', 'cancelled_by',
+            'rescheduled_to', 'cancellation_reason', 'reschedule_reason', 'cancelled_by',
             # Notifications
             'reminder_24h_sent', 'reminder_1h_sent',
             # Dates clés
-            'confirmed_at', 'completed_at', 'cancelled_at',
+            'confirmed_at', 'checked_in_at', 'started_at', 'completed_at', 'cancelled_at',
+            # Paiement consultation (tarif médecin)
+            'consultation_fee_amount', 'consultation_fee_currency',
+            'payment_status', 'payment_method', 'payer_phone',
+            'payment_provider_reference', 'payment_merchant_account',
+            'paid_at', 'payment_note',
+            'anticipation_status', 'anticipation_preferred_at', 'anticipation_reason',
+            'anticipation_admin_note', 'anticipation_requested_at', 'anticipation_resolved_at',
+            'events',
             # Transitions valides
             'valid_transitions',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'patient', 'status', 'queue_number', 'confirmed_at', 'completed_at',
+            'patient', 'status', 'queue_number', 'reference_code',
+            'confirmed_at', 'checked_in_at', 'started_at', 'completed_at',
             'cancelled_at', 'reminder_24h_sent', 'reminder_1h_sent',
+            'created_by', 'confirmed_by', 'events',
+            'consultation_fee_amount', 'consultation_fee_currency',
+            'payment_status', 'payment_method', 'payer_phone',
+            'payment_provider_reference', 'payment_merchant_account',
+            'paid_at', 'payment_note',
+            'anticipation_status', 'anticipation_preferred_at', 'anticipation_reason',
+            'anticipation_admin_note', 'anticipation_requested_at', 'anticipation_resolved_at',
         ]
+        extra_kwargs = {
+            'doctor': {'required': False},
+            'hospital': {'required': False},
+            'appointment_date': {'required': False},
+        }
+
+    def validate(self, attrs):
+        slot = attrs.get('slot')
+        if slot:
+            attrs['doctor'] = slot.doctor
+            attrs['hospital'] = slot.hospital
+        return attrs
 
     def get_patient_name(self, obj):
-        return f"{obj.patient.first_name} {obj.patient.last_name}"
+        if obj.patient_contact_name and obj.patient_contact_name.strip():
+            return obj.patient_contact_name.strip()
+        if obj.patient:
+            full = obj.patient.get_full_name()
+            return full.strip() if full and full.strip() else obj.patient.email
+        return 'Patient'
+
+    def get_patient_phone(self, obj):
+        if obj.patient_contact_phone and obj.patient_contact_phone.strip():
+            return obj.patient_contact_phone.strip()
+        return getattr(obj.patient, 'phone_number', '') or ''
+
+    def get_patient_email(self, obj):
+        if obj.patient_contact_email and obj.patient_contact_email.strip():
+            return obj.patient_contact_email.strip()
+        return obj.patient.email if obj.patient else ''
 
     def get_valid_transitions(self, obj):
         """Retourne les transitions de statut disponibles depuis l'état actuel."""
@@ -358,6 +700,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
 class MedicalServiceSerializer(serializers.ModelSerializer):
     hospital_name = serializers.CharField(source='hospital.name', read_only=True)
     category_display = serializers.CharField(source='get_category_display', read_only=True)
+    prestation_category_name = serializers.CharField(
+        source='prestation_category.name', read_only=True, allow_null=True
+    )
     service_type_display = serializers.CharField(source='get_service_type_display', read_only=True)
     availability_display = serializers.CharField(source='get_availability_display', read_only=True)
     head_doctor_name = serializers.SerializerMethodField()
@@ -372,7 +717,7 @@ class MedicalServiceSerializer(serializers.ModelSerializer):
         model = MedicalService
         fields = [
             'id', 'hospital', 'hospital_name',
-            'category', 'category_display',
+            'category', 'category_display', 'prestation_category', 'prestation_category_name',
             'service_type', 'service_type_display',
             'name', 'description',
             'head_doctor', 'head_doctor_name',
@@ -385,6 +730,32 @@ class MedicalServiceSerializer(serializers.ModelSerializer):
             'is_active', 'display_order',
             'created_at', 'updated_at',
         ]
+        extra_kwargs = {
+            'head_doctor': {'required': False, 'allow_null': True},
+            'prestation_category': {'required': False, 'allow_null': True},
+        }
+
+    def validate_operating_hours(self, value):
+        if value is None or value == '':
+            return {}
+        if isinstance(value, str):
+            return {'note': value.strip()}
+        if isinstance(value, dict):
+            return value
+        raise serializers.ValidationError('Format horaires invalide.')
+
+    def validate_category(self, value):
+        valid = {c[0] for c in MedicalService.CATEGORY_CHOICES}
+        if value not in valid:
+            raise serializers.ValidationError(
+                f'Catégorie invalide « {value} ». Utilisez une catégorie standard ou une catégorie personnalisée (prestation_category).'
+            )
+        return value
+
+    def validate(self, attrs):
+        if attrs.get('head_doctor') == '':
+            attrs['head_doctor'] = None
+        return attrs
 
     def get_head_doctor_name(self, obj):
         if obj.head_doctor:
@@ -405,6 +776,39 @@ class MedicalServiceSerializer(serializers.ModelSerializer):
             }
             for doc in obj.assigned_doctors.all()
         ]
+
+
+class HospitalExamSerializer(serializers.ModelSerializer):
+    hospital_name = serializers.CharField(source='hospital.name', read_only=True)
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+    formatted_price = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HospitalExam
+        fields = [
+            'id', 'hospital', 'hospital_name',
+            'name', 'category', 'category_display', 'description',
+            'price', 'currency', 'price_notes', 'formatted_price',
+            'preparation', 'is_active', 'is_public', 'display_order',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_formatted_price(self, obj):
+        return obj.formatted_price
+
+    def validate_name(self, value):
+        name = (value or '').strip()
+        if len(name) < 2:
+            raise serializers.ValidationError("Le nom de l'examen est requis.")
+        return name
+
+    def validate_price(self, value):
+        if value is None:
+            return 0
+        if value < 0:
+            raise serializers.ValidationError('Le tarif ne peut pas être négatif.')
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -435,12 +839,22 @@ class LabResultSerializer(serializers.ModelSerializer):
     ordered_by_name = serializers.SerializerMethodField()
     validated_by_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
+    appointment_reference = serializers.CharField(
+        source='appointment.reference_code', read_only=True, allow_null=True
+    )
+    appointment_status = serializers.CharField(
+        source='appointment.status', read_only=True, allow_null=True
+    )
+
+    # RDV doit être au moins « Présent » (après confirmation + arrivée)
+    LAB_ELIGIBLE_APPOINTMENT_STATUSES = ('PRESENT', 'IN_PROGRESS', 'COMPLETED')
 
     class Meta:
         model = LabResult
         fields = [
             'id', 'patient', 'patient_name', 'patient_email',
             'hospital', 'hospital_name',
+            'appointment', 'appointment_reference', 'appointment_status',
             'ordered_by', 'ordered_by_name',
             'uploaded_by', 'validated_by', 'validated_by_name',
             'test_name', 'test_date', 'result_value', 'unit', 'reference_values',
@@ -448,6 +862,10 @@ class LabResultSerializer(serializers.ModelSerializer):
             'status', 'status_display',
             'validation_date', 'communication_date',
             'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'uploaded_by', 'validated_by', 'validation_date',
+            'communication_date', 'created_at', 'updated_at',
         ]
 
     def get_patient_name(self, obj):
@@ -465,6 +883,61 @@ class LabResultSerializer(serializers.ModelSerializer):
         if obj.validated_by:
             return f"{obj.validated_by.user.first_name} {obj.validated_by.user.last_name}"
         return None
+
+    def validate(self, attrs):
+        hospital = attrs.get('hospital') or getattr(self.instance, 'hospital', None)
+        patient = attrs.get('patient') or getattr(self.instance, 'patient', None)
+        ordered_by = attrs.get('ordered_by') or getattr(self.instance, 'ordered_by', None)
+        appointment = attrs.get('appointment')
+        status_value = attrs.get('status')
+
+        if hospital and ordered_by and ordered_by.hospital_id != hospital.id:
+            raise serializers.ValidationError({
+                'ordered_by': "Le médecin prescripteur doit appartenir au même hôpital."
+            })
+
+        if not self.instance and status_value and status_value != 'REQUESTED':
+            raise serializers.ValidationError({
+                'status': "À la création, le statut doit être REQUESTED."
+            })
+
+        # Création : RDV obligatoire et patient présent (pas en attente de confirmation)
+        if not self.instance:
+            if not patient or not hospital:
+                raise serializers.ValidationError({
+                    'patient': "Patient et hôpital sont requis."
+                })
+            if not appointment:
+                raise serializers.ValidationError({
+                    'appointment': (
+                        "Sélectionnez un rendez-vous. Un résultat labo ne peut être créé "
+                        "que pour un patient déjà Présent (RDV confirmé → arrivé → présent)."
+                    )
+                })
+            if appointment.hospital_id != hospital.id:
+                raise serializers.ValidationError({
+                    'appointment': "Le rendez-vous doit appartenir au même hôpital."
+                })
+            if appointment.patient_id != patient.id:
+                raise serializers.ValidationError({
+                    'appointment': "Le rendez-vous ne correspond pas au patient sélectionné."
+                })
+            if appointment.status in ('PENDING', 'REQUEST_SENT'):
+                raise serializers.ValidationError({
+                    'appointment': (
+                        "Impossible : le rendez-vous est encore en attente de confirmation. "
+                        "L'administration doit d'abord confirmer le RDV."
+                    )
+                })
+            if appointment.status not in self.LAB_ELIGIBLE_APPOINTMENT_STATUSES:
+                raise serializers.ValidationError({
+                    'appointment': (
+                        f"Impossible de créer un résultat pour un RDV « {appointment.get_status_display()} ». "
+                        "Le patient doit d'abord être confirmé, arrivé, puis marqué Présent."
+                    )
+                })
+
+        return attrs
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -527,7 +1000,15 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             'is_active', 'is_dispensed', 'is_completed',
             'prescribed_at', 'valid_until',
         ]
-        read_only_fields = ['prescribed_at']
+        read_only_fields = ['prescribed_at', 'doctor']
+
+    def validate(self, attrs):
+        ptype = attrs.get('prescription_type') or getattr(self.instance, 'prescription_type', None)
+        if ptype == 'MEDICATION' and not (attrs.get('medication_name') or getattr(self.instance, 'medication_name', '')):
+            raise serializers.ValidationError({'medication_name': 'Nom du médicament requis.'})
+        if ptype == 'EXAM' and not (attrs.get('exam_name') or getattr(self.instance, 'exam_name', '')):
+            raise serializers.ValidationError({'exam_name': "Nom de l'examen requis."})
+        return attrs
 
     def get_patient_email(self, obj):
         return obj.patient.email if obj.patient else None

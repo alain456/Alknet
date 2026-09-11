@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import SocialLogins from '../shared/components/SocialLogins';
 import PasswordStrength from '../shared/components/PasswordStrength';
+import PasswordInput from '../shared/components/PasswordInput';
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
@@ -56,8 +57,8 @@ export default function RegisterPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">First Name</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={formData.firstName}
               onChange={(e) => setFormData({...formData, firstName: e.target.value})}
@@ -67,8 +68,8 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={formData.lastName}
               onChange={(e) => setFormData({...formData, lastName: e.target.value})}
@@ -80,8 +81,8 @@ export default function RegisterPage() {
 
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Email</label>
-          <input 
-            type="email" 
+          <input
+            type="email"
             required
             value={formData.email}
             onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -89,23 +90,22 @@ export default function RegisterPage() {
             placeholder="john@example.com"
           />
         </div>
-        
 
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Password</label>
-          <input 
-            type="password" 
+          <PasswordInput
             required
             value={formData.password}
             onChange={(e) => setFormData({...formData, password: e.target.value})}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
+            autoComplete="new-password"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
             placeholder="Create a strong password"
           />
           <PasswordStrength password={formData.password} />
         </div>
 
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={isLoading}
           className="w-full bg-primary hover:bg-secondary text-white font-semibold py-2.5 rounded-md shadow-sm transition flex justify-center items-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
         >
@@ -118,7 +118,7 @@ export default function RegisterPage() {
         </button>
       </form>
 
-      <SocialLogins />
+      <SocialLogins nextPath="/dashboard" />
 
       <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
         Already have an account?{' '}

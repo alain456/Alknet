@@ -1,50 +1,121 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api, {
+  storageKeys,
+  AUTH_EVENTS,
+  setToken as storeToken,
+  setRefreshToken,
+  clearAuthStorage,
+  getToken,
+  getRefreshToken,
+} from '../shared/api';
+import { getHomePathForUser } from '../auth/roleAccess';
 
 const AuthContext = createContext(null);
 
+/** Migration des anciennes clés AlkNet vers Isoko Hub */
+function migrateLegacyStorage() {
+  const legacyMap = [
+    ['alknet_token', storageKeys.token],
+    ['alknet_refresh_token', storageKeys.refresh],
+    ['alknet_user', storageKeys.user],
+  ];
+  legacyMap.forEach(([oldKey, newKey]) => {
+    const val = localStorage.getItem(oldKey);
+    if (val && !localStorage.getItem(newKey)) {
+      localStorage.setItem(newKey, val);
+    }
+    localStorage.removeItem(oldKey);
+  });
+}
+
+migrateLegacyStorage();
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('alknet_user');
+    const savedUser = localStorage.getItem(storageKeys.user);
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [token, setToken] = useState(() => localStorage.getItem('alknet_token') || null);
+  const [token, setToken] = useState(() => getToken());
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (token) {
-      localStorage.setItem('alknet_token', token);
-    } else {
-      localStorage.removeItem('alknet_token');
-    }
+    storeToken(token);
   }, [token]);
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem('alknet_user', JSON.stringify(user));
+      localStorage.setItem(storageKeys.user, JSON.stringify(user));
     } else {
-      localStorage.removeItem('alknet_user');
+      localStorage.removeItem(storageKeys.user);
     }
   }, [user]);
+
+  // Synchronise onglets : si un autre onglet change de compte, on aligne token + user
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (!event.key) return;
+      if (event.key === storageKeys.token) {
+        setToken(event.newValue);
+      }
+      if (event.key === storageKeys.user) {
+        try {
+          setUser(event.newValue ? JSON.parse(event.newValue) : null);
+        } catch {
+          setUser(null);
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // Sync React state après refresh / logout déclenchés par api.ts
+  useEffect(() => {
+    const onTokenRefreshed = (event) => {
+      const access = event?.detail?.access;
+      if (access) setToken(access);
+    };
+    const onLogout = () => {
+      setUser(null);
+      setToken(null);
+    };
+    window.addEventListener(AUTH_EVENTS.tokenRefreshed, onTokenRefreshed);
+    window.addEventListener(AUTH_EVENTS.logout, onLogout);
+    return () => {
+      window.removeEventListener(AUTH_EVENTS.tokenRefreshed, onTokenRefreshed);
+      window.removeEventListener(AUTH_EVENTS.logout, onLogout);
+    };
+  }, []);
+
+  // Au chargement : resynchronise le profil avec le JWT (évite user local ≠ token)
+  useEffect(() => {
+    const access = getToken();
+    if (!access) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const profile = await api.get('accounts/profile/', { auth: true });
+        if (cancelled) return;
+        // Aligner le state React si le refresh a mis à jour localStorage
+        const latest = getToken();
+        if (latest) setToken(latest);
+        if (profile) setUser(profile);
+      } catch {
+        if (!cancelled && !getToken()) {
+          setUser(null);
+          setToken(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const login = async (email, password) => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/v1/accounts/login/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || errorData.non_field_errors?.[0] || 'Invalid credentials');
-      }
-
-      const data = await response.json();
+      const data = await api.post('accounts/login/', { email, password });
       setToken(data.access);
-      if (data.refresh) {
-        localStorage.setItem('alknet_refresh_token', data.refresh);
-      }
+      if (data.refresh) setRefreshToken(data.refresh);
       setUser(data.user);
       setIsLoading(false);
       return data.user;
@@ -54,102 +125,38 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginWithTokens = async ({ access, refresh }) => {
+    setToken(access);
+    storeToken(access);
+    if (refresh) setRefreshToken(refresh);
+    const profile = await api.get('accounts/profile/', { auth: true });
+    setUser(profile);
+    return profile;
+  };
+
   const getRedirectPath = (userOrRole) => {
-    // Si un objet user est passé
     if (typeof userOrRole === 'object' && userOrRole !== null) {
-      const { role, staff_category, system_access_level, email, business_info, is_superuser } = userOrRole;
-      const userEmail = (email || '').toLowerCase();
-      const category = (staff_category || '').toUpperCase();
-      const accessLevel = (system_access_level || '').toUpperCase();
-      const roleName = (business_info?.role_name || '').toLowerCase();
-
-      // 1. Super Admin
-      if (role === 'SUPER_ADMIN' || is_superuser) {
-        return '/admin';
-      }
-
-      // 2. Hospital / Business Admin & Owner
-      if (
-        role === 'BUSINESS_OWNER' ||
-        accessLevel.includes('ADMIN') ||
-        accessLevel.includes('ALL') ||
-        category === 'ADMIN' ||
-        category === 'DIRECTION' ||
-        category === 'GESTONNAIRE' ||
-        roleName.includes('admin') ||
-        roleName.includes('propriétaire') ||
-        roleName.includes('directeur') ||
-        userEmail.includes('admin')
-      ) {
-        return '/hospital/admin';
-      }
-
-      // 3. Hospital Staff Roles
-      if (role === 'PROFESSIONAL' || category || accessLevel) {
-        if (accessLevel === 'RECEPTIONIST_ACCESS' || category === 'RECEPTIONIST' || category === 'ACCUEIL' || userEmail.includes('accueil') || userEmail.includes('reception')) {
-          return '/hospital/staff/receptionist';
-        }
-        if (accessLevel === 'LAB_ACCESS' || category === 'LAB' || category === 'LABORANTIN' || userEmail.includes('labo') || userEmail.includes('lab')) {
-          return '/hospital/staff/lab-technician';
-        }
-        if (accessLevel === 'CASHIER_ACCESS' || category === 'CASHIER' || category === 'CAISSE' || userEmail.includes('caissier') || userEmail.includes('cashier')) {
-          return '/hospital/staff/cashier';
-        }
-        if (category === 'NURSE' || category === 'INFIRMIER' || userEmail.includes('infirmier') || userEmail.includes('nurse')) {
-          return '/hospital/staff/nurse';
-        }
-        if (category === 'DOCTOR' || category === 'SPECIALIST' || category === 'MEDECIN' || userEmail.includes('medecin') || userEmail.includes('doctor')) {
-          return '/hospital/staff/doctor';
-        }
-        // Fallback for professionals: default to hospital admin dashboard if role is unknown
-        return '/hospital/admin';
-      }
-      return '/dashboard';
+      return getHomePathForUser(userOrRole);
     }
-
-    // Si une string role est passée
     switch (userOrRole) {
-      case 'SUPER_ADMIN':
-        return '/admin';
-      case 'BUSINESS_OWNER':
-        return '/hospital/admin';
-      case 'PROFESSIONAL':
-        return '/hospital/admin';
-      case 'CUSTOMER':
-        return '/dashboard';
-      default:
-        return '/dashboard';
+      case 'SUPER_ADMIN': return '/admin';
+      case 'BUSINESS_OWNER': return '/hospital/admin';
+      case 'PROFESSIONAL': return '/hospital/staff/doctor';
+      case 'CUSTOMER': return '/dashboard';
+      default: return '/dashboard';
     }
   };
 
   const register = async (formData) => {
     setIsLoading(true);
     try {
-      const payload = {
+      await api.post('accounts/register/', {
         email: formData.email,
         password: formData.password,
         first_name: formData.firstName || formData.first_name || '',
         last_name: formData.lastName || formData.last_name || '',
         phone_number: formData.phoneNumber || formData.phone_number || '',
-        role: formData.role || 'CUSTOMER',
-      };
-
-      const response = await fetch('/api/v1/accounts/register/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        const firstErrorKey = Object.keys(errorData)[0];
-        const errorMsg = Array.isArray(errorData[firstErrorKey])
-          ? `${firstErrorKey}: ${errorData[firstErrorKey][0]}`
-          : 'Registration failed';
-        throw new Error(errorMsg);
-      }
-
-      // Automatically login after successful registration
       return await login(formData.email, formData.password);
     } catch (err) {
       setIsLoading(false);
@@ -160,83 +167,43 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('alknet_token');
-    localStorage.removeItem('alknet_refresh_token');
-    localStorage.removeItem('alknet_user');
+    clearAuthStorage();
   };
 
-  // Variable globale pour éviter les requêtes de rafraîchissement multiples simultanées
-  let refreshPromise = null;
-
-  /**
-   * Tente de renouveler l'access token via le refresh token.
-   * Utilise une promesse partagée pour éviter les appels concurrents.
-   * Retourne le nouvel access token ou null si échec.
-   */
   const refreshAccessToken = async () => {
-    const refreshToken = localStorage.getItem('alknet_refresh_token');
-    if (!refreshToken) return null;
-
-    if (refreshPromise) {
-      return refreshPromise;
+    const refresh = getRefreshToken();
+    if (!refresh) return null;
+    try {
+      const data = await api.post('accounts/refresh/', { refresh }, { skipRefresh: true });
+      setToken(data.access);
+      if (data.refresh) setRefreshToken(data.refresh);
+      return data.access;
+    } catch {
+      logout();
+      return null;
     }
-
-    refreshPromise = (async () => {
-      try {
-        const res = await fetch('/api/v1/accounts/refresh/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh: refreshToken }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const newToken = data.access;
-          setToken(newToken);
-          localStorage.setItem('alknet_token', newToken);
-          return newToken;
-        } else {
-          // Refresh token invalide ou expiré → déconnexion
-          logout();
-          return null;
-        }
-      } catch {
-        logout();
-        return null;
-      } finally {
-        refreshPromise = null;
-      }
-    })();
-
-    return refreshPromise;
   };
 
-  /**
-   * Fonction fetch avec gestion automatique du 401.
-   * En cas de 401, tente un refresh du token puis réessaie la requête.
-   * Usage : const res = await authFetch(url, options);
-   */
   const authFetch = async (url, options = {}) => {
-    const currentToken = localStorage.getItem('alknet_token');
+    // Toujours lire localStorage (pas le state React, souvent périmé après refresh)
+    const currentToken = getToken();
+    const relativeUrl = url.startsWith('http://localhost:8000')
+      ? url.replace('http://localhost:8000', '')
+      : url;
     const headers = {
       ...options.headers,
-      ...(currentToken ? { 'Authorization': `Bearer ${currentToken}` } : {}),
+      ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
     };
-
-    let response = await fetch(url, { ...options, headers });
-
+    let response = await fetch(relativeUrl, { ...options, headers });
     if (response.status === 401) {
-      // Tentative de rafraîchissement du token
       const newToken = await refreshAccessToken();
       if (newToken) {
-        // Réessai avec le nouveau token
-        response = await fetch(url, {
+        response = await fetch(relativeUrl, {
           ...options,
-          headers: { ...options.headers, 'Authorization': `Bearer ${newToken}` },
+          headers: { ...options.headers, Authorization: `Bearer ${newToken}` },
         });
       }
     }
-
     return response;
   };
 
@@ -247,11 +214,13 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!token && !!user,
       isLoading,
       login,
+      loginWithTokens,
       register,
       logout,
       authFetch,
       refreshAccessToken,
       getRedirectPath,
+      updateUser: (next) => setUser((prev) => ({ ...prev, ...next })),
     }}>
       {children}
     </AuthContext.Provider>

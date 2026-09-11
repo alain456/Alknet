@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pharmacie Centrale — Catalogue</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sarrau-900:#0B332F;
+    --sarrau-700:#0F4C46;
+    --sarrau-100:#DCEBE8;
+    --sarrau-50:#EEF6F4;
+    --amber:#C97C2A;
+    --amber-100:#F4E3CB;
+    --rx:#B33F3F;
+    --rx-100:#F5DEDC;
+    --bg:#F4F6F6;
+    --foil:#EDEFEF;
+    --surface:#FFFFFF;
+    --ink:#132523;
+    --ink-muted:#5B6A67;
+    --ink-faint:#8C9997;
+    --border:#DCE3E1;
+    --font-display:'Zilla Slab', serif;
+    --font-body:'IBM Plex Sans', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+    --shadow-sm:0 1px 3px rgba(11,51,47,0.08);
+    --shadow-md:0 8px 24px rgba(11,51,47,0.10);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body); line-height:1.5;}
+  h1,h2,h3{font-family:var(--font-display); margin:0; font-weight:600; color:var(--sarrau-900);}
+
+  /* header */
+  .topbar{background:var(--sarrau-900); color:#fff; padding:18px clamp(20px,5vw,56px);}
+  .topbar-inner{display:flex; align-items:center; justify-content:space-between; max-width:1180px; margin:0 auto;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand svg{width:26px; height:26px;}
+  .brand span{font-family:var(--font-display); font-weight:700; font-size:20px;}
+  .brand small{display:block; font-family:var(--font-mono); font-size:10px; color:#9FC4BE; letter-spacing:0.06em;}
+  .topbar-right{display:flex; gap:10px; align-items:center;}
+  .cart-pill{background:var(--amber); color:#2B1B05; font-family:var(--font-mono); font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:20px;}
+
+  /* label strip / hero */
+  .label-strip{
+    background:var(--surface); border-bottom:3px double var(--sarrau-700);
+    padding:26px clamp(20px,5vw,56px);
+  }
+  .label-inner{max-width:1180px; margin:0 auto;}
+  .label-inner .eyebrow{font-family:var(--font-mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--amber); font-weight:600;}
+  .label-inner h1{font-size:clamp(24px,3vw,32px); margin:6px 0 16px;}
+  .search-row{display:flex; gap:12px; flex-wrap:wrap;}
+  .search-bar{
+    flex:1; min-width:240px; display:flex; align-items:center; gap:10px; background:var(--sarrau-50);
+    border:1.5px solid var(--border); border-radius:8px; padding:11px 16px;
+  }
+  .search-bar input{border:none; background:transparent; outline:none; font-family:var(--font-body); font-size:14.5px; flex:1; color:var(--ink);}
+  .select-form{
+    font-family:var(--font-body); font-size:14px; padding:11px 14px; border:1.5px solid var(--border);
+    border-radius:8px; background:var(--surface); color:var(--ink-muted);
+  }
+
+  /* layout */
+  .layout{max-width:1180px; margin:0 auto; padding:32px clamp(20px,5vw,56px) 80px; display:grid; grid-template-columns:220px 1fr; gap:32px;}
+  @media (max-width:820px){ .layout{grid-template-columns:1fr;} }
+
+  /* filters */
+  .filters{display:flex; flex-direction:column; gap:22px;}
+  .filter-group h3{font-size:13px; font-family:var(--font-body); font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--sarrau-700); margin-bottom:10px;}
+  .chip-list{display:flex; flex-direction:column; gap:4px;}
+  .chip{
+    display:flex; align-items:center; justify-content:space-between; padding:8px 10px; border-radius:6px;
+    font-size:13.5px; color:var(--ink-muted); cursor:pointer;
+  }
+  .chip:hover{background:var(--sarrau-50);}
+  .chip.active{background:var(--sarrau-100); color:var(--sarrau-900); font-weight:600;}
+  .chip .count{font-family:var(--font-mono); font-size:11px; color:var(--ink-faint);}
+  .legend{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:12px; color:var(--ink-muted); display:flex; flex-direction:column; gap:8px;}
+  .legend-row{display:flex; align-items:center; gap:8px;}
+
+  /* results header */
+  .results-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:8px;}
+  .results-head .count-text{font-size:13.5px; color:var(--ink-muted);}
+  .results-head .count-text strong{color:var(--ink);}
+
+  /* catalog grid — blister pack cards */
+  .catalog-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:20px;}
+
+  .blister{
+    position:relative; background:
+      repeating-linear-gradient(135deg, var(--foil) 0px, var(--foil) 2px, #F6F7F7 2px, #F6F7F7 6px);
+    border:1px solid var(--border); border-radius:16px; padding:16px 16px 0; box-shadow:var(--shadow-sm);
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .blister:hover{transform:translateY(-3px); box-shadow:var(--shadow-md);}
+  .bubble{
+    background:var(--surface); border-radius:50% 50% 46% 46% / 60% 60% 40% 40%;
+    border:1px solid var(--border); height:96px; display:flex; align-items:center; justify-content:center;
+    margin-bottom:-1px; position:relative; overflow:hidden;
+  }
+  .bubble svg{width:34px; height:34px; stroke:var(--sarrau-700);}
+  .rx-flag{
+    position:absolute; top:8px; right:8px; background:var(--rx); color:#fff; font-family:var(--font-mono);
+    font-size:9.5px; font-weight:700; padding:2px 6px; border-radius:4px; letter-spacing:0.03em;
+  }
+  .blister-body{background:var(--surface); border:1px solid var(--border); border-top:none; border-radius:0 0 12px 12px; padding:14px 16px 16px; margin-top:0;}
+  .med-eyebrow{font-family:var(--font-mono); font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-faint);}
+  .med-name{font-family:var(--font-display); font-weight:600; font-size:16.5px; margin:4px 0 2px;}
+  .med-form{font-size:12.5px; color:var(--ink-muted); margin-bottom:10px;}
+  .med-footer{display:flex; align-items:center; justify-content:space-between; padding-top:10px; border-top:1px dashed var(--border);}
+  .med-price{font-family:var(--font-mono); font-weight:600; font-size:14px; color:var(--sarrau-900);}
+  .stock{font-size:11px; font-family:var(--font-mono); display:flex; align-items:center; gap:5px;}
+  .stock.in{color:#2F7A4F;}
+  .stock.low{color:var(--amber);}
+  .stock.out{color:var(--ink-faint);}
+  .dot{width:6px; height:6px; border-radius:50%; background:currentColor;}
+  .add-btn{
+    width:100%; margin-top:12px; background:var(--sarrau-700); color:#fff; border:none; border-radius:7px;
+    padding:9px; font-family:var(--font-body); font-weight:600; font-size:13px; cursor:pointer;
+  }
+  .add-btn:hover{background:var(--sarrau-900);}
+  .add-btn.locked{background:var(--rx-100); color:var(--rx); cursor:default;}
+
+  /* detail panel (expanded example) */
+  .detail-note{font-size:12px; color:var(--ink-faint); text-align:center; margin-top:28px; font-family:var(--font-mono);}
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8"><path d="M12 3v18M3 12h18"/></svg>
+        <div><span>Pharmacie Centrale</span><small>CATALOGUE EN LIGNE</small></div>
+      </div>
+      <div class="topbar-right">
+        <span class="cart-pill">Panier · 3 articles</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="label-strip">
+    <div class="label-inner">
+      <span class="eyebrow">Ordonnances & vente libre</span>
+      <h1>Trouvez votre médicament</h1>
+      <div class="search-row">
+        <div class="search-bar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8C9997" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+          <input type="text" placeholder="Nom du médicament, molécule ou symptôme...">
+        </div>
+        <select class="select-form"><option>Toutes les formes</option><option>Comprimé</option><option>Sirop</option><option>Gélule</option><option>Injectable</option></select>
+        <select class="select-form"><option>Trier : Pertinence</option><option>Prix croissant</option><option>Disponibilité</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="filters">
+      <div class="filter-group">
+        <h3>Catégorie</h3>
+        <div class="chip-list">
+          <div class="chip active">Tous <span class="count">128</span></div>
+          <div class="chip">Antidouleurs <span class="count">24</span></div>
+          <div class="chip">Antibiotiques <span class="count">18</span></div>
+          <div class="chip">Vitamines <span class="count">31</span></div>
+          <div class="chip">Soins de la peau <span class="count">15</span></div>
+          <div class="chip">Chroniques <span class="count">22</span></div>
+          <div class="chip">Premiers secours <span class="count">18</span></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <h3>Accès</h3>
+        <div class="chip-list">
+          <div class="chip">Vente libre <span class="count">76</span></div>
+          <div class="chip">Ordonnance requise <span class="count">52</span></div>
+        </div>
+      </div>
+      <div class="legend">
+        <div class="legend-row"><span class="dot" style="background:#2F7A4F;"></span> En stock</div>
+        <div class="legend-row"><span class="dot" style="background:#C97C2A;"></span> Stock faible</div>
+        <div class="legend-row"><span class="rx-flag" style="position:static;">RX</span> Ordonnance requise</div>
+      </div>
+    </aside>
+
+    <div>
+      <div class="results-head">
+        <span class="count-text"><strong>128</strong> médicaments trouvés</span>
+      </div>
+
+      <div class="catalog-grid">
+
+        <div class="blister">
+          <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg></div>
+          <div class="blister-body">
+            <span class="med-eyebrow">Antidouleur</span>
+            <div class="med-name">Paracétamol 500mg</div>
+            <div class="med-form">Comprimé · boîte de 16</div>
+            <div class="med-footer">
+              <span class="med-price">1 200 BIF</span>
+              <span class="stock in"><span class="dot"></span>En stock</span>
+            </div>
+            <button class="add-btn">Ajouter au panier</button>
+          </div>
+        </div>
+
+        <div class="blister">
+          <div class="rx-flag">RX</div>
+          <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M6 3h12M9 3v6l-5 9a2 2 0 002 3h12a2 2 0 002-3l-5-9V3"/></svg></div>
+          <div class="blister-body">
+            <span class="med-eyebrow">Antibiotique</span>
+            <div class="med-name">Amoxicilline 500mg</div>
+            <div class="med-form">Gélule · boîte de 12</div>
+            <div class="med-footer">
+              <span class="med-price">4 800 BIF</span>
+              <span class="stock in"><span class="dot"></span>En stock</span>
+            </div>
+            <button class="add-btn locked">Ordonnance requise</button>
+          </div>
+        </div>
+
+        <div class="blister">
+          <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
+          <div class="blister-body">
+            <span class="med-eyebrow">Vitamines</span>
+            <div class="med-name">Vitamine C 1000mg</div>
+            <div class="med-form">Comprimé effervescent · tube de 10</div>
+            <div class="med-footer">
+              <span class="med-price">3 500 BIF</span>
+              <span class="stock low"><span class="dot"></span>Stock faible</span>
+            </div>
+            <button class="add-btn">Ajouter au panier</button>
+          </div>
+        </div>
+
+        <div class="blister">
+          <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+          <div class="blister-body">
+            <span class="med-eyebrow">Antidouleur</span>
+            <div class="med-name">Ibuprofène 400mg</div>
+            <div class="med-form">Comprimé · boîte de 20</div>
+            <div class="med-footer">
+              <span class="med-price">2 200 BIF</span>
+              <span class="stock in"><span class="dot"></span>En stock</span>
+            </div>
+            <button class="add-btn">Ajouter au panier</button>
+          </div>
+        </div>
+
+        <div class="blister">
+          <div class="rx-flag">RX</div>
+          <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 12h16M4 12a8 8 0 0116 0M4 12a8 8 0 008 8"/></svg></div>
+          <div class="blister-body">
+            <span class="med-eyebrow">Chronique</span>
+            <div class="med-name">Oméprazole 20mg</div>
+            <div class="med-form">Gélule gastro-résistante · boîte de 14</div>
+            <div class="med-footer">
+              <span class="med-price">5 600 BIF</span>
+              <span class="stock out"><span class="dot"></span>Rupture</span>
+            </div>
+            <button class="add-btn locked">Ordonnance requise</button>
+          </div>
+        </div>
+
+        <div class="blister">
+          <div class="bubble"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M5 4h14v6a7 7 0 01-14 0V4z"/><path d="M9 20h6M12 17v3"/></svg></div>
+          <div class="blister-body">
+            <span class="med-eyebrow">Premiers secours</span>
+            <div class="med-name">Sirop contre la toux</div>
+            <div class="med-form">Sirop · flacon 120ml</div>
+            <div class="med-footer">
+              <span class="med-price">3 000 BIF</span>
+              <span class="stock in"><span class="dot"></span>En stock</span>
+            </div>
+            <button class="add-btn">Ajouter au panier</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="detail-note">Grille conçue comme une plaquette — chaque alvéole est une fiche médicament</div>
+    </div>
+  </div>
+
+</body>
+</html>

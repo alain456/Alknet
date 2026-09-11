@@ -24,5 +24,25 @@ services:
     ports:
       - "5434:5432"
 
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_PROXY=http://web:8000
+    depends_on:
+      - web
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    environment:
+      MP_MAX_MESSAGES: 5000
+
 volumes:
   postgres_data:

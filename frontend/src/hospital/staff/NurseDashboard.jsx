@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  HeartPulse, Users, Activity, Clock, CheckCircle, Search, Plus, 
-  Thermometer, ShieldAlert, FileText, User, Filter, AlertTriangle, ArrowUpRight
+  HeartPulse, Users, Activity, Clock, CheckCircle, Search, 
+  Thermometer, ShieldAlert
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import hospitalService from '../hospitalService';
+
+const EMPTY_VITALS = {
+  blood_pressure: '',
+  heart_rate: '',
+  temperature: '',
+  weight: '',
+  height: '',
+  oxygen_saturation: '',
+  triage_priority: 'NORMAL',
+  nurse_notes: '',
+};
+
+const QUEUE_STATUSES = new Set(['CONFIRMED', 'PATIENT_ARRIVED', 'WAITING_ROOM', 'PRESENT', 'IN_PROGRESS']);
 
 export default function NurseDashboard() {
-  const { token, authFetch } = useAuth();
+  const { authFetch } = useAuth();
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [queuePatients, setQueuePatients] = useState([]);
@@ -16,16 +30,7 @@ export default function NurseDashboard() {
   // Modal de saisie des constantes vitales (Tension, Pouls, Température, Poids)
   const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [vitalsForm, setVitalsForm] = useState({
-    blood_pressure: '',
-    heart_rate: '',
-    temperature: '',
-    weight: '',
-    height: '',
-    oxygen_saturation: '',
-    triage_priority: 'NORMAL',
-    nurse_notes: ''
-  });
+  const [vitalsForm, setVitalsForm] = useState(EMPTY_VITALS);
 
   const [stats, setStats] = useState({
     waitingQueue: 0,
@@ -35,21 +40,16 @@ export default function NurseDashboard() {
   });
 
   useEffect(() => {
-    if (token) initData();
-  }, [token]);
+    initData();
+  }, []);
 
   const initData = async () => {
     try {
-      const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
-      if (busRes.ok) {
-        const businesses = await busRes.json();
-        if (businesses.length > 0) {
-          const hid = businesses[0].id;
-          setHospitalId(hid);
-          fetchQueue(hid);
-        } else {
-          setLoading(false);
-        }
+      const businesses = await hospitalService.getMyHospital();
+      if (Array.isArray(businesses) && businesses.length > 0) {
+        const hid = businesses[0].id;
+        setHospitalId(hid);
+        fetchQueue(hid);
       } else {
         setLoading(false);
       }
@@ -61,19 +61,24 @@ export default function NurseDashboard() {
 
   const fetchQueue = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`);
-      if (res.ok) {
-        const appointments = await res.json();
-        setQueuePatients(appointments);
+      const [queueData, allAppointments] = await Promise.all([
+        hospitalService.getQueue(hid).catch(() => []),
+        hospitalService.getAppointments({ hospital: hid }).catch(() => []),
+      ]);
+      const queueList = Array.isArray(queueData) ? queueData : (queueData?.results || []);
+      const appointments = Array.isArray(allAppointments) ? allAppointments : (allAppointments?.results || []);
+      const triageQueue = queueList.length > 0
+        ? queueList
+        : appointments.filter((a) => QUEUE_STATUSES.has(a.status));
 
-        const today = new Date().toISOString().split('T')[0];
-        setStats({
-          waitingQueue: appointments.filter(a => a.status === 'PENDING').length,
-          vitalsRecordedToday: appointments.filter(a => a.notes && a.notes.includes('Tension')).length || 4,
-          emergencyCases: appointments.filter(a => a.reason && a.reason.toLowerCase().includes('urgence')).length,
-          completedCare: appointments.filter(a => a.status === 'COMPLETED').length
-        });
-      }
+      setQueuePatients(triageQueue);
+
+      setStats({
+        waitingQueue: triageQueue.filter((a) => !a.location_notes?.includes('CONSTANTES')).length,
+        vitalsRecordedToday: appointments.filter((a) => a.location_notes?.includes('CONSTANTES')).length,
+        emergencyCases: triageQueue.filter((a) => a.reason && a.reason.toLowerCase().includes('urgence')).length,
+        completedCare: appointments.filter((a) => a.status === 'COMPLETED').length,
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -83,16 +88,7 @@ export default function NurseDashboard() {
 
   const handleOpenVitalsModal = (patient) => {
     setSelectedPatient(patient);
-    setVitalsForm({
-      blood_pressure: '120/80',
-      heart_rate: '72',
-      temperature: '36.6',
-      weight: '68',
-      height: '170',
-      oxygen_saturation: '98',
-      triage_priority: 'NORMAL',
-      nurse_notes: ''
-    });
+    setVitalsForm({ ...EMPTY_VITALS });
     setIsVitalsModalOpen(true);
   };
 
@@ -108,7 +104,7 @@ Poids: ${vitalsForm.weight} kg | Taille: ${vitalsForm.height} cm
 Priorité: ${vitalsForm.triage_priority}
 Notes: ${vitalsForm.nurse_notes}`;
 
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/${selectedPatient.id}/`, {
+      const res = await authFetch(`/api/v1/hospital/appointments/${selectedPatient.id}/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +124,7 @@ Notes: ${vitalsForm.nurse_notes}`;
 
   const filteredPatients = queuePatients.filter(p => {
     const pName = (p.patient_name || '').toLowerCase();
-    const docName = (p.doctor_details?.full_name || '').toLowerCase();
+    const docName = (p.doctor_name || p.doctor_details?.full_name || '').toLowerCase();
     return pName.includes(searchQuery.toLowerCase()) || docName.includes(searchQuery.toLowerCase());
   });
 
@@ -268,7 +264,7 @@ Notes: ${vitalsForm.nurse_notes}`;
                             {item.patient_name || 'Patient Inconnu'}
                           </td>
                           <td className="py-3.5 px-6 font-medium text-gray-600 dark:text-gray-300">
-                            {item.doctor_details?.full_name || 'Médecin Généraliste'}
+                            {item.doctor_name || item.doctor_details?.full_name || 'Médecin Généraliste'}
                           </td>
                           <td className="py-3.5 px-6 text-gray-500 max-w-xs truncate">
                             {item.reason || 'Consultation standard'}

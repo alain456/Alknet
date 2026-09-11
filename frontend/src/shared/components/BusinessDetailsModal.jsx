@@ -1,13 +1,43 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, Building2, MapPin, Star, Phone, Mail, Globe, 
   ShieldCheck, Clock, Navigation, ExternalLink, Award, 
   FileText, CheckCircle2, AlertTriangle, Utensils, Hotel, 
-  Check, Sparkles, User
+  Check, Sparkles, User, Package, History
 } from 'lucide-react';
 
-export default function BusinessDetailsModal({ isOpen, onClose, business, categories = [] }) {
+function isWholesalePharmacy(business) {
+  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
+  return name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'));
+}
+
+function isRetailPharmacy(business) {
+  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
+  return !isWholesalePharmacy(business) && (
+    name.includes('pharmacie de détail')
+    || name.includes('pharmacie de detail')
+    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
+    || name.trim() === 'pharmacie'
+  );
+}
+
+function isCommerceShop(business) {
+  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
+  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
+  const keys = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
+  return keys.some((k) => name.includes(k) || slug.includes(k));
+}
+
+export default function BusinessDetailsModal({
+  isOpen, onClose, business, categories = [], showModerationStatus = false,
+}) {
+  const navigate = useNavigate();
   if (!isOpen || !business) return null;
+
+  const wholesale = isWholesalePharmacy(business);
+  const retail = isRetailPharmacy(business);
+  const commerce = isCommerceShop(business);
 
   // Resolve category names
   const primaryCategoryName = business.primary_category_name || 
@@ -76,16 +106,18 @@ export default function BusinessDetailsModal({ isOpen, onClose, business, catego
                   {primaryCategoryName}
                 </span>
 
-                <span className={`px-2.5 py-1 rounded-md font-medium text-xs ${
-                  business.verification_status === 'APPROVED' ? 'bg-green-500/20 text-green-200 border border-green-500/30' :
-                  business.verification_status === 'PENDING' ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30' :
-                  'bg-red-500/20 text-red-200 border border-red-500/30'
-                }`}>
-                  Modération : {
-                    business.verification_status === 'APPROVED' ? 'Approuvé' :
-                    business.verification_status === 'PENDING' ? 'En attente de validation' : 'Rejeté'
-                  }
-                </span>
+                {showModerationStatus && (
+                  <span className={`px-2.5 py-1 rounded-md font-medium text-xs ${
+                    business.verification_status === 'APPROVED' ? 'bg-green-500/20 text-green-200 border border-green-500/30' :
+                    business.verification_status === 'PENDING' ? 'bg-amber-500/20 text-amber-200 border border-amber-500/30' :
+                    'bg-red-500/20 text-red-200 border border-red-500/30'
+                  }`}>
+                    Modération : {
+                      business.verification_status === 'APPROVED' ? 'Approuvé' :
+                      business.verification_status === 'PENDING' ? 'En attente de validation' : 'Rejeté'
+                    }
+                  </span>
+                )}
 
                 <span className={`px-2.5 py-1 rounded-md font-medium text-xs ${
                   business.is_active ? 'bg-emerald-500/20 text-emerald-200' : 'bg-gray-500/20 text-gray-300'
@@ -278,14 +310,62 @@ export default function BusinessDetailsModal({ isOpen, onClose, business, catego
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-xs text-gray-400 shrink-0">
-          <span>ID: <code className="font-mono text-gray-600 dark:text-gray-300">{business.id}</code></span>
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold rounded-lg transition cursor-pointer"
-          >
-            Fermer
-          </button>
+        <div className="p-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-xs text-gray-400 shrink-0 gap-3">
+          <span className="truncate">ID: <code className="font-mono text-gray-600 dark:text-gray-300">{business.id}</code></span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                navigate(`/businesses/${business.id}/historique`);
+              }}
+              className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <History className="w-4 h-4" /> Historique
+            </button>
+            {wholesale && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/businesses/${business.id}/catalog`);
+                }}
+                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Package className="w-4 h-4" /> Entrer — Catalogue
+              </button>
+            )}
+            {retail && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/businesses/${business.id}/pharmacy`);
+                }}
+                className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Package className="w-4 h-4" /> Entrer — Catalogue
+              </button>
+            )}
+            {commerce && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/businesses/${business.id}/shop`);
+                }}
+                className="px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Package className="w-4 h-4" /> Entrer — Boutique
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-5 py-2 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 font-semibold rounded-lg transition cursor-pointer"
+            >
+              Fermer
+            </button>
+          </div>
         </div>
 
       </div>

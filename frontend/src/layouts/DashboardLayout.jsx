@@ -1,22 +1,27 @@
 import React, { useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Compass, MessageSquare, Heart, 
   Calendar, ShoppingBag, CreditCard, Bell, User, 
   Crown, Settings, Menu, X, Search, LogOut 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { canAccessZone, ZONE_ACCESS } from '../auth/roleAccess';
 
 export default function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, getRedirectPath } = useAuth();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
+
+  if (user && !canAccessZone(user, ZONE_ACCESS.customerDashboard)) {
+    return <Navigate to={getRedirectPath(user)} replace />;
+  }
 
   const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
@@ -36,6 +41,10 @@ export default function DashboardLayout() {
   ];
 
   const closeSidebar = () => setIsSidebarOpen(false);
+
+  if (user && !canAccessZone(user, ZONE_ACCESS.customerDashboard)) {
+    return <Navigate to={getRedirectPath(user)} replace />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">

@@ -1,399 +1,590 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  UserCheck, Users, Clock, Search, Plus, Calendar, Building2, UserPlus, 
-  CheckCircle, ArrowRight, ShieldAlert, Phone, Filter, AlertCircle
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  UserCheck, Users, Search, Building2, CheckCircle, AlertCircle,
+  Calendar, Stethoscope, HeartPulse, Clock, History, Phone, Mail,
+  MapPin, Navigation, Hash, FileText, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import hospitalService, { APPOINTMENT_STATUS_LABELS } from '../hospitalService';
+
+const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
+
+const STATUS_COLORS = {
+  CONFIRMED: 'bg-blue-100 text-blue-700',
+  PATIENT_ARRIVED: 'bg-emerald-100 text-emerald-700',
+  WAITING_ROOM: 'bg-purple-100 text-purple-700',
+  PRESENT: 'bg-teal-100 text-teal-800',
+  IN_PROGRESS: 'bg-indigo-100 text-indigo-700',
+  COMPLETED: 'bg-green-100 text-green-700',
+};
+
+function doctorFullName(apt) {
+  if (apt?.doctor_name) return apt.doctor_name;
+  const d = apt?.doctor_details;
+  if (!d) return '—';
+  if (d.full_name) return d.full_name;
+  const first = d.user_details?.first_name || '';
+  const last = d.user_details?.last_name || '';
+  return `${first} ${last}`.trim() || '—';
+}
 
 export default function ReceptionistDashboard() {
-  const { token, authFetch } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [appointments, setAppointments] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [confirmedList, setConfirmedList] = useState([]);
+  const [queue, setQueue] = useState([]);
+  const [services, setServices] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [actionError, setActionError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
-  // Modal Enregistrement Patient d'Accueil
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  const [patientForm, setPatientForm] = useState({
-    first_name: '',
-    last_name: '',
-    phone: '',
-    doctor_name: '',
-    service_name: 'Consultation Générale',
-    reason: 'Consultation sur place'
-  });
-  const [registerSuccess, setRegisterSuccess] = useState(false);
+  const [arrivalSearch, setArrivalSearch] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [orientationNotes, setOrientationNotes] = useState('');
+  const [sendToWaitingRoom, setSendToWaitingRoom] = useState(true);
+  const [orienting, setOrienting] = useState(false);
 
-  useEffect(() => {
-    if (token) initData();
-  }, [token]);
+  const [historyTarget, setHistoryTarget] = useState(null);
+  const [historyEvents, setHistoryEvents] = useState([]);
+  const [filterService, setFilterService] = useState('ALL');
 
-  const initData = async () => {
+  const refresh = useCallback(async (hid) => {
     try {
-      const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
-      if (busRes.ok) {
-        const businesses = await busRes.json();
-        if (businesses.length > 0) {
-          const hid = businesses[0].id;
-          setHospitalId(hid);
-          fetchAppointments(hid);
-        } else {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
-      }
-    } catch (err) {
-      console.error(err);
-      setLoading(false);
-    }
-  };
-
-  const fetchAppointments = async (hid) => {
-    try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/?hospital=${hid}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAppointments(data);
-      }
+      const [queueData, apptData, statsData, servicesData] = await Promise.all([
+        hospitalService.getQueue(hid),
+        hospitalService.getAppointments({ hospital: hid, status: 'CONFIRMED' }),
+        hospitalService.getStats(hid),
+        hospitalService.getServices(hid, true),
+      ]);
+      setQueue(normalizeList(queueData));
+      setConfirmedList(normalizeList(apptData));
+      setStats(statsData);
+      setServices(normalizeList(servicesData).filter((s) => s.is_active !== false));
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    const init = async () => {
+      if (!isAuthenticated) { setLoading(false); return; }
+      try {
+        const businesses = await hospitalService.getMyHospital();
+        const list = Array.isArray(businesses) ? businesses : [];
+        if (list.length > 0) {
+          setHospitalId(list[0].id);
+          await refresh(list[0].id);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+      }
+    };
+    init();
+  }, [isAuthenticated, refresh]);
+
+  useEffect(() => {
+    if (!hospitalId || arrivalSearch.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await hospitalService.searchConfirmedAppointments(hospitalId, arrivalSearch.trim());
+        const results = normalizeList(data);
+        setSearchResults(results);
+        if (results.length === 1) {
+          setSelectedAppointment(results[0]);
+          setOrientationNotes('');
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [arrivalSearch, hospitalId]);
+
+  const selectAppointment = (apt) => {
+    setSelectedAppointment(apt);
+    setOrientationNotes('');
+    setActionError('');
+    setSuccessMsg('');
   };
 
-  const handleCheckIn = async (appointmentId) => {
+  const handleOrientPatient = async () => {
+    if (!selectedAppointment || selectedAppointment.status !== 'CONFIRMED') return;
+    setOrienting(true);
+    setActionError('');
+    setSuccessMsg('');
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/appointments/${appointmentId}/`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'CONFIRMED' })
+      const result = await hospitalService.checkInAppointment(selectedAppointment.id, {
+        orientation_notes: orientationNotes.trim(),
+        send_to_waiting_room: sendToWaitingRoom,
       });
-      if (res.ok) {
-        fetchAppointments(hospitalId);
-      }
+      const orient = result?.orientation || {};
+      const doctorLabel = orient.doctor || doctorFullName(selectedAppointment);
+      const serviceLabel = orient.service || selectedAppointment.service_name || '—';
+      setSuccessMsg(
+        `Patient orienté vers Dr. ${doctorLabel}`
+        + (serviceLabel && serviceLabel !== '—' ? ` (${serviceLabel})` : '')
+        + `. Statut : ${APPOINTMENT_STATUS_LABELS[result.status] || result.status}. Médecin notifié.`
+      );
+      setArrivalSearch('');
+      setSearchResults([]);
+      setSelectedAppointment(null);
+      setOrientationNotes('');
+      await refresh(hospitalId);
     } catch (err) {
-      console.error(err);
+      setActionError(err.message || 'Impossible d\'orienter le patient');
+    } finally {
+      setOrienting(false);
     }
   };
 
-  const handleRegisterPatient = (e) => {
-    e.preventDefault();
-    const newAppointment = {
-      id: `walkin-${Date.now()}`,
-      patient_name: `${patientForm.first_name} ${patientForm.last_name}`,
-      doctor_details: { full_name: patientForm.doctor_name || 'Médecin de garde' },
-      appointment_date: new Date().toISOString(),
-      status: 'CONFIRMED',
-      reason: patientForm.reason
-    };
-    setAppointments([newAppointment, ...appointments]);
-    setRegisterSuccess(true);
-    setTimeout(() => {
-      setIsRegisterModalOpen(false);
-      setRegisterSuccess(false);
-      setPatientForm({ first_name: '', last_name: '', phone: '', doctor_name: '', service_name: 'Consultation Générale', reason: 'Consultation sur place' });
-    }, 1200);
+  const openHistory = async (apt) => {
+    setHistoryTarget(apt);
+    try {
+      const events = await hospitalService.getAppointmentHistory(apt.id);
+      setHistoryEvents(Array.isArray(events) ? events : []);
+    } catch {
+      setHistoryEvents([]);
+    }
   };
 
-  const filteredAppointments = appointments.filter(a => {
-    const nameMatch = (a.patient_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      (a.doctor_details?.full_name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    if (!nameMatch) return false;
-    if (statusFilter === 'ALL') return true;
-    return a.status === statusFilter;
-  });
+  const getStatusBadge = (status) => {
+    const label = APPOINTMENT_STATUS_LABELS[status] || status;
+    const color = STATUS_COLORS[status] || 'bg-gray-100 text-gray-700';
+    return <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold ${color}`}>{label}</span>;
+  };
 
-  const totalExpected = appointments.length;
-  const checkedInCount = appointments.filter(a => a.status === 'CONFIRMED').length;
-  const pendingCount = appointments.filter(a => a.status === 'PENDING').length;
-  const completedCount = appointments.filter(a => a.status === 'COMPLETED').length;
+  const formatTime = (apt) => {
+    if (apt.slot_details?.start_time) return apt.slot_details.start_time.substring(0, 5);
+    if (apt.appointment_date) {
+      return new Date(apt.appointment_date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return '—';
+  };
+
+  const formatDate = (apt) => {
+    if (!apt.appointment_date) return '—';
+    return new Date(apt.appointment_date).toLocaleDateString('fr-FR', {
+      weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+    });
+  };
+
+  const kpiCards = [
+    { label: 'Patients attendus', value: stats?.expected_today ?? '—', icon: Calendar, color: 'text-teal-600' },
+    { label: 'Arrivées du jour', value: stats?.arrivals_today ?? '—', icon: UserCheck, color: 'text-emerald-600' },
+    { label: 'File d\'attente', value: stats?.in_waiting_room ?? '—', icon: Users, color: 'text-purple-600' },
+    { label: 'RDV confirmés', value: confirmedList.length, icon: CheckCircle, color: 'text-blue-600' },
+    { label: 'Consultations en retard', value: stats?.late_consultations ?? '—', icon: AlertCircle, color: 'text-red-600' },
+    { label: 'Services disponibles', value: stats?.available_services ?? services.length, icon: HeartPulse, color: 'text-indigo-600' },
+  ];
+
+  const orientationPreview = selectedAppointment
+    ? `Orienter vers Dr. ${doctorFullName(selectedAppointment)}`
+      + (selectedAppointment.service_name ? ` — Service : ${selectedAppointment.service_name}` : '')
+      + (selectedAppointment.slot_details?.title ? ` — Session : ${selectedAppointment.slot_details.title}` : '')
+    : '';
+
+  const matchesService = (apt) => {
+    if (filterService === 'ALL') return true;
+    return String(apt.service) === String(filterService)
+      || String(apt.slot_details?.service) === String(filterService);
+  };
+  const filteredConfirmed = confirmedList.filter(matchesService);
+  const filteredQueue = queue.filter(matchesService);
 
   return (
     <div className="space-y-6 pb-12">
-      {/* En-tête Espace Accueil & Admissions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-teal-900 via-emerald-900 to-green-900 p-6 rounded-2xl text-white shadow-xl">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-200 text-xs font-semibold mb-2">
-            <UserCheck className="w-3.5 h-3.5" /> Poste d'Accueil, Recommandations & Admissions
+      <div className="bg-gradient-to-r from-teal-900 to-emerald-900 p-6 rounded-2xl text-white">
+        <p className="text-xs text-teal-200 mb-1">{user?.business_info?.role_name || 'Agent d\'accueil'}</p>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Building2 className="text-teal-400" /> Accueil & Orientation
+        </h1>
+        <p className="text-teal-100 text-sm mt-1">
+          Rechercher le patient (nom ou N° RDV) → consulter le dossier → orienter vers le médecin / service → notification automatique
+        </p>
+      </div>
+
+      {actionError && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">{actionError}</div>}
+      {successMsg && <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-sm border border-emerald-100">{successMsg}</div>}
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+        {kpiCards.map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="bg-white rounded-xl border p-4 flex justify-between items-center">
+            <div>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase">{label}</p>
+              <p className={`text-2xl font-extrabold ${color}`}>{value}</p>
+            </div>
+            <Icon className={`w-8 h-8 ${color} opacity-80`} />
           </div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Building2 className="text-teal-400" />
-            Accueil & File d'Attente de l'Hôpital
-          </h1>
-          <p className="text-teal-100 text-sm mt-1">Enregistrement des arrivées, orientation des patients et vérification administrative des rendez-vous.</p>
-        </div>
-        <button 
-          onClick={() => setIsRegisterModalOpen(true)}
-          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-2 cursor-pointer shrink-0"
+        ))}
+      </div>
+
+      <div className="bg-white rounded-xl border p-3 flex flex-wrap items-center gap-3">
+        <span className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+          <Stethoscope className="w-3.5 h-3.5" /> Triage par service
+        </span>
+        <select
+          value={filterService}
+          onChange={(e) => setFilterService(e.target.value)}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-gray-50 min-w-[200px]"
         >
-          <UserPlus className="w-4 h-4" /> Nouveau Patient Arrivant
-        </button>
+          <option value="ALL">Tous les services</option>
+          {services.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+        <span className="text-[11px] text-gray-400">
+          {filteredConfirmed.length} confirmé(s) · {filteredQueue.length} en file
+        </span>
       </div>
 
-      {/* Cartes KPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Patients Attendus Jour</p>
-              <p className="text-2xl font-extrabold text-gray-900 dark:text-white mt-1">{totalExpected}</p>
-            </div>
-            <div className="w-11 h-11 bg-teal-50 dark:bg-teal-950/50 text-teal-600 rounded-xl flex items-center justify-center">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 space-y-4">
+          {/* Recherche + orientation */}
+          <div className="bg-white rounded-2xl border-2 border-teal-200 p-5 shadow-sm space-y-4">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <Navigation className="w-5 h-5 text-teal-600" /> Arrivée patient & orientation
+            </h2>
+            <p className="text-xs text-gray-500">
+              Saisissez le <strong>nom</strong> ou le <strong>numéro de rendez-vous</strong> (ex. RDV-BAHO-…).
+              Le dossier complet s’affiche pour orienter le patient vers le médecin ou le service chargé.
+            </p>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Patients Enregistrés / Présents</p>
-              <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">{checkedInCount}</p>
-            </div>
-            <div className="w-11 h-11 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <UserCheck className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">En Attente de Validation</p>
-              <p className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 mt-1">{pendingCount}</p>
-            </div>
-            <div className="w-11 h-11 bg-amber-50 dark:bg-amber-950/50 text-amber-600 rounded-xl flex items-center justify-center">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Consultations Terminées</p>
-              <p className="text-2xl font-extrabold text-blue-600 dark:text-blue-400 mt-1">{completedCount}</p>
-            </div>
-            <div className="w-11 h-11 bg-blue-50 dark:bg-blue-950/50 text-blue-600 rounded-xl flex items-center justify-center">
-              <CheckCircle className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Barre de recherche et filtres */}
-      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row justify-between gap-4">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-          <input 
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Rechercher par nom de patient ou médecin..."
-            className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-400" />
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            <option value="ALL">Tous les statuts</option>
-            <option value="PENDING">En attente d'arrivée</option>
-            <option value="CONFIRMED">Enregistré / Présent</option>
-            <option value="COMPLETED">Terminé</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Tableau de la file des admissions */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <h3 className="font-bold text-gray-900 dark:text-white text-base flex items-center gap-2">
-            <Users className="w-4 h-4 text-teal-600" />
-            File d'Attente & Admissions du Jour
-          </h3>
-          <span className="text-xs text-gray-400">{filteredAppointments.length} résultat(s)</span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-800 text-[11px] font-bold text-gray-400 uppercase bg-gray-50/50 dark:bg-gray-800/50">
-                <th className="py-3 px-6">Patient</th>
-                <th className="py-3 px-6">Médecin / Service</th>
-                <th className="py-3 px-6">Motif Administratif</th>
-                <th className="py-3 px-6">Statut Présence</th>
-                <th className="py-3 px-6 text-right">Orientation & Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
-              {loading ? (
-                <tr><td colSpan="5" className="py-8 text-center text-gray-400">Chargement de la file...</td></tr>
-              ) : filteredAppointments.length === 0 ? (
-                <tr><td colSpan="5" className="py-8 text-center text-gray-400">Aucun patient trouvé.</td></tr>
-              ) : (
-                filteredAppointments.map(item => (
-                  <tr key={item.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40 transition">
-                    <td className="py-3.5 px-6 font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 flex items-center justify-center font-extrabold text-xs">
-                        {(item.patient_name || 'P')[0]}
-                      </div>
-                      {item.patient_name || 'Patient sur place'}
-                    </td>
-                    <td className="py-3.5 px-6 font-medium text-gray-600 dark:text-gray-300">
-                      {item.doctor_details?.full_name || 'Médecin Généraliste'}
-                    </td>
-                    <td className="py-3.5 px-6 text-gray-500 max-w-xs truncate">
-                      {item.reason || 'Consultation standard'}
-                    </td>
-                    <td className="py-3.5 px-6">
-                      {item.status === 'CONFIRMED' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                          <UserCheck className="w-3 h-3" /> Présent sur place
-                        </span>
-                      ) : item.status === 'COMPLETED' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                          <CheckCircle className="w-3 h-3" /> Consultation terminée
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                          <Clock className="w-3 h-3" /> Attendu à l'accueil
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-6 text-right">
-                      {item.status === 'PENDING' ? (
-                        <button
-                          onClick={() => handleCheckIn(item.id)}
-                          className="px-3 py-1.5 rounded-xl font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20 transition cursor-pointer text-xs inline-flex items-center gap-1"
-                        >
-                          <UserCheck className="w-3.5 h-3.5" /> Marquer Présent
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 italic text-[11px]">Orienter vers Infirmerie / Cabinet</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Modal d'enregistrement rapide patient d'accueil */}
-      {isRegisterModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-gray-800">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-teal-900 text-white">
-              <h3 className="font-bold text-sm flex items-center gap-2">
-                <UserPlus className="text-teal-300" />
-                Enregistrement Rapide d'un Patient Arrivant
-              </h3>
-              <button onClick={() => setIsRegisterModalOpen(false)} className="text-white/70 hover:text-white text-xl font-bold">&times;</button>
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={arrivalSearch}
+                onChange={(e) => {
+                  setArrivalSearch(e.target.value);
+                  if (e.target.value.trim().length < 2) setSelectedAppointment(null);
+                }}
+                placeholder="Nom du patient ou N° RDV…"
+                className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none bg-gray-50"
+              />
             </div>
 
-            <form onSubmit={handleRegisterPatient} className="p-6 space-y-4">
-              {registerSuccess && (
-                <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600" /> Patient enregistré avec succès et placé dans la file !
-                </div>
-              )}
+            {searching && (
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Recherche…
+              </p>
+            )}
+            {arrivalSearch.length >= 2 && !searching && searchResults.length === 0 && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                Aucun RDV confirmé trouvé pour « {arrivalSearch} ».
+              </p>
+            )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Prénom</label>
-                  <input 
-                    type="text" required
-                    value={patientForm.first_name}
-                    onChange={e => setPatientForm({...patientForm, first_name: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nom</label>
-                  <input 
-                    type="text" required
-                    value={patientForm.last_name}
-                    onChange={e => setPatientForm({...patientForm, last_name: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Téléphone de contact</label>
-                <input 
-                  type="text"
-                  value={patientForm.phone}
-                  onChange={e => setPatientForm({...patientForm, phone: e.target.value})}
-                  placeholder="ex: +257 79 000 000"
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Service Demandé</label>
-                  <select
-                    value={patientForm.service_name}
-                    onChange={e => setPatientForm({...patientForm, service_name: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-medium outline-none focus:ring-2 focus:ring-teal-500"
+            {searchResults.length > 1 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600">
+                  {searchResults.length} rendez-vous confirmés — sélectionnez le bon :
+                </p>
+                {searchResults.map((apt) => (
+                  <button
+                    key={apt.id}
+                    type="button"
+                    onClick={() => selectAppointment(apt)}
+                    className={`w-full text-left p-3 rounded-xl border text-xs transition ${
+                      selectedAppointment?.id === apt.id
+                        ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-400'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
                   >
-                    <option value="Consultation Générale">Consultation Générale</option>
-                    <option value="Pédiatrie">Pédiatrie</option>
-                    <option value="Cardiologie">Cardiologie</option>
-                    <option value="Gynécologie">Gynécologie</option>
-                    <option value="Laboratoire / Analyses">Laboratoire / Analyses</option>
-                    <option value="Urgences">Urgences 24/7</option>
-                  </select>
+                    <div className="flex justify-between gap-2">
+                      <strong className="text-gray-900">{apt.patient_name}</strong>
+                      <span className="font-mono text-indigo-600">{apt.reference_code}</span>
+                    </div>
+                    <p className="text-gray-500 mt-0.5">
+                      {formatDate(apt)} · {formatTime(apt)} · Dr. {doctorFullName(apt)}
+                      {apt.service_name ? ` · ${apt.service_name}` : ''}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Dossier complet + orientation */}
+            {selectedAppointment && (
+              <div className="rounded-2xl border border-teal-100 bg-teal-50/40 overflow-hidden">
+                <div className="px-4 py-3 bg-teal-700 text-white flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    <span className="font-bold text-sm">Dossier rendez-vous</span>
+                  </div>
+                  {getStatusBadge(selectedAppointment.status)}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Médecin Demandé</label>
-                  <input 
-                    type="text"
-                    value={patientForm.doctor_name}
-                    onChange={e => setPatientForm({...patientForm, doctor_name: e.target.value})}
-                    placeholder="ex: Brigitte Nahayo (ou Médecin de garde)"
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500"
-                  />
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="sm:col-span-2 flex items-start gap-2">
+                    <Hash className="w-4 h-4 text-indigo-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-500">N° de suivi</p>
+                      <p className="font-mono font-bold text-indigo-700 text-base">
+                        {selectedAppointment.reference_code || '—'}
+                      </p>
+                      {selectedAppointment.queue_number != null && (
+                        <p className="text-xs text-gray-600">Ordre de passage : #{selectedAppointment.queue_number}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Patient</p>
+                    <p className="font-bold text-gray-900">{selectedAppointment.patient_name || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-gray-500">Date & heure</p>
+                    <p className="font-semibold text-gray-900 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                      {formatDate(selectedAppointment)} · {formatTime(selectedAppointment)}
+                    </p>
+                  </div>
+
+                  <div className="flex items-start gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-gray-400 mt-1" />
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-500">Téléphone</p>
+                      <p className="text-gray-800">{selectedAppointment.patient_phone || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-gray-400 mt-1" />
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-gray-500">Email</p>
+                      <p className="text-gray-800 break-all">{selectedAppointment.patient_email || '—'}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-white border border-teal-100 p-3 sm:col-span-2">
+                    <p className="text-[10px] uppercase font-bold text-teal-700 mb-2">Orientation selon le RDV</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                      <p className="flex items-center gap-1.5">
+                        <Stethoscope className="w-4 h-4 text-teal-600" />
+                        <span><strong>Médecin :</strong> Dr. {doctorFullName(selectedAppointment)}</span>
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <HeartPulse className="w-4 h-4 text-teal-600" />
+                        <span><strong>Service :</strong> {selectedAppointment.service_name || selectedAppointment.slot_details?.service_name || '—'}</span>
+                      </p>
+                      {selectedAppointment.slot_details?.title && (
+                        <p className="flex items-center gap-1.5 sm:col-span-2">
+                          <Clock className="w-4 h-4 text-teal-600" />
+                          <span><strong>Session :</strong> {selectedAppointment.slot_details.title}</span>
+                        </p>
+                      )}
+                      {selectedAppointment.doctor_details?.staff_category_display && (
+                        <p className="text-xs text-gray-500 sm:col-span-2">
+                          {selectedAppointment.doctor_details.staff_category_display}
+                          {selectedAppointment.doctor_details.professional_title_display
+                            ? ` · ${selectedAppointment.doctor_details.professional_title_display}`
+                            : ''}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {selectedAppointment.reason && (
+                    <div className="sm:col-span-2">
+                      <p className="text-[10px] uppercase font-bold text-gray-500">Motif</p>
+                      <p className="text-gray-800">{selectedAppointment.reason}</p>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Motif d'Arrivée</label>
-                <input 
-                  type="text"
-                  value={patientForm.reason}
-                  onChange={e => setPatientForm({...patientForm, reason: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
+                {selectedAppointment.status === 'CONFIRMED' ? (
+                  <div className="px-4 pb-4 space-y-3 border-t border-teal-100 pt-4 bg-white/60">
+                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-100 text-xs text-emerald-900">
+                      <p className="font-bold flex items-center gap-1 mb-1">
+                        <MapPin className="w-3.5 h-3.5" /> Destination d’orientation
+                      </p>
+                      <p>{orientationPreview}</p>
+                    </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-                <button 
-                  type="button" 
-                  onClick={() => setIsRegisterModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-100 rounded-xl"
-                >
-                  Annuler
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-teal-600/30 transition cursor-pointer"
-                >
-                  Valider l'Arrivée
-                </button>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 mb-1">
+                        Précisions d’orientation (salle, étage, consignes…)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={orientationNotes}
+                        onChange={(e) => setOrientationNotes(e.target.value)}
+                        placeholder="Ex. : Salle d’attente A, 1er étage — apporter carte d’identité"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sendToWaitingRoom}
+                        onChange={(e) => setSendToWaitingRoom(e.target.checked)}
+                        className="w-4 h-4 rounded text-teal-600"
+                      />
+                      Placer en salle d’attente après orientation
+                    </label>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={orienting}
+                        onClick={handleOrientPatient}
+                        className="flex-1 min-w-[200px] py-3 bg-teal-600 hover:bg-teal-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {orienting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+                        {orienting ? 'Orientation…' : 'Orienter le patient & notifier le médecin'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openHistory(selectedAppointment)}
+                        className="px-4 py-3 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl flex items-center gap-1"
+                      >
+                        <History className="w-4 h-4" /> Historique
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-4 pb-4">
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
+                      Ce rendez-vous n’est plus en statut « Confirmé » ({APPOINTMENT_STATUS_LABELS[selectedAppointment.status] || selectedAppointment.status}).
+                    </p>
+                  </div>
+                )}
               </div>
-            </form>
+            )}
+          </div>
+
+          {/* Liste confirmés */}
+          <div className="bg-white rounded-2xl border p-5">
+            <h2 className="font-bold text-sm flex items-center gap-2 mb-3">
+              <CheckCircle className="w-4 h-4 text-blue-600" /> Rendez-vous confirmés ({filteredConfirmed.length})
+            </h2>
+            {loading ? (
+              <p className="text-sm text-gray-400">Chargement...</p>
+            ) : filteredConfirmed.length === 0 ? (
+              <p className="text-sm text-gray-400">Aucun RDV confirmé en attente d&apos;arrivée.</p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {filteredConfirmed.map((apt) => (
+                  <button
+                    key={apt.id}
+                    type="button"
+                    onClick={() => {
+                      selectAppointment(apt);
+                      setArrivalSearch(apt.reference_code || apt.patient_name || '');
+                    }}
+                    className={`w-full text-left p-3 rounded-xl border transition ${
+                      selectedAppointment?.id === apt.id
+                        ? 'border-teal-500 bg-teal-50'
+                        : 'border-gray-200 hover:border-teal-200 bg-white'
+                    }`}
+                  >
+                    <div className="flex justify-between gap-2 items-start">
+                      <div>
+                        <p className="font-bold text-sm text-gray-900">{apt.patient_name}</p>
+                        <p className="text-[11px] font-mono text-indigo-600">{apt.reference_code}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Dr. {doctorFullName(apt)}
+                          {apt.service_name ? ` · ${apt.service_name}` : ''}
+                        </p>
+                        <p className="text-xs text-gray-500">{formatDate(apt)} · {formatTime(apt)}</p>
+                      </div>
+                      {getStatusBadge(apt.status)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* File */}
+          <div className="bg-white rounded-2xl border p-5">
+            <h2 className="font-bold text-sm flex items-center gap-2 mb-3">
+              <Users className="w-4 h-4 text-purple-600" /> File d&apos;attente ({filteredQueue.length})
+            </h2>
+            {filteredQueue.length === 0 ? (
+              <p className="text-sm text-gray-400">Personne en file pour le moment.</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredQueue.map((apt, idx) => (
+                  <div key={apt.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg text-xs">
+                    <div className="flex items-center gap-3">
+                      <span className="w-7 h-7 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center">{idx + 1}</span>
+                      <div>
+                        <p className="font-bold">{apt.patient_name}</p>
+                        <p className="text-gray-500">
+                          {formatTime(apt)} · Dr. {doctorFullName(apt)}
+                          {apt.service_name ? ` · ${apt.service_name}` : ''}
+                        </p>
+                        {apt.location_notes && (
+                          <p className="text-[10px] text-teal-700 mt-0.5">{apt.location_notes}</p>
+                        )}
+                      </div>
+                    </div>
+                    {getStatusBadge(apt.status)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border p-4 h-fit sticky top-4">
+          <h3 className="font-bold text-sm flex items-center gap-2 mb-3">
+            <HeartPulse className="w-4 h-4 text-indigo-600" /> Services disponibles
+          </h3>
+          {services.length === 0 ? (
+            <p className="text-xs text-gray-400">Aucun service actif.</p>
+          ) : (
+            <ul className="space-y-2">
+              {services.map((s) => (
+                <li key={s.id} className="text-xs p-2 bg-gray-50 rounded-lg">
+                  <span className="font-medium text-gray-900">{s.name}</span>
+                  {s.head_doctor_name && (
+                    <p className="text-gray-500 mt-0.5">Chef : {s.head_doctor_name}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {historyTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 max-h-[80vh] overflow-y-auto">
+            <h3 className="font-bold mb-1">Historique — {historyTarget.patient_name}</h3>
+            <p className="text-xs font-mono text-indigo-600 mb-4">{historyTarget.reference_code}</p>
+            {historyEvents.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">Aucun événement.</p>
+            ) : (
+              <div className="space-y-2">
+                {historyEvents.map((ev) => (
+                  <div key={ev.id} className="text-xs border-l-2 border-teal-400 pl-3 py-1">
+                    <p className="font-semibold">{ev.event_type_display || ev.event_type}</p>
+                    <p className="text-gray-500">
+                      {ev.previous_status && ev.new_status && `${APPOINTMENT_STATUS_LABELS[ev.previous_status] || ev.previous_status} → ${APPOINTMENT_STATUS_LABELS[ev.new_status] || ev.new_status}`}
+                    </p>
+                    {ev.comment && <p className="text-teal-700 mt-0.5">{ev.comment}</p>}
+                    <p className="text-[10px] text-gray-400">{ev.created_at && new Date(ev.created_at).toLocaleString('fr-FR')}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button type="button" onClick={() => setHistoryTarget(null)} className="mt-4 w-full py-2 bg-gray-100 rounded-xl text-sm font-semibold">Fermer</button>
           </div>
         </div>
       )}

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  HeartPulse, Plus, CheckCircle, XCircle, Stethoscope, 
-  Clock, Phone, DollarSign, ShieldAlert, Video, Calendar, 
+import {
+  HeartPulse, Plus, CheckCircle, XCircle, Stethoscope,
+  Clock, Phone, DollarSign, ShieldAlert, Video, Calendar,
   Package, Edit3, Trash2, Filter, Search, Sparkles, FolderPlus, Tag, Layers
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../shared/api';
 
 const DEFAULT_CATEGORIES = [
   { value: 'GENERAL', label: 'Service Général' },
@@ -16,7 +17,7 @@ const DEFAULT_CATEGORIES = [
   { value: 'MATERNITY', label: 'Maternité & Gynécologie' },
   { value: 'PEDIATRIC', label: 'Pédiatrie' },
   { value: 'PHARMACY', label: 'Pharmacie Hospitalière' },
-  { value: 'TELEMEDICINE', label: 'Télémédecine' },
+  { value: 'TELEMEDICINE', label: 'Télémédecine (bientôt)' },
   { value: 'REHABILITATION', label: 'Rééducation & Kinésithérapie' },
 ];
 
@@ -43,6 +44,7 @@ export default function ManageServices() {
 
   const initialFormState = {
     category: 'GENERAL',
+    prestation_category: '',
     name: '',
     description: '',
     head_doctor: '',
@@ -53,10 +55,11 @@ export default function ManageServices() {
     access_conditions: 'Sur Rendez-vous',
     telemedicine_available: false,
     online_booking_available: true,
-    is_active: true
+    is_active: true,
   };
 
   const [formData, setFormData] = useState(initialFormState);
+  const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
     if (token) initHospitalData();
@@ -64,7 +67,7 @@ export default function ManageServices() {
 
   const initHospitalData = async () => {
     try {
-      const busRes = await authFetch('http://localhost:8000/api/v1/businesses/me/');
+      const busRes = await authFetch('/api/v1/businesses/me/');
       if (busRes.ok) {
         const businesses = await busRes.json();
         if (businesses.length > 0) {
@@ -87,7 +90,7 @@ export default function ManageServices() {
 
   const fetchServices = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/services/?hospital=${hid}`);
+      const res = await authFetch(`/api/v1/hospital/services/?hospital=${hid}`);
       if (res.ok) {
         setServices(await res.json());
       }
@@ -100,7 +103,7 @@ export default function ManageServices() {
 
   const fetchDoctors = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/doctors/?hospital=${hid}&is_active=true`);
+      const res = await authFetch(`/api/v1/hospital/doctors/?hospital=${hid}&is_active=true`);
       if (res.ok) {
         const data = await res.json();
         // Filtrer les utilisateurs inactifs ou supprimés
@@ -114,7 +117,7 @@ export default function ManageServices() {
 
   const fetchCategories = async (hid) => {
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/service-categories/?hospital=${hid}`);
+      const res = await authFetch(`/api/v1/hospital/service-categories/?hospital=${hid}`);
       if (res.ok) {
         setCategories(await res.json());
       }
@@ -131,8 +134,8 @@ export default function ManageServices() {
 
     try {
       const url = editingCatId 
-        ? `http://localhost:8000/api/v1/hospital/service-categories/${editingCatId}/`
-        : 'http://localhost:8000/api/v1/hospital/service-categories/';
+        ? `/api/v1/hospital/service-categories/${editingCatId}/`
+        : '/api/v1/hospital/service-categories/';
       const method = editingCatId ? 'PATCH' : 'POST';
 
       const payload = {
@@ -170,7 +173,7 @@ export default function ManageServices() {
   const handleDeleteCategory = async (catId) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer cette catégorie de prestation ?")) return;
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/service-categories/${catId}/`, {
+      const res = await authFetch(`/api/v1/hospital/service-categories/${catId}/`, {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -183,21 +186,28 @@ export default function ManageServices() {
 
   // --- SERVICE MODAL ---
   const handleOpenModal = (service = null) => {
+    setSubmitError(null);
     if (service) {
       setEditingServiceId(service.id);
+      const categoryValue = service.prestation_category || service.category || 'GENERAL';
       setFormData({
-        category: service.category || 'GENERAL',
+        category: categoryValue,
+        prestation_category: service.prestation_category || '',
         name: service.name || '',
         description: service.description || '',
         head_doctor: service.head_doctor || '',
-        assigned_doctor_ids: service.assigned_doctors_details ? service.assigned_doctors_details.map(d => d.id) : [],
+        assigned_doctor_ids: service.assigned_doctors_details
+          ? service.assigned_doctors_details.map((d) => d.id)
+          : [],
         contact_phone: service.contact_phone || '',
-        operating_hours: service.operating_hours || '24h/24, 7j/7',
+        operating_hours: typeof service.operating_hours === 'object'
+          ? (service.operating_hours?.note || JSON.stringify(service.operating_hours))
+          : (service.operating_hours || '24h/24, 7j/7'),
         indicative_cost: service.indicative_cost || 0,
         access_conditions: service.access_conditions || 'Sur Rendez-vous',
         telemedicine_available: !!service.telemedicine_available,
         online_booking_available: !!service.online_booking_available,
-        is_active: !!service.is_active
+        is_active: !!service.is_active,
       });
     } else {
       setEditingServiceId(null);
@@ -208,39 +218,30 @@ export default function ManageServices() {
 
   const handleSubmitService = async (e) => {
     e.preventDefault();
+    setSubmitError(null);
+    if (!formData.name.trim()) {
+      setSubmitError('Le nom du service est obligatoire.');
+      return;
+    }
     try {
-      const url = editingServiceId 
-        ? `http://localhost:8000/api/v1/hospital/services/${editingServiceId}/`
-        : 'http://localhost:8000/api/v1/hospital/services/';
-
-      const method = editingServiceId ? 'PUT' : 'POST';
-
-      const payload = {
-        ...formData,
-        hospital: hospitalId,
-        head_doctor: formData.head_doctor || null
-      };
-
-      const res = await authFetch(url, {
-        method: method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        setIsModalOpen(false);
-        setFormData(initialFormState);
-        fetchServices(hospitalId);
+      const payload = buildServicePayload();
+      if (editingServiceId) {
+        await api.put(`hospital/services/${editingServiceId}/`, payload, { auth: true });
+      } else {
+        await api.post('hospital/services/', payload, { auth: true });
       }
+      setIsModalOpen(false);
+      setFormData(initialFormState);
+      fetchServices(hospitalId);
     } catch (err) {
-      console.error(err);
+      setSubmitError(err.message || 'Erreur lors de l\'enregistrement du service.');
     }
   };
 
   const handleDeleteService = async (id) => {
     if (!window.confirm("Êtes-vous sûr de vouloir supprimer ce service ?")) return;
     try {
-      const res = await authFetch(`http://localhost:8000/api/v1/hospital/services/${id}/`, {
+      const res = await authFetch(`/api/v1/hospital/services/${id}/`, {
         method: 'DELETE'
       });
       if (res.ok) fetchServices(hospitalId);
@@ -249,11 +250,43 @@ export default function ManageServices() {
     }
   };
 
-  // Liste globale de toutes les catégories disponibles (Standards + Hôpital)
+  // Catégories standards (backend CATEGORY_CHOICES) + catégories personnalisées hôpital
+  const standardCategoryOptions = DEFAULT_CATEGORIES;
+  const customCategoryOptions = categories.map((c) => ({
+    value: c.id,
+    label: c.name,
+    type: 'custom',
+  }));
+
   const allCategoryOptions = [
-    ...DEFAULT_CATEGORIES,
-    ...categories.map(c => ({ value: c.name, label: c.name }))
+    ...standardCategoryOptions.map((c) => ({ ...c, type: 'standard' })),
+    ...customCategoryOptions,
   ];
+
+  const buildServicePayload = () => {
+    const customCat = categories.find((c) => c.id === formData.category);
+    const isCustom = !!customCat;
+    const operatingHours = typeof formData.operating_hours === 'string'
+      ? (formData.operating_hours.trim() ? { note: formData.operating_hours.trim() } : {})
+      : (formData.operating_hours || {});
+
+    return {
+      category: isCustom ? 'GENERAL' : (formData.category || 'GENERAL'),
+      prestation_category: isCustom ? formData.category : (formData.prestation_category || null),
+      name: formData.name.trim(),
+      description: formData.description || '',
+      head_doctor: formData.head_doctor || null,
+      assigned_doctor_ids: formData.assigned_doctor_ids || [],
+      contact_phone: formData.contact_phone || '',
+      operating_hours: operatingHours,
+      indicative_cost: Number(formData.indicative_cost) || 0,
+      access_conditions: formData.access_conditions || '',
+      telemedicine_available: !!formData.telemedicine_available,
+      online_booking_available: !!formData.online_booking_available,
+      is_active: !!formData.is_active,
+      hospital: hospitalId,
+    };
+  };
 
   // Filtrage des services
   const filteredServices = services.filter(s => {
@@ -263,9 +296,11 @@ export default function ManageServices() {
     return matchesTab && matchesSearch;
   });
 
-  const getCategoryBadge = (category) => {
-    const match = allCategoryOptions.find(c => c.value === category);
-    const label = match ? match.label : category;
+  const getCategoryBadge = (service) => {
+    const label = service.prestation_category_name
+      || allCategoryOptions.find((c) => c.value === service.category)?.label
+      || service.category;
+    const category = service.category;
 
     switch (category) {
       case 'GENERAL':
@@ -376,7 +411,7 @@ export default function ManageServices() {
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  {getCategoryBadge(s.category)}
+                  {getCategoryBadge(s)}
                   <span className={`flex items-center gap-1 text-xs font-semibold ${s.is_active ? 'text-emerald-600' : 'text-gray-400'}`}>
                     {s.is_active ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
                     {s.is_active ? 'Actif' : 'Inactif'}
@@ -564,6 +599,11 @@ export default function ManageServices() {
             </div>
 
             <form onSubmit={handleSubmitService} className="p-6 space-y-4 overflow-y-auto flex-1">
+              {submitError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
+                  {submitError}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Catégorie de Prestation (Liste combinée standard + catégories hôpital) */}
                 <div className="sm:col-span-2">
@@ -573,9 +613,18 @@ export default function ManageServices() {
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs font-bold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-500"
                   >
-                    {allCategoryOptions.map(c => (
-                      <option key={c.value} value={c.value}>{c.label}</option>
-                    ))}
+                    <optgroup label="Catégories standards">
+                      {standardCategoryOptions.map((c) => (
+                        <option key={`standard-${c.value}`} value={c.value}>{c.label}</option>
+                      ))}
+                    </optgroup>
+                    {customCategoryOptions.length > 0 && (
+                      <optgroup label="Catégories personnalisées (hôpital)">
+                        {customCategoryOptions.map((c) => (
+                          <option key={`custom-${c.value}`} value={c.value}>{c.label}</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
 
@@ -700,15 +749,17 @@ export default function ManageServices() {
 
               {/* Options du service */}
               <div className="p-4 bg-gray-50 dark:bg-gray-800/40 rounded-2xl space-y-2 border border-gray-200 dark:border-gray-700">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                    <Video className="w-4 h-4 text-indigo-500" /> Disponible pour la Téléconsultation
+                <label className="flex items-center justify-between opacity-60 cursor-not-allowed">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                    <Video className="w-4 h-4 text-gray-400" /> Téléconsultation
+                    <span className="text-[10px] font-bold uppercase bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded">Bientôt</span>
                   </span>
-                  <input 
+                  <input
                     type="checkbox"
-                    checked={formData.telemedicine_available}
-                    onChange={e => setFormData({ ...formData, telemedicine_available: e.target.checked })}
-                    className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
+                    checked={false}
+                    disabled
+                    readOnly
+                    className="w-4 h-4 text-teal-600 rounded cursor-not-allowed"
                   />
                 </label>
 

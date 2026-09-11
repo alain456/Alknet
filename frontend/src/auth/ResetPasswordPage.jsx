@@ -1,29 +1,47 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import PasswordStrength from '../shared/components/PasswordStrength';
+import PasswordInput from '../shared/components/PasswordInput';
 import { CheckCircle2 } from 'lucide-react';
+import { api, ApiError } from '../shared/api';
 
 export default function ResetPasswordPage() {
+  const [searchParams] = useSearchParams();
+  const uid = searchParams.get('uid') || '';
+  const token = searchParams.get('token') || '';
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     
+    if (!uid || !token) {
+      setError('Lien de réinitialisation invalide. Demandez un nouveau lien.');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await api.post('accounts/password-reset/confirm/', {
+        uid,
+        token,
+        password,
+      });
       setIsSuccess(true);
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Impossible de réinitialiser le mot de passe.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSuccess) {
@@ -61,12 +79,12 @@ export default function ResetPasswordPage() {
 
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">New Password</label>
-          <input 
-            type="password" 
+          <PasswordInput
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
+            autoComplete="new-password"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
             placeholder="Create a strong password"
           />
           <PasswordStrength password={password} />
@@ -74,12 +92,12 @@ export default function ResetPasswordPage() {
         
         <div>
           <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
-          <input 
-            type="password" 
+          <PasswordInput
             required
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
+            autoComplete="new-password"
+            className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:ring-2 focus:ring-primary focus:border-transparent dark:bg-gray-800 dark:text-white transition"
             placeholder="Confirm your password"
           />
         </div>

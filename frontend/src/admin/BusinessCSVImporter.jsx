@@ -70,7 +70,7 @@ Quincaillerie Moderne,qmoderne@gmail.com,+25771889900,Gitega,Gitega,Centre-Ville
         throw new Error("Aucune ligne d'entreprise valide détectée dans le CSV.");
       }
 
-      const response = await fetch('http://localhost:8000/api/v1/businesses/admin/import-csv/', {
+      const response = await fetch('/api/v1/businesses/admin/import-csv/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

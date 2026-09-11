@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, CheckCircle2, Clock, Mail, Building2, Pill, Stethoscope, Hotel, LayoutGrid, Plus, X, Phone, Globe, Tag, ChevronDown, ChevronRight, MoreHorizontal, Edit, Trash2, Power, Star, ShieldCheck, Utensils, Bed, Sparkles, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Upload } from 'lucide-react';
+import { Search, Filter, Download, CheckCircle2, Clock, Mail, Building2, Pill, Stethoscope, Hotel, LayoutGrid, Plus, X, Phone, Globe, Tag, ChevronDown, ChevronRight, MoreHorizontal, Edit, Trash2, Power, Star, ShieldCheck, Utensils, Bed, Sparkles, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Upload, Crown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../shared/api';
 import SectorSpecificFields from '../shared/components/SectorSpecificFields';
 import LocationSelector from '../shared/components/LocationSelector';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
@@ -48,22 +49,18 @@ export default function AdminBusinessesPage() {
   });
 
   const fetchBusinessesAndCategories = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
-      const [busRes, catRes] = await Promise.all([
-        fetch('http://localhost:8000/api/v1/businesses/admin/list/', {
-          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        }),
-        fetch('http://localhost:8000/api/v1/business-categories/')
+      const [busData, catData] = await Promise.all([
+        api.get('businesses/admin/list/', { auth: true }),
+        api.get('business-categories/'),
       ]);
-
-      if (busRes.ok) {
-        const data = await busRes.json();
-        setBusinesses(data);
-      }
-      if (catRes.ok) {
-        const catData = await catRes.json();
-        setCategories(catData);
-      }
+      setBusinesses(Array.isArray(busData) ? busData : (busData?.results || []));
+      setCategories(Array.isArray(catData) ? catData : (catData?.results || []));
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -142,16 +139,32 @@ export default function AdminBusinessesPage() {
   };
 
   const handleDeleteBusiness = async (business) => {
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement l'entreprise "${business.name}" ?`)) return;
+    const ok = window.confirm(
+      `Supprimer définitivement « ${business.name} » ?\n\nCette action est irréversible.`
+    );
+    if (!ok) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/businesses/admin/${business.id}/`, {
-        method: 'DELETE',
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-      });
+      const data = await api.delete(`businesses/admin/${business.id}/`, { auth: true });
+      setBusinesses((prev) => prev.filter((b) => b.id !== business.id));
+      alert(data?.message || 'Entreprise supprimée.');
+    } catch (err) {
+      alert(`Erreur : ${err.message}`);
+    }
+  };
 
-      if (!response.ok) throw new Error('Erreur lors de la suppression');
-
+  const handleApproveBusiness = async (business) => {
+    const ok = window.confirm(
+      `Rendre « ${business.name} » Active & Approuvée ?\n\nElle redeviendra visible dans le catalogue public.`
+    );
+    if (!ok) return;
+    try {
+      const data = await api.post(
+        `businesses/admin/moderation/${business.id}/approve/`,
+        {},
+        { auth: true }
+      );
+      alert(data.message || 'Entreprise approuvée.');
       fetchBusinessesAndCategories();
     } catch (err) {
       alert(`Erreur : ${err.message}`);
@@ -160,20 +173,42 @@ export default function AdminBusinessesPage() {
 
   const handleToggleActiveStatus = async (business) => {
     try {
-      const response = await fetch(`http://localhost:8000/api/v1/businesses/admin/${business.id}/`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ is_active: !business.is_active })
-      });
-
-      if (!response.ok) throw new Error('Erreur lors du changement de statut');
-
+      await api.patch(
+        `businesses/admin/${business.id}/`,
+        { is_active: !business.is_active },
+        { auth: true }
+      );
       fetchBusinessesAndCategories();
     } catch (err) {
       alert(`Erreur : ${err.message}`);
+    }
+  };
+
+  const handleActivateSubscription = async (business) => {
+    const daysRaw = window.prompt(
+      `Activer / prolonger l'abonnement SaaS de « ${business.name} ».\nNombre de jours :`,
+      '30'
+    );
+    if (daysRaw === null) return;
+    const days = parseInt(daysRaw, 10);
+    if (!days || days < 1) {
+      alert('Nombre de jours invalide.');
+      return;
+    }
+    try {
+      const data = await api.post(
+        `businesses/admin/${business.id}/subscription/`,
+        { action: 'activate', days, plan_code: 'monthly' },
+        { auth: true }
+      );
+      alert(
+        data?.has_active_subscription
+          ? `Abonnement actif jusqu'au ${data.ends_at ? new Date(data.ends_at).toLocaleDateString('fr-FR') : '—'}`
+          : 'Abonnement mis à jour.'
+      );
+      fetchBusinessesAndCategories();
+    } catch (err) {
+      alert(`Erreur abonnement : ${err.message}`);
     }
   };
 
@@ -181,24 +216,10 @@ export default function AdminBusinessesPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const url = editingBusiness
-        ? `http://localhost:8000/api/v1/businesses/admin/${editingBusiness.id}/`
-        : 'http://localhost:8000/api/v1/businesses/admin/list/';
-
-      const method = editingBusiness ? 'PATCH' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(JSON.stringify(errData));
+      if (editingBusiness) {
+        await api.patch(`businesses/admin/${editingBusiness.id}/`, formData, { auth: true });
+      } else {
+        await api.post('businesses/admin/list/', formData, { auth: true });
       }
 
       setIsModalOpen(false);
@@ -425,16 +446,44 @@ export default function AdminBusinessesPage() {
 
                       {/* Verification Status Column */}
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ${getStatusBadgeStyle(business)}`}>
-                          {business.verification_status === 'PENDING' && <AlertTriangle className="w-3 h-3 text-amber-600" />}
-                          {business.verification_status === 'PENDING' ? 'En attente modération' :
-                           business.verification_status === 'REJECTED' ? 'Rejeté' :
-                           business.is_active ? 'Actif & Approuvé' : 'Suspendu'}
-                        </span>
+                        <div className="space-y-1">
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide ${getStatusBadgeStyle(business)}`}>
+                            {business.verification_status === 'PENDING' && <AlertTriangle className="w-3 h-3 text-amber-600" />}
+                            {business.verification_status === 'PENDING' ? 'En attente modération' :
+                             business.verification_status === 'REJECTED' ? 'Rejeté' :
+                             business.is_active ? 'Actif & Approuvé' : 'Suspendu'}
+                          </span>
+                          {business.subscription && (
+                            <div className={`text-[11px] font-medium ${business.subscription.is_blocked ? 'text-amber-700' : 'text-teal-700'}`}>
+                              Abo : {business.subscription.status_display || business.subscription.status}
+                              {business.subscription.days_remaining != null
+                                ? ` · ${business.subscription.days_remaining}j`
+                                : ''}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {(business.verification_status === 'REJECTED' || business.verification_status === 'PENDING') && (
+                            <button
+                              type="button"
+                              onClick={() => handleApproveBusiness(business)}
+                              title="Rendre Actif & Approuvé"
+                              className="p-1.5 text-ink-faint hover:text-emerald-600 dark:text-green-100/60 dark:hover:text-emerald-400 rounded-md hover:bg-emerald-50 dark:hover:bg-white/10"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleActivateSubscription(business)}
+                            title="Activer / prolonger l'abonnement SaaS"
+                            className="p-1.5 text-ink-faint hover:text-teal-700 dark:text-green-100/60 dark:hover:text-teal-300 rounded-md hover:bg-teal-50 dark:hover:bg-white/10"
+                          >
+                            <Crown className="w-4 h-4" />
+                          </button>
                           <button 
                             onClick={() => {
                               setSelectedDetailBusiness(business);
@@ -492,6 +541,7 @@ export default function AdminBusinessesPage() {
         onClose={() => setIsDetailModalOpen(false)}
         business={selectedDetailBusiness}
         categories={categories}
+        showModerationStatus
       />
 
       {/* Modal Import CSV / Excel */}

@@ -55,7 +55,7 @@ export default function LocationSelector({
   useEffect(() => {
     const fetchTree = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/locations/tree/');
+        const response = await fetch('/api/v1/locations/tree/');
         if (response.ok) {
           const tree = await response.json();
           if (tree && tree.length > 0) {

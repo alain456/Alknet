@@ -12,7 +12,7 @@ export default function AdminProductsPage() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/v1/products/admin/list/', {
+        const response = await fetch('/api/v1/products/admin/list/', {
           headers: {
             'Authorization': `Bearer ${token}`
           }

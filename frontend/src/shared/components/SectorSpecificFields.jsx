@@ -1,5 +1,6 @@
 import React from 'react';
 import { Stethoscope, Hotel, Utensils, Store, ShieldCheck, Star, Bed, Coffee, Wifi, Car, FileText, Truck, Smartphone } from 'lucide-react';
+import { readDocumentAsDataUrl } from '../imageUpload';
 
 export default function SectorSpecificFields({ primaryCategory, categories = [], attributes = {}, onChange }) {
   if (!primaryCategory) return null;
@@ -20,7 +21,20 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
   
   const isRestaurant = categoryName.includes('restaurant') || categoryName.includes('restauration') || categoryName.includes('bar') || categoryName.includes('café') || categoryName.includes('traiteur') || categorySlug.includes('restaurant') || parentName.includes('restauration');
 
-  const isCommerce = categoryName.includes('commerce') || categoryName.includes('boutique') || categoryName.includes('supermarché') || categorySlug.includes('boutique') || parentName.includes('commerce');
+  const isCommerce = categoryName.includes('commerce')
+    || categoryName.includes('boutique')
+    || categoryName.includes('supermarché')
+    || categoryName.includes('supermarche')
+    || categoryName.includes('mode')
+    || categoryName.includes('quincaillerie')
+    || categoryName.includes('électronique')
+    || categoryName.includes('electronique')
+    || categorySlug.includes('boutique')
+    || categorySlug.includes('commerce')
+    || categorySlug.includes('mode')
+    || categorySlug.includes('quincaillerie')
+    || categorySlug.includes('electronique')
+    || parentName.includes('commerce');
 
   const handleFieldChange = (key, value) => {
     onChange({
@@ -182,28 +196,95 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
 
       {/* RETAIL / COMMERCE FIELDS */}
       {isCommerce && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">
-            <input 
-              type="checkbox"
-              checked={!!attributes.accepts_mobile_money}
-              onChange={(e) => handleFieldChange('accepts_mobile_money', e.target.checked)}
-              className="rounded border-border text-green-700 focus:ring-green-700"
-            />
-            <span>Paiement Mobile (Lumicash, Ecocash...)</span>
-          </label>
+        <div className="space-y-4 text-xs">
+          <p className="text-[11px] text-ink-muted dark:text-green-100/70 leading-relaxed">
+            Pour le secteur Commerce, joignez votre
+            <strong className="text-ink dark:text-white"> NIF (OBR)</strong> :
+            numéro + scan. Un NIF déjà enregistré sur Isoko Hub sera refusé.
+          </p>
 
-          <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">
-            <input 
-              type="checkbox"
-              checked={!!attributes.express_delivery}
-              onChange={(e) => handleFieldChange('express_delivery', e.target.checked)}
-              className="rounded border-border text-green-700 focus:ring-green-700"
-            />
-            <span>Service de livraison rapide</span>
-          </label>
+          <CommerceDocField
+            label="NIF — Numéro d'Identification Fiscale (OBR) *"
+            numberKey="nif_number"
+            fileKey="nif_document"
+            numberPlaceholder="Ex: 4001234567"
+            attributes={attributes}
+            onChange={handleFieldChange}
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gold-500/20">
+            <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!attributes.accepts_mobile_money}
+                onChange={(e) => handleFieldChange('accepts_mobile_money', e.target.checked)}
+                className="rounded border-border text-green-700 focus:ring-green-700"
+              />
+              <span>Paiement Mobile (Lumicash, Ecocash...)</span>
+            </label>
+
+            <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!attributes.express_delivery}
+                onChange={(e) => handleFieldChange('express_delivery', e.target.checked)}
+                className="rounded border-border text-green-700 focus:ring-green-700"
+              />
+              <span>Service de livraison rapide</span>
+            </label>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CommerceDocField({ label, numberKey, fileKey, numberPlaceholder, attributes, onChange }) {
+  const [fileError, setFileError] = React.useState('');
+  const [fileName, setFileName] = React.useState('');
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    setFileError('');
+    if (!file) return;
+    try {
+      const dataUrl = await readDocumentAsDataUrl(file);
+      setFileName(file.name);
+      onChange(fileKey, dataUrl);
+    } catch (err) {
+      setFileError(err.message || 'Fichier invalide');
+      onChange(fileKey, '');
+      setFileName('');
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-gold-500/20 bg-black/10 p-3 space-y-2">
+      <label className="block font-semibold text-ink-muted dark:text-green-100/80">
+        <span className="inline-flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {label}</span>
+      </label>
+      <input
+        type="text"
+        required
+        placeholder={numberPlaceholder}
+        value={attributes[numberKey] || ''}
+        onChange={(e) => onChange(numberKey, e.target.value)}
+        className="w-full px-3 py-2 text-xs bg-paper dark:bg-black/30 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-gold-600"
+      />
+      <input
+        type="file"
+        required={!attributes[fileKey]}
+        accept=".pdf,image/jpeg,image/png,image/webp,application/pdf"
+        onChange={onFile}
+        className="w-full text-[11px] text-ink-muted dark:text-green-100/70 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-gold-500/20 file:text-gold-800 dark:file:text-gold-200 file:font-semibold"
+      />
+      {fileName && (
+        <p className="text-[11px] text-green-700 dark:text-green-300">Fichier : {fileName}</p>
+      )}
+      {attributes[fileKey] && !fileName && (
+        <p className="text-[11px] text-green-700 dark:text-green-300">Document chargé</p>
+      )}
+      {fileError && <p className="text-[11px] text-red-500">{fileError}</p>}
     </div>
   );
 }

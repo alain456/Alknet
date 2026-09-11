@@ -64,6 +64,39 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return full_name if full_name else self.email
 
 
+class SocialIdentity(models.Model):
+    """Lien compte Isoko Hub ↔ identité OAuth (Google / Facebook / GitHub)."""
+
+    PROVIDER_CHOICES = (
+        ('google', 'Google'),
+        ('facebook', 'Facebook'),
+        ('github', 'GitHub'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name='social_identities',
+    )
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, db_index=True)
+    provider_user_id = models.CharField(max_length=191, db_index=True)
+    email = models.EmailField(blank=True, default='')
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['provider', 'provider_user_id'],
+                name='uniq_social_provider_uid',
+            ),
+        ]
+        verbose_name = 'Identité sociale'
+        verbose_name_plural = 'Identités sociales'
+
+    def __str__(self):
+        return f'{self.provider}:{self.provider_user_id} → {self.user.email}'
+
+
 class AuditLog(models.Model):
     STATUS_CHOICES = (
         ('SUCCESS', 'Success'),
