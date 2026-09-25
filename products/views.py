@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from businesses.commerce import is_commerce_business
 from businesses.models import BusinessEmployee
 from businesses.tenant import get_user_tenant_business
+from permissions.custom_permissions import IsSuperAdmin
 
 from .models import Product, ProductVariant, ShopCategory, StockMovement
 from .serializers import (
@@ -91,7 +92,7 @@ class MyBusinessProductDetailView(generics.RetrieveUpdateDestroyAPIView):
 class AdminProductListView(generics.ListAPIView):
     queryset = Product.objects.all().order_by('-created_at')
     serializer_class = AdminProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSuperAdmin]
 
 
 class ProductVariantViewSet(viewsets.ModelViewSet):

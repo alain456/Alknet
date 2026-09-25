@@ -96,7 +96,7 @@ export const ORDER_STATUS_LABELS = {
 
 export const PAYMENT_STATUS_LABELS = {
   UNPAID: 'Non payée',
-  AWAITING_PIN: 'PIN Lumicash',
+  AWAITING_PIN: 'PIN BurundiPay',
   PAID: 'Payée',
   FAILED: 'Échec',
   REFUNDED: 'Remboursée',

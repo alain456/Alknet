@@ -181,7 +181,7 @@ def accept_order(order, user):
         raise ValueError('Cette commande ne peut pas etre acceptee.')
     if order.payment_status != 'PAID':
         raise ValueError(
-            'Le client doit d\'abord payer via Lumicash avant que la commande puisse être acceptée.'
+            'Le client doit d\'abord payer via BurundiPay avant que la commande puisse être acceptée.'
         )
 
     locked = {}
@@ -225,7 +225,7 @@ def accept_order(order, user):
 def mark_order_paid(order, user, payment_method='', payment_note=''):
     """
     Fallback caisse : marque payée (espèces / autre) si besoin.
-    Le flux normal = paiement Lumicash client avant acceptation.
+    Le flux normal = paiement BurundiPay client avant acceptation.
     """
     if order.status not in ('SUBMITTED', 'PROCESSING', 'CLARIFICATION_REQUESTED', 'ACCEPTED'):
         raise ValueError('Cette commande ne peut pas être marquée payée.')

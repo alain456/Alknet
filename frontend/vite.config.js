@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
           timeout: 120000,
           proxyTimeout: 120000,
         },
+        '/media': {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   }

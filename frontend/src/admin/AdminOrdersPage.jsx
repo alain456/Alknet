@@ -63,7 +63,7 @@ export default function AdminOrdersPage() {
       key: 'actions',
       label: 'Actions',
       render: () => (
-        <button className="p-1.5 text-gray-500 hover:text-primary transition bg-gray-50 hover:bg-primary/10 rounded-md">
+        <button className="icon-btn">
           <Eye className="w-4 h-4" />
         </button>
       )

@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from businesses.models import Business
-from permissions.custom_permissions import IsSuperAdmin
+from permissions.custom_permissions import PlatformMethodPermission
 from services.models import Service
 
 User = get_user_model()
@@ -45,7 +45,8 @@ def _audit_status(status):
 
 
 class AdminDashboardStatsView(APIView):
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'GET': 'platform.analytics.view'}
 
     def get(self, request):
         now = timezone.now()
@@ -102,12 +103,9 @@ class AdminDashboardStatsView(APIView):
 
         active_subscriptions = 0
         try:
-            from businesses.subscription import ACTIVE_SUBSCRIPTION_STATUSES
+            from businesses.subscription import subscription_access_q
             from businesses.models import BusinessSubscription
-            active_subscriptions = BusinessSubscription.objects.filter(
-                status__in=ACTIVE_SUBSCRIPTION_STATUSES,
-                ends_at__gte=now,
-            ).count()
+            active_subscriptions = BusinessSubscription.objects.filter(subscription_access_q('')).count()
         except Exception:
             pass
 
@@ -239,7 +237,8 @@ class DataGovernanceView(APIView):
     Visibilité portefeuille SaaS + checklist sécurité + état des sauvegardes.
     Réservé Super Admin (responsabilité partagée côté opérateur plateforme).
     """
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'GET': 'platform.settings.view'}
 
     PORTFOLIO = [
         ('accounts', 'Comptes & audit', ['CustomUser', 'AuditLog']),

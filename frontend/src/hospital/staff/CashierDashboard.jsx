@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Receipt, DollarSign, User, Calendar, CheckCircle, XCircle, Clock, Search, Printer, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { isComptable } from '../../auth/roleAccess';
+import AccountingDashboard from './AccountingDashboard';
 
-export default function CashierDashboard() {
-  const { token , authFetch} = useAuth();
+function CashierDesk() {
+  const { token, authFetch } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -327,4 +329,10 @@ export default function CashierDashboard() {
       )}
     </div>
   );
+}
+
+export default function CashierDashboard() {
+  const { user } = useAuth();
+  if (isComptable(user)) return <AccountingDashboard />;
+  return <CashierDesk />;
 }

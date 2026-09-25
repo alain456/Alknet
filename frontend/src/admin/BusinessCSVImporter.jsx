@@ -95,7 +95,7 @@ Quincaillerie Moderne,qmoderne@gmail.com,+25771889900,Gitega,Gitega,Centre-Ville
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-2xl shadow-xl relative">
+      <div className="bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-2xl shadow-xl relative">
         <div className="flex justify-between items-center pb-4 mb-4 border-b border-border dark:border-white/10">
           <div className="flex items-center gap-2 text-green-900 dark:text-white font-bold text-lg">
             <FileSpreadsheet className="w-5 h-5 text-green-700 dark:text-gold-400" />

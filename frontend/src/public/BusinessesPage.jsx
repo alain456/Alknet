@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Filter, Building2, Phone, Clock, Eye, Package } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Search, MapPin, Filter, Building2, Phone, Clock, Eye, Package, History, Globe } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
 import api from '../shared/api';
+import { websiteHref } from '../shared/websiteUrl';
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -20,6 +21,27 @@ function categoryName(business) {
   );
 }
 
+/** Match exact ou via catégorie parente (Explore Categories = racines). */
+function businessMatchesCategory(business, selectedCategory) {
+  if (!selectedCategory || selectedCategory === 'All') return true;
+  const selected = String(selectedCategory).toLowerCase().trim();
+  if (!selected) return true;
+  const labels = new Set();
+  const add = (value) => {
+    const v = String(value || '').toLowerCase().trim();
+    if (v) labels.add(v);
+  };
+  add(categoryName(business));
+  add(business?.primary_category_detail?.name);
+  add(business?.primary_category_detail?.parent_name);
+  add(business?.primary_category_parent_name);
+  (business?.categories_detail || []).forEach((c) => {
+    add(c?.name);
+    add(c?.parent_name);
+  });
+  return labels.has(selected);
+}
+
 function isWholesalePharmacy(business) {
   const name = categoryName(business).toLowerCase();
   return name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'));
@@ -34,9 +56,21 @@ function isRetailPharmacy(business) {
     || name.trim() === 'pharmacie';
 }
 
+function isHotelBusiness(business) {
+  const name = categoryName(business).toLowerCase();
+  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
+  return (
+    name.includes('hôtel')
+    || name.includes('hotel')
+    || name.includes('hôtellerie')
+    || name.includes('hotellerie')
+    || slug.includes('hotel')
+  );
+}
+
 function isHospitalBusiness(business) {
   const name = categoryName(business).toLowerCase();
-  if (isWholesalePharmacy(business)) return false;
+  if (isWholesalePharmacy(business) || isHotelBusiness(business)) return false;
   return (
     name.includes('sant')
     || name.includes('hôpital')
@@ -67,8 +101,9 @@ function locationLabel(business) {
 
 export default function BusinessesPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get('category') || 'All');
   const [selectedCity, setSelectedCity] = useState('All');
   const [businesses, setBusinesses] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -78,11 +113,16 @@ export default function BusinessesPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   useEffect(() => {
+    const cat = searchParams.get('category');
+    setSelectedCategory(cat && cat.trim() ? cat : 'All');
+  }, [searchParams]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     Promise.all([
       api.get('businesses/').catch(() => []),
-      api.get('business-categories/').catch(() => []),
+      api.get('business-categories/?used=1&parents_only=1').catch(() => []),
     ])
       .then(([bizData, catData]) => {
         if (cancelled) return;
@@ -100,6 +140,14 @@ export default function BusinessesPage() {
     return () => { cancelled = true; };
   }, []);
 
+  const updateCategory = (value) => {
+    setSelectedCategory(value);
+    const next = new URLSearchParams(searchParams);
+    if (!value || value === 'All') next.delete('category');
+    else next.set('category', value);
+    setSearchParams(next, { replace: true });
+  };
+
   const cities = useMemo(() => {
     const set = new Set();
     businesses.forEach((b) => {
@@ -109,10 +157,35 @@ export default function BusinessesPage() {
     return ['All', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'fr'))];
   }, [businesses]);
 
-  const categoryOptions = useMemo(
-    () => ['All', ...categories.map((c) => c.name).filter(Boolean)],
-    [categories],
-  );
+  const categoryOptions = useMemo(() => {
+    // Priorité : catégories déjà utilisées par les entreprises affichées (côté client)
+    const usedFromBusinesses = new Set();
+    businesses.forEach((b) => {
+      const parent = b.primary_category_parent_name || b.primary_category_detail?.parent_name;
+      const own = categoryName(b);
+      if (parent) usedFromBusinesses.add(parent);
+      else if (own) usedFromBusinesses.add(own);
+      (b.categories_detail || []).forEach((c) => {
+        if (c?.parent_name) usedFromBusinesses.add(c.parent_name);
+        else if (c?.name && !c?.parent) usedFromBusinesses.add(c.name);
+      });
+    });
+
+    // Compléter avec l’API used=1 (parents déjà utilisés)
+    categories.forEach((c) => {
+      if (c?.name) usedFromBusinesses.add(c.name);
+    });
+
+    const names = Array.from(usedFromBusinesses)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'fr'));
+
+    // Garder la catégorie de l’URL même si plus aucun résultat temporairement
+    if (selectedCategory && selectedCategory !== 'All' && !names.includes(selectedCategory)) {
+      names.unshift(selectedCategory);
+    }
+    return ['All', ...names];
+  }, [businesses, categories, selectedCategory]);
 
   const filteredBusinesses = businesses.filter((business) => {
     const cat = categoryName(business);
@@ -121,7 +194,7 @@ export default function BusinessesPage() {
       || business.name?.toLowerCase().includes(searchTerm.toLowerCase())
       || business.description?.toLowerCase().includes(searchTerm.toLowerCase())
       || cat.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || cat === selectedCategory;
+    const matchesCategory = businessMatchesCategory(business, selectedCategory);
     const matchesCity = selectedCity === 'All'
       || loc.toLowerCase().includes(selectedCity.toLowerCase())
       || (business.commune || '').toLowerCase() === selectedCity.toLowerCase()
@@ -131,10 +204,10 @@ export default function BusinessesPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <div className="bg-primary text-white border-b border-teal-900/50">
+      <div className="bg-primary border-b border-primary">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-white mb-2">Entreprises</h1>
-          <p className="text-teal-100">Entreprises actives et approuvées sur Isoko Hub</p>
+          <p className="text-white/85">Entreprises actives et approuvées sur Isoko Hub</p>
         </div>
       </div>
 
@@ -165,7 +238,7 @@ export default function BusinessesPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Catégorie</label>
                 <select
                   value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  onChange={(e) => updateCategory(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none"
                 >
                   {categoryOptions.map((cat) => (
@@ -189,7 +262,11 @@ export default function BusinessesPage() {
 
               <button
                 type="button"
-                onClick={() => { setSearchTerm(''); setSelectedCategory('All'); setSelectedCity('All'); }}
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCity('All');
+                  updateCategory('All');
+                }}
                 className="w-full text-primary hover:text-secondary font-medium py-2 text-sm"
               >
                 Réinitialiser
@@ -260,9 +337,35 @@ export default function BusinessesPage() {
                       <Clock className="w-4 h-4 shrink-0" />
                       {business.hours || 'Horaires sur demande'}
                     </div>
+                    {business.website ? (
+                      <a
+                        href={websiteHref(business.website)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 text-primary font-medium sm:col-span-2 hover:underline truncate"
+                      >
+                        <Globe className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{business.website}</span>
+                      </a>
+                    ) : null}
                   </div>
 
                   <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(
+                        isHospitalBusiness(business)
+                          ? `/hospitals/${business.id}/historique`
+                          : isHotelBusiness(business)
+                            ? `/hotels/${business.id}/historique`
+                            : `/businesses/${business.id}/historique`
+                      )}
+                      className="px-3 py-2 border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition inline-flex items-center gap-1.5"
+                      title="Mon historique"
+                    >
+                      <History className="w-4 h-4" />
+                    </button>
                     {isWholesalePharmacy(business) ? (
                       <button
                         type="button"
@@ -280,6 +383,14 @@ export default function BusinessesPage() {
                       >
                         <Package className="w-4 h-4" />
                         Entrer — Catalogue
+                      </button>
+                    ) : isHotelBusiness(business) ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/hotels/${business.id}`)}
+                        className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg"
+                      >
+                        Voir l&apos;établissement
                       </button>
                     ) : isHospitalBusiness(business) ? (
                       <button

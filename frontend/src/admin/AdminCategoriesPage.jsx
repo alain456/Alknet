@@ -215,7 +215,7 @@ export default function AdminCategoriesPage() {
       </div>
 
       {/* Toolbar & View Mode Switcher */}
-      <div className="border border-border dark:border-white/10 rounded-md bg-surface dark:bg-[#1A2E25] p-4 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+      <div className="border border-border dark:border-white/10 rounded-md bg-surface dark:bg-primary p-4 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
         
         {/* View Mode Buttons */}
         <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ export default function AdminCategoriesPage() {
       {viewMode === 'grouped' && (
         <div className="space-y-6">
           {loading ? (
-            <div className="p-12 text-center bg-surface dark:bg-[#1A2E25] rounded-md border border-border dark:border-white/10">
+            <div className="p-12 text-center bg-surface dark:bg-primary rounded-md border border-border dark:border-white/10">
               <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-green-700"></div>
               <p className="mt-2 text-xs text-ink-muted dark:text-green-100/60">Chargement de l'arborescence des secteurs...</p>
             </div>
@@ -262,7 +262,7 @@ export default function AdminCategoriesPage() {
               Erreur de chargement: {error}
             </div>
           ) : sectorsList.length === 0 ? (
-            <div className="p-12 text-center text-ink-muted dark:text-green-100/60 bg-surface dark:bg-[#1A2E25] rounded-md border border-border">
+            <div className="p-12 text-center text-ink-muted dark:text-green-100/60 bg-surface dark:bg-primary rounded-md border border-border">
               Aucun secteur principal trouvé.
             </div>
           ) : (
@@ -276,7 +276,7 @@ export default function AdminCategoriesPage() {
                 const subCats = categories.filter(c => c.parent === sector.id || (c.parent_name && c.parent_name === sector.name));
 
                 return (
-                  <div key={sector.id} className="border border-border dark:border-white/10 rounded-xl bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm">
+                  <div key={sector.id} className="border border-border dark:border-white/10 rounded-xl bg-surface dark:bg-primary overflow-hidden shadow-sm">
                     {/* Sector Header Banner */}
                     <div className="px-6 py-4 bg-paper/80 dark:bg-black/20 border-b border-border dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
@@ -307,14 +307,14 @@ export default function AdminCategoriesPage() {
                         <button 
                           onClick={() => openEditModal(sector)}
                           title="Modifier le secteur"
-                          className="p-1.5 text-ink-muted hover:text-green-700 dark:text-green-100/70 dark:hover:text-white rounded-md hover:bg-paper dark:hover:bg-white/10 border border-border dark:border-white/10"
+                          className="icon-btn"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => handleDeleteCategory(sector)}
                           title="Supprimer le secteur"
-                          className="p-1.5 text-red-600 dark:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-900/40"
+                          className="icon-btn icon-btn--danger"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -347,14 +347,14 @@ export default function AdminCategoriesPage() {
                                     <button 
                                       onClick={() => openEditModal(sub)}
                                       title="Modifier"
-                                      className="p-1 text-ink-faint hover:text-green-700 dark:hover:text-white rounded"
+                                      className="icon-btn"
                                     >
                                       <Edit className="w-3.5 h-3.5" />
                                     </button>
                                     <button 
                                       onClick={() => handleDeleteCategory(sub)}
                                       title="Supprimer"
-                                      className="p-1 text-ink-faint hover:text-red-600 dark:hover:text-red-400 rounded"
+                                      className="icon-btn icon-btn--danger"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -386,7 +386,7 @@ export default function AdminCategoriesPage() {
 
       {/* VIEW MODE 2: FLAT TABLE DATA GRID */}
       {viewMode === 'table' && (
-        <div className="border border-border dark:border-white/10 rounded-md bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm flex flex-col">
+        <div className="border border-border dark:border-white/10 rounded-md bg-surface dark:bg-primary overflow-hidden shadow-sm flex flex-col">
           
           {/* Toolbar & Tabs */}
           <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-paper dark:bg-black/10">
@@ -498,14 +498,14 @@ export default function AdminCategoriesPage() {
                             <button 
                               onClick={() => openEditModal(category)}
                               title={isSector ? "Modifier le Secteur" : "Modifier la Sous-catégorie"}
-                              className="p-1.5 text-ink-faint hover:text-green-700 dark:text-green-100/60 dark:hover:text-white rounded-md hover:bg-paper dark:hover:bg-white/10"
+                              className="icon-btn"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
                             <button 
                               onClick={() => handleDeleteCategory(category)}
                               title={isSector ? "Supprimer le Secteur" : "Supprimer la Sous-catégorie"}
-                              className="p-1.5 text-ink-faint hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
+                              className="icon-btn icon-btn--danger"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -524,7 +524,7 @@ export default function AdminCategoriesPage() {
       {/* Modal Créer / Modifier (Secteur ou Sous-catégorie) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-md shadow-xl relative">
+          <div className="bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-md shadow-xl relative">
             <div className="flex justify-between items-center pb-4 mb-4 border-b border-border dark:border-white/10">
               <h3 className="text-lg font-bold text-green-900 dark:text-white">
                 {editingCategory 

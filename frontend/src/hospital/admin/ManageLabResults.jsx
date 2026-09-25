@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { FlaskConical, User, Stethoscope, Calendar, Search, CheckCircle, Clock, AlertCircle, Shield, FileText, Eye } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  FlaskConical, User, Stethoscope, Calendar, Search, CheckCircle, Clock,
+  AlertCircle, Shield, FileText, Eye, Activity, Download,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import hospitalService from '../hospitalService';
 
@@ -23,6 +26,27 @@ export default function ManageLabResults() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedResult, setSelectedResult] = useState(null);
   const [viewMode, setViewMode] = useState('list');
+  const [apiStats, setApiStats] = useState(null);
+  const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
+  const [fhirJson, setFhirJson] = useState(null);
+
+  const fetchLabResults = useCallback(async (hid) => {
+    try {
+      const [data, statsData] = await Promise.all([
+        hospitalService.getLabResults(hid),
+        hospitalService.getLabStats(hid).catch(() => null),
+      ]);
+      setLabResults(normalizeList(data));
+      if (statsData) setApiStats(statsData);
+    } catch (err) {
+      console.error(err);
+      setLabResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -46,17 +70,30 @@ export default function ManageLabResults() {
       }
     };
     init();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchLabResults]);
 
-  const fetchLabResults = async (hid) => {
+  const handleValidate = async (result) => {
+    setActionLoading(true);
+    setActionError('');
+    setActionSuccess('');
     try {
-      const data = await hospitalService.getLabResults(hid);
-      setLabResults(normalizeList(data));
+      const updated = await hospitalService.updateLabResultStatus(result.id, { status: 'VALIDATED' });
+      setActionSuccess('Résultat validé' + (updated.invoice_number ? ` · facture ${updated.invoice_number}` : ''));
+      await fetchLabResults(hospitalId);
+      if (viewMode === 'detail') setSelectedResult(updated);
     } catch (err) {
-      console.error(err);
-      setLabResults([]);
+      setActionError(err.message || 'Validation impossible');
     } finally {
-      setLoading(false);
+      setActionLoading(false);
+    }
+  };
+
+  const handleLoadFhir = async (id) => {
+    try {
+      const data = await hospitalService.getLabFhir(id);
+      setFhirJson(data);
+    } catch (err) {
+      setActionError(err.message || 'FHIR indisponible');
     }
   };
 
@@ -95,17 +132,43 @@ export default function ManageLabResults() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <FlaskConical className="text-teal-600" />
-          Résultats de Laboratoire
+          Laboratoire
         </h1>
         <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
           <Eye className="w-4 h-4 text-slate-500" />
-          Consultation seule — la saisie et le workflow sont gérés par le laborantin
+          Suivi, validation médicale, stats et facturation examen
         </p>
       </div>
+
+      {actionError && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">{actionError}</div>}
+      {actionSuccess && <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-sm border border-emerald-100">{actionSuccess}</div>}
 
       {!hospitalId && (
         <div className="p-4 bg-yellow-50 text-yellow-800 rounded-xl border border-yellow-200">
           Vous n&apos;avez pas encore configuré votre hôpital.
+        </div>
+      )}
+
+      {hospitalId && apiStats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[
+            { label: 'Total', value: apiStats.total, icon: FlaskConical },
+            { label: 'File ouverte', value: apiStats.pending, icon: AlertCircle },
+            { label: 'Validés (période)', value: apiStats.validated_period, icon: CheckCircle },
+            {
+              label: 'Délai moyen',
+              value: apiStats.avg_hours_to_validate != null ? `${apiStats.avg_hours_to_validate} h` : '—',
+              icon: Activity,
+            },
+          ].map(({ label, value, icon: Icon }) => (
+            <div key={label} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex justify-between items-center">
+              <div>
+                <p className="text-sm text-gray-500">{label}</p>
+                <p className="text-2xl font-bold text-teal-700">{value}</p>
+              </div>
+              <Icon className="w-6 h-6 text-teal-600" />
+            </div>
+          ))}
         </div>
       )}
 
@@ -114,11 +177,11 @@ export default function ManageLabResults() {
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm text-slate-700">
             <p className="font-semibold flex items-center gap-2">
               <Shield className="w-4 h-4 text-amber-500" />
-              Rôle admin : visualisation
+              Validation clinique
             </p>
             <p className="mt-1 text-slate-600">
-              Le laborantin crée le résultat, suit les étapes (prélèvement → analyse → validation)
-              et notifie le patient. Vous consultez ici l&apos;état d&apos;avancement.
+              Après saisie laborantin (Résultat disponible), validez ici pour déclencher la facture examen
+              et permettre la notification patient.
             </p>
           </div>
 
@@ -164,7 +227,7 @@ export default function ManageLabResults() {
                     <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600">Date</th>
                     <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600">Médecin</th>
                     <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600">Statut</th>
-                    <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600">Détail</th>
+                    <th className="text-left px-6 py-3 text-xs font-semibold text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -186,14 +249,26 @@ export default function ManageLabResults() {
                         <td className="px-6 py-4 text-sm text-gray-600">{result.ordered_by_name || '—'}</td>
                         <td className="px-6 py-4">{getStatusBadge(result.status)}</td>
                         <td className="px-6 py-4">
-                          <button
-                            type="button"
-                            onClick={() => { setSelectedResult(result); setViewMode('detail'); }}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                            title="Voir le détail"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { setSelectedResult(result); setViewMode('detail'); setFhirJson(null); }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                              title="Voir le détail"
+                            >
+                              <FileText className="w-4 h-4" />
+                            </button>
+                            {result.status === 'RESULT_AVAILABLE' && (
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={() => handleValidate(result)}
+                                className="px-2.5 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50"
+                              >
+                                Valider
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -207,14 +282,33 @@ export default function ManageLabResults() {
 
       {viewMode === 'detail' && selectedResult && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-3 flex-wrap">
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
               <FlaskConical className="text-teal-600" />
               Détail du résultat
             </h2>
-            <button type="button" onClick={() => setViewMode('list')} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
-              Retour
-            </button>
+            <div className="flex gap-2">
+              {selectedResult.status === 'RESULT_AVAILABLE' && (
+                <button
+                  type="button"
+                  disabled={actionLoading}
+                  onClick={() => handleValidate(selectedResult)}
+                  className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                >
+                  Valider
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleLoadFhir(selectedResult.id)}
+                className="px-4 py-2 border border-slate-200 rounded-lg text-sm"
+              >
+                FHIR
+              </button>
+              <button type="button" onClick={() => setViewMode('list')} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+                Retour
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -233,6 +327,9 @@ export default function ManageLabResults() {
             <div>
               <h3 className="font-semibold mb-2">Examen</h3>
               <p className="bg-gray-50 rounded-lg p-3">{selectedResult.test_name}</p>
+              {selectedResult.hospital_exam_name && (
+                <p className="text-xs text-slate-500 mt-1">Catalogue : {selectedResult.hospital_exam_name}</p>
+              )}
             </div>
             <div>
               <h3 className="font-semibold mb-2">Date</h3>
@@ -251,8 +348,25 @@ export default function ManageLabResults() {
             <div>
               <h3 className="font-semibold mb-2">Statut</h3>
               {getStatusBadge(selectedResult.status)}
+              {selectedResult.invoice_number && (
+                <p className="text-xs text-slate-500 mt-2">Facture : {selectedResult.invoice_number}</p>
+              )}
             </div>
           </div>
+
+          {Array.isArray(selectedResult.parameters) && selectedResult.parameters.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2">Paramètres</h3>
+              <ul className="space-y-1 text-sm">
+                {selectedResult.parameters.map((p, idx) => (
+                  <li key={idx} className="bg-gray-50 rounded-lg px-3 py-2">
+                    <strong>{p.name}</strong>: {p.value}{p.unit ? ` ${p.unit}` : ''}
+                    {p.reference ? ` (réf. ${p.reference})` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {selectedResult.reference_values && (
             <div>
@@ -265,6 +379,39 @@ export default function ManageLabResults() {
               <h3 className="font-semibold mb-2">Commentaires</h3>
               <p className="bg-gray-50 rounded-lg p-3 whitespace-pre-wrap">{selectedResult.result_notes}</p>
             </div>
+          )}
+
+          {(selectedResult.document_display_url || selectedResult.document_url) && (
+            <a
+              href={selectedResult.document_display_url || selectedResult.document_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-teal-700"
+            >
+              <Download className="w-4 h-4" /> Compte-rendu
+            </a>
+          )}
+
+          {Array.isArray(selectedResult.events) && selectedResult.events.length > 0 && (
+            <div>
+              <h3 className="font-semibold mb-2">Audit</h3>
+              <ul className="space-y-1 text-xs text-slate-600">
+                {selectedResult.events.map((ev) => (
+                  <li key={ev.id} className="bg-slate-50 rounded-lg px-3 py-1.5">
+                    {ev.action}
+                    {ev.from_status ? ` ${ev.from_status}` : ''}
+                    {ev.to_status ? ` → ${ev.to_status}` : ''}
+                    {ev.actor_email ? ` · ${ev.actor_email}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {fhirJson && (
+            <pre className="text-xs bg-slate-900 text-slate-100 rounded-xl p-4 overflow-x-auto max-h-64">
+              {JSON.stringify(fhirJson, null, 2)}
+            </pre>
           )}
         </div>
       )}

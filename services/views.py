@@ -2,7 +2,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from permissions.custom_permissions import IsSuperAdmin
+from permissions.custom_permissions import PlatformMethodPermission
 from .models import Service
 from .serializers import ServiceSerializer, AdminServiceSerializer
 
@@ -49,7 +49,8 @@ class AdminServiceListView(generics.ListAPIView):
         'category', 'business', 'professional'
     ).order_by('-created_at')
     serializer_class = AdminServiceSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'GET': 'platform.catalog.view'}
 
 
 class AdminServiceDetailView(generics.RetrieveUpdateAPIView):
@@ -57,12 +58,18 @@ class AdminServiceDetailView(generics.RetrieveUpdateAPIView):
         'category', 'business', 'professional'
     )
     serializer_class = AdminServiceSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.catalog.view',
+        'PUT': 'platform.catalog.update',
+        'PATCH': 'platform.catalog.update',
+    }
 
 
 class AdminServiceStatusView(APIView):
     """POST { status: ACTIVE|SUSPENDED|DRAFT }"""
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'POST': 'platform.catalog.update'}
 
     def post(self, request, pk):
         service = Service.objects.filter(pk=pk).first()

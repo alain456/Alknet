@@ -145,7 +145,7 @@ export default function ManageServiceCategories() {
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto">
       {/* En-tête de la page */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-linear-to-r from-teal-900 via-slate-900 to-teal-950 p-6 rounded-2xl text-white shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-linear-to-r from-teal-900 via-slate-900 to-teal-950 p-6 rounded-2xl text-white shadow-xl ih-frame-dark">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold mb-2">
             <Sparkles className="w-3.5 h-3.5" /> Module 01.2 — Structure des Prestations
@@ -168,8 +168,8 @@ export default function ManageServiceCategories() {
 
       {/* KPI Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-teal-50 dark:bg-teal-950 text-teal-600 rounded-xl">
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border-2 border-accent shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-teal-50 dark:bg-teal-950 text-teal-600 rounded-xl border border-accent/40">
             <FolderPlus className="w-6 h-6" />
           </div>
           <div>
@@ -178,8 +178,8 @@ export default function ManageServiceCategories() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 rounded-xl">
+        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border-2 border-alert shadow-sm flex items-center gap-4">
+          <div className="p-3 bg-indigo-50 dark:bg-indigo-950 text-indigo-600 rounded-xl border border-alert/40">
             <HeartPulse className="w-6 h-6" />
           </div>
           <div>
@@ -188,8 +188,11 @@ export default function ManageServiceCategories() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 rounded-xl">
+        <div
+          className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm flex items-center gap-4 border-duo"
+          style={{ '--ih-frame-bg': 'var(--color-white, #F5F5F3)' }}
+        >
+          <div className="p-3 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 rounded-xl border border-accent">
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
@@ -202,7 +205,7 @@ export default function ManageServiceCategories() {
       </div>
 
       {/* Barre de Recherche */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-2xl border-2 border-accent shadow-sm">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
           <input 
@@ -221,16 +224,18 @@ export default function ManageServiceCategories() {
         {loading ? (
           <div className="col-span-full text-center py-12 text-gray-500">Chargement des catégories...</div>
         ) : filteredCategories.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-400 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
+          <div className="col-span-full text-center py-12 text-gray-400 bg-white dark:bg-gray-900 rounded-2xl border-2 border-alert">
             Aucune catégorie de prestation trouvée. Cliquez sur <strong>"Nouvelle Catégorie"</strong> pour en ajouter une.
           </div>
         ) : (
-          filteredCategories.map(cat => {
+          filteredCategories.map((cat, idx) => {
             const countServices = services.filter(s => s.category === cat.name).length;
             return (
               <div 
                 key={cat.id} 
-                className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4"
+                className={`bg-white dark:bg-gray-900 rounded-2xl border-2 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4 ${
+                  idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                }`}
               >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -251,14 +256,14 @@ export default function ManageServiceCategories() {
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
                   <button 
                     onClick={() => handleOpenModal(cat)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl transition cursor-pointer"
+                    className="icon-btn"
                     title="Éditer la catégorie"
                   >
                     <Edit3 className="w-4 h-4" />
                   </button>
                   <button 
                     onClick={() => handleDelete(cat.id)}
-                    className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition cursor-pointer"
+                    className="icon-btn icon-btn--danger"
                     title="Supprimer"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -273,7 +278,7 @@ export default function ManageServiceCategories() {
       {/* Modal Création / Édition */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200 dark:border-gray-800 flex flex-col">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-accent flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
               <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
                 <FolderPlus className="text-teal-600" />

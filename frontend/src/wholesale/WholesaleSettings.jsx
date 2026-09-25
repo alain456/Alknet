@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import wholesaleService from './wholesaleService';
+import { normalizeWebsiteUrl } from '../shared/websiteUrl';
 
 export default function WholesaleSettings() {
   const [profile, setProfile] = useState(null);
@@ -23,6 +24,7 @@ export default function WholesaleSettings() {
         email: profile.email,
         address: profile.address,
         description: profile.description,
+        website: normalizeWebsiteUrl(profile.website),
       });
       setProfile({ ...profile, ...updated });
       setMsg('Paramètres enregistrés');
@@ -52,6 +54,17 @@ export default function WholesaleSettings() {
             <input className="w-full border rounded-lg px-3 py-2" value={profile[k] || ''} onChange={(e) => setProfile({ ...profile, [k]: e.target.value })} />
           </label>
         ))}
+        <label className="text-sm space-y-1 sm:col-span-2">
+          <span className="font-medium">Site web officiel</span>
+          <input
+            type="url"
+            placeholder="https://www.exemple.com"
+            className="w-full border rounded-lg px-3 py-2"
+            value={profile.website || ''}
+            onChange={(e) => setProfile({ ...profile, website: e.target.value })}
+          />
+          <span className="text-xs text-slate-500">Visible côté clients dans les informations de l&apos;entreprise.</span>
+        </label>
         <label className="text-sm space-y-1">
           <span className="font-medium">Statut</span>
           <select className="w-full border rounded-lg px-3 py-2" value={profile.status} onChange={(e) => setProfile({ ...profile, status: e.target.value })}>

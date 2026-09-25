@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import api from './api';
+import api, { invalidateApiCache } from './api';
 
 let cachedPayload = null;
 let inflight = null;
 
+export function clearSiteContentCache() {
+  cachedPayload = null;
+  invalidateApiCache('cms/public');
+}
+
 export async function fetchSiteContent(force = false) {
   if (!force && cachedPayload) return cachedPayload;
   if (!force && inflight) return inflight;
-  inflight = api.get('cms/public/')
+  inflight = api.get('cms/public/', force ? { noCache: true } : undefined)
     .then((data) => {
       cachedPayload = data;
       return data;

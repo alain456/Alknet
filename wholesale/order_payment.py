@@ -1,11 +1,11 @@
 """
-Paiement commande pharmacie de gros : acheteur → compte marchand du grossiste (Lumicash).
+Paiement commande pharmacie de gros : acheteur → compte marchand du grossiste (BurundiPay).
 """
 from __future__ import annotations
 
 from django.utils import timezone
 
-from businesses import lumicash
+from businesses import burundipay
 
 
 def pharmacy_merchant_account(business) -> str:
@@ -51,7 +51,7 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
         }
 
     merchant = pharmacy_merchant_account(order.wholesale_business)
-    result = lumicash.initiate_collection(
+    result = burundipay.initiate_collection(
         amount_bif=amount,
         payer_phone=payer_phone,
         external_id=f'wholesale-{order.id}',
@@ -62,8 +62,8 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
         merchant=merchant,
     )
 
-    order.payer_phone = lumicash.normalize_phone(payer_phone)
-    order.payment_method = 'LUMICASH'
+    order.payer_phone = burundipay.normalize_phone(payer_phone)
+    order.payment_method = 'BURUNDIPAY'
     order.payment_merchant_account = merchant
     order.payment_provider_reference = result.get('provider_reference') or ''
     if result.get('ok'):
@@ -71,7 +71,7 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
         order.payment_note = ''
     else:
         order.payment_status = 'FAILED'
-        order.payment_note = result.get('message') or 'Échec initiation Lumicash'
+        order.payment_note = result.get('message') or 'Échec initiation BurundiPay'
     order.save(update_fields=[
         'payer_phone', 'payment_method', 'payment_merchant_account',
         'payment_provider_reference', 'payment_status', 'payment_note', 'updated_at',
@@ -81,7 +81,7 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
         'ok': bool(result.get('ok')),
         'already_paid': False,
         'message': result.get('message') or '',
-        'stub_mode': lumicash.is_stub_mode(),
+        'stub_mode': burundipay.is_stub_mode(),
         'provider_reference': order.payment_provider_reference,
         'merchant_account': merchant,
         'amount_bif': amount,
@@ -91,7 +91,7 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
 
 
 def confirm_order_payment_stub(order) -> dict:
-    if not lumicash.is_stub_mode():
+    if not burundipay.is_stub_mode():
         return {
             'ok': False,
             'message': 'Confirmation manuelle réservée au mode simulation.',
@@ -108,8 +108,8 @@ def confirm_order_payment_stub(order) -> dict:
 
     order.payment_status = 'PAID'
     order.paid_at = timezone.now()
-    order.payment_method = order.payment_method or 'LUMICASH'
-    order.payment_note = 'Paiement confirmé (simulation Lumicash)'
+    order.payment_method = order.payment_method or 'BURUNDIPAY'
+    order.payment_note = 'Paiement confirmé (simulation BurundiPay)'
     order.save(update_fields=[
         'payment_status', 'paid_at', 'payment_method', 'payment_note', 'updated_at',
     ])

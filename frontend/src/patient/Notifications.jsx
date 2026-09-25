@@ -1,60 +1,57 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Check, CheckCheck, FlaskConical, Calendar, FileText, AlertCircle, X } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { Bell, Check, CheckCheck, FlaskConical, Calendar, FileText, AlertCircle } from 'lucide-react';
+import api from '../shared/api';
+
+const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
+
+function historyPathFromMessage(message) {
+  const m = String(message || '').match(/(\/hotels\/[^/\s]+\/historique)/);
+  return m ? m[1] : null;
+}
 
 export default function Notifications() {
-  const { token } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filterType, setFilterType] = useState('ALL');
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [token]);
-
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
+    setError('');
     try {
-      const res = await fetch('/api/v1/hospital/notifications/', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.is_read).length);
-      }
+      const data = await api.get('hospital/notifications/', { auth: true });
+      const list = normalizeList(data);
+      setNotifications(list);
+      setUnreadCount(list.filter((n) => !n.is_read).length);
     } catch (err) {
-      console.error(err);
+      setError(err?.message || 'Impossible de charger les notifications');
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   const handleMarkAsRead = async (notificationId) => {
     try {
-      const res = await fetch(`/api/v1/hospital/notifications/${notificationId}/mark_as_read/`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        fetchNotifications();
-      }
+      await api.post(`hospital/notifications/${notificationId}/mark_as_read/`, {}, { auth: true });
+      await fetchNotifications();
     } catch (err) {
-      console.error(err);
+      setError(err?.message || 'Impossible de marquer comme lu');
     }
   };
 
   const handleMarkAllAsRead = async () => {
     try {
-      const res = await fetch('/api/v1/hospital/notifications/mark_all_as_read/', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        fetchNotifications();
-      }
+      await api.post('hospital/notifications/mark_all_as_read/', {}, { auth: true });
+      await fetchNotifications();
     } catch (err) {
-      console.error(err);
+      setError(err?.message || 'Impossible de tout marquer comme lu');
     }
   };
 
@@ -83,12 +80,14 @@ export default function Notifications() {
         return 'Prescription prête';
       case 'INVOICE_PAYMENT':
         return 'Facture à payer';
+      case 'GENERAL':
+        return 'Information';
       default:
         return 'Information';
     }
   };
 
-  const filteredNotifications = notifications.filter(notif => {
+  const filteredNotifications = notifications.filter((notif) => {
     if (filterType === 'ALL') return true;
     if (filterType === 'UNREAD') return !notif.is_read;
     return notif.notification_type === filterType;
@@ -102,33 +101,36 @@ export default function Notifications() {
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'À l\'instant';
+    if (diffMins < 1) return "À l'instant";
     if (diffMins < 60) return `Il y a ${diffMins} min`;
     if (diffHours < 24) return `Il y a ${diffHours} h`;
     if (diffDays < 7) return `Il y a ${diffDays} j`;
     return date.toLocaleDateString('fr-FR');
   };
 
-  if (loading) return <div className="p-8">Chargement...</div>;
+  if (loading) return <div className="p-8 text-sm text-gray-500">Chargement...</div>;
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Bell className="text-teal-600" />
             Notifications
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            {unreadCount > 0 && (
+            {unreadCount > 0 ? (
               <span className="inline-flex items-center gap-1 text-teal-600 font-medium">
                 {unreadCount} notification{unreadCount > 1 ? 's' : ''} non lue{unreadCount > 1 ? 's' : ''}
               </span>
+            ) : (
+              <span>Toutes vos alertes sont à jour.</span>
             )}
           </p>
         </div>
         {unreadCount > 0 && (
-          <button 
+          <button
+            type="button"
             onClick={handleMarkAllAsRead}
             className="flex items-center gap-2 text-teal-600 hover:text-teal-700 font-medium"
           >
@@ -138,13 +140,17 @@ export default function Notifications() {
         )}
       </div>
 
-      {/* Filtres */}
+      {error && (
+        <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm font-medium">{error}</div>
+      )}
+
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
         <div className="flex items-center gap-2 overflow-x-auto">
           <span className="text-sm font-medium text-gray-600">Filtrer:</span>
-          {['ALL', 'UNREAD', 'LAB_RESULT', 'APPOINTMENT_REMINDER', 'PRESCRIPTION_READY', 'INVOICE_PAYMENT'].map(type => (
+          {['ALL', 'UNREAD', 'LAB_RESULT', 'APPOINTMENT_REMINDER', 'PRESCRIPTION_READY', 'INVOICE_PAYMENT', 'GENERAL'].map((type) => (
             <button
               key={type}
+              type="button"
               onClick={() => setFilterType(type)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
                 filterType === type
@@ -152,15 +158,14 @@ export default function Notifications() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {type === 'ALL' ? 'Toutes' : 
-               type === 'UNREAD' ? 'Non lues' :
-               getNotificationTypeLabel(type)}
+              {type === 'ALL' ? 'Toutes'
+                : type === 'UNREAD' ? 'Non lues'
+                  : getNotificationTypeLabel(type)}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Liste des notifications */}
       <div className="space-y-3">
         {filteredNotifications.length === 0 ? (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
@@ -168,7 +173,7 @@ export default function Notifications() {
             <p className="text-gray-500">Aucune notification</p>
           </div>
         ) : (
-          filteredNotifications.map(notification => (
+          filteredNotifications.map((notification) => (
             <div
               key={notification.id}
               className={`bg-white rounded-2xl border shadow-sm p-4 transition ${
@@ -188,6 +193,17 @@ export default function Notifications() {
                         {notification.title}
                       </h3>
                       <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+                      {historyPathFromMessage(notification.message) && (
+                        <Link
+                          to={historyPathFromMessage(notification.message)}
+                          className="inline-block mt-2 text-xs font-bold text-primary hover:underline"
+                          onClick={() => {
+                            if (!notification.is_read) handleMarkAsRead(notification.id);
+                          }}
+                        >
+                          Ouvrir mon historique hôtel →
+                        </Link>
+                      )}
                       {notification.lab_result_summary && (
                         <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg p-2">
                           <span className="font-medium">Examen:</span> {notification.lab_result_summary.test_name}
@@ -198,8 +214,9 @@ export default function Notifications() {
                     </div>
                     {!notification.is_read && (
                       <button
+                        type="button"
                         onClick={() => handleMarkAsRead(notification.id)}
-                        className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition"
+                        className="icon-btn"
                         title="Marquer comme lu"
                       >
                         <Check className="w-4 h-4" />

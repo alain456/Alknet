@@ -6,10 +6,10 @@ import {
 function InfoRow({ icon: Icon, label, value }) {
   if (value === null || value === undefined || value === '') return null;
   return (
-    <div className="flex items-start gap-1.5 text-xs text-gray-600 dark:text-gray-300">
-      <Icon className="w-3.5 h-3.5 text-teal-600 shrink-0 mt-0.5" />
-      <span>
-        {label}: <strong className="text-gray-900 dark:text-white">{value}</strong>
+    <div className="flex items-start gap-1.5 text-xs text-ink">
+      <Icon className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+      <span className="text-ink">
+        {label}: <strong className="text-ink font-bold">{value}</strong>
       </span>
     </div>
   );
@@ -36,8 +36,7 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
   const experienceYears = doctor.experience_years;
   const qualifications = doctor.qualifications?.trim();
   const bio = doctor.bio?.trim();
-  const fee = Number(doctor.consultation_fee || 0);
-  const formattedFee = doctor.formatted_fee;
+  const officeAddress = doctor.office_address?.trim();
   const isPhysical = doctor.is_physical_consultation !== false;
   const isTelemed = !!doctor.is_available_for_telemedicine;
   const assignedServices = (doctor.services || [])
@@ -47,50 +46,56 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
   const photo = doctor.public_photo_url || doctor.photo_url || doctor.user_details?.avatar;
 
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col sm:flex-row gap-5">
-      <div className="w-24 h-24 rounded-2xl bg-teal-50 dark:bg-teal-950 flex items-center justify-center shrink-0 border border-teal-100 dark:border-teal-800 overflow-hidden shadow-inner">
+    <div className="bg-surface text-ink border-2 border-accent rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col sm:flex-row gap-5">
+      <div className="w-24 h-24 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 border-2 border-accent/40 overflow-hidden">
         {photo ? (
           <img src={photo} alt={name} className="w-full h-full object-cover" />
         ) : (
-          <User className="text-teal-600 dark:text-teal-400 w-10 h-10" />
+          <User className="text-primary w-10 h-10" />
         )}
       </div>
 
-      <div className="flex-1 flex flex-col justify-between">
+      <div className="flex-1 flex flex-col justify-between min-w-0">
         <div>
           <div className="mb-2">
             <div className="flex flex-wrap items-center gap-2">
-              <h4 className="font-bold text-gray-900 dark:text-white text-lg">
+              <h4 className="font-bold text-ink text-lg">
                 {titleLabel ? `${titleLabel} ` : ''}{name}
               </h4>
               {licenseNumber && (
-                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-primary text-surface">
                   Licence: {licenseNumber}
                 </span>
               )}
             </div>
             {categoryLabel && (
-              <p className="text-teal-600 dark:text-teal-400 font-semibold text-sm mt-0.5">
+              <p className="text-primary font-semibold text-sm mt-0.5">
                 {categoryLabel}
               </p>
             )}
             {specialtyLine && (
-              <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{specialtyLine}</p>
+              <p className="text-sm text-ink mt-0.5 font-medium">{specialtyLine}</p>
             )}
-            <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-              <MapPin className="w-3 h-3 text-gray-400" />
-              Établissement: <span className="font-medium text-gray-700 dark:text-gray-300">{hospitalName}</span>
+            <p className="text-xs text-ink-muted flex items-center gap-1 mt-1">
+              <MapPin className="w-3 h-3 text-accent" />
+              Établissement: <span className="font-semibold text-ink">{hospitalName}</span>
             </p>
+            {officeAddress && (
+              <p className="text-xs text-ink flex items-center gap-1 mt-1 font-medium">
+                <MapPin className="w-3 h-3 text-accent" />
+                Bureau: <span className="font-semibold">{officeAddress}</span>
+              </p>
+            )}
           </div>
 
           {bio ? (
             <div className="mb-3">
-              <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Biographie</p>
-              <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-line">{bio}</p>
+              <p className="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-1">Biographie</p>
+              <p className="text-ink text-sm leading-relaxed whitespace-pre-line">{bio}</p>
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 bg-gray-50 dark:bg-gray-800/40 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 bg-primary/5 p-3 rounded-xl border-2 border-alert/40">
             <InfoRow icon={Globe} label="Langues" value={languages} />
             <InfoRow
               icon={Award}
@@ -101,44 +106,34 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
           </div>
 
           <div className="mb-4">
-            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              <HeartPulse className="w-3 h-3 text-teal-500" /> Services
+            <p className="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-1.5 flex items-center gap-1">
+              <HeartPulse className="w-3 h-3 text-accent" /> Services
             </p>
             {assignedServices.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {assignedServices.map((svc) => (
                   <span
                     key={svc.id || svc.name}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 border border-teal-100 dark:border-teal-800"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-ink border border-accent/50"
                   >
                     {svc.name}
-                    {svc.formatted_cost && svc.formatted_cost !== 'Gratuit / Non renseigné' && (
-                      <span className="text-teal-600/80 dark:text-teal-400/80 font-normal">
-                        · {svc.formatted_cost}
-                      </span>
-                    )}
                   </span>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">Aucun service associé pour le moment.</p>
+              <p className="text-xs text-ink-muted italic">Aucun service associé pour le moment.</p>
             )}
           </div>
 
           <div className="flex flex-wrap gap-2 mb-4">
             {isPhysical && (
-              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-xs font-semibold rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <span className="px-2.5 py-1 bg-primary/10 text-ink text-xs font-semibold rounded-lg border border-accent/40">
                 Consultation présentielle
               </span>
             )}
             {isTelemed && (
-              <span className="px-2.5 py-1 bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 text-xs font-semibold rounded-lg border border-gray-200 flex items-center gap-1">
+              <span className="px-2.5 py-1 bg-primary/10 text-ink-muted text-xs font-semibold rounded-lg border border-border flex items-center gap-1">
                 <Video className="w-3 h-3" /> Téléconsultation — bientôt
-              </span>
-            )}
-            {fee > 0 && (
-              <span className="px-2.5 py-1 bg-teal-600 text-white text-xs font-bold rounded-lg shadow-xs">
-                Tarif: {formattedFee || `${fee.toLocaleString()} BIF`}
               </span>
             )}
           </div>
@@ -148,7 +143,7 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
           <button
             type="button"
             onClick={() => onBook(doctor)}
-            className="w-full sm:w-auto px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition shadow-md shadow-teal-600/20 flex items-center justify-center gap-2 text-sm cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 bg-primary hover:bg-primary text-surface font-semibold rounded-xl transition flex items-center justify-center gap-2 text-sm cursor-pointer border-2 border-accent"
           >
             Prendre Rendez-vous <ChevronRight className="w-4 h-4" />
           </button>

@@ -274,10 +274,10 @@ export default function CommerceCatalog() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-1">
-                      <button type="button" onClick={() => openEdit(p)} className="p-2 hover:bg-green-50 rounded-lg text-primary" title="Modifier la fiche">
+                      <button type="button" onClick={() => openEdit(p)} className="icon-btn" title="Modifier la fiche">
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button type="button" onClick={() => removeProduct(p.id)} className="p-2 hover:bg-red-50 rounded-lg text-red-500" title="Supprimer">
+                      <button type="button" onClick={() => removeProduct(p.id)} className="icon-btn icon-btn--danger" title="Supprimer">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>

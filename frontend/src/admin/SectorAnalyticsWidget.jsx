@@ -42,7 +42,7 @@ export default function SectorAnalyticsWidget({ businesses = [], categories = []
   const underRepresented = sortedSectors.filter(s => s.count <= 2);
 
   return (
-    <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-xl p-5 shadow-sm space-y-4">
+    <div className="bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-xl p-5 shadow-sm space-y-4">
       <div className="flex items-center justify-between border-b border-border dark:border-white/10 pb-3">
         <div className="flex items-center gap-2 text-green-900 dark:text-white font-bold text-base">
           <PieChart className="w-5 h-5 text-gold-600 dark:text-gold-400" />

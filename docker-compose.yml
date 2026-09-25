@@ -44,5 +44,24 @@ services:
     environment:
       MP_MAX_MESSAGES: 5000
 
+  # Sidecar cron : rappels départ hôtel (J-1) chaque jour à 06:05
+  hotel-cron:
+    build: .
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq cron >/dev/null
+      && cp /app/deploy/cron/crontab /etc/cron.d/isoko-hub
+      && chmod 0644 /etc/cron.d/isoko-hub
+      && crontab /etc/cron.d/isoko-hub
+      && touch /var/log/isoko-hotel-departures.log
+      && cron && tail -F /var/log/isoko-hotel-departures.log"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+    profiles:
+      - cron
+
 volumes:
   postgres_data:

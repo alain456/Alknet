@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Search, ShoppingCart, X, Minus, Plus, Pill, Trash2, History,
 } from 'lucide-react';
-import LumicashPayerField from '../shared/components/LumicashPayerField';
+import BurundiPayPayerField from '../shared/components/BurundiPayPayerField';
 import OrderPaymentSuccess from '../shared/components/OrderPaymentSuccess';
 import { PROFORMA_STATUS_LABELS } from './wholesaleService';
 import wholesaleService from './wholesaleService';
@@ -68,7 +68,7 @@ export default function PublicWholesaleCatalog() {
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
-  const [payerLumicash, setPayerLumicash] = useState('');
+  const [payerBurundiPay, setPayerBurundiPay] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -259,7 +259,7 @@ export default function PublicWholesaleCatalog() {
       return;
     }
     setConfirmChecked(false);
-    setPayerLumicash('');
+    setPayerBurundiPay('');
     setConfirmOpen(true);
   };
 
@@ -269,8 +269,8 @@ export default function PublicWholesaleCatalog() {
       setError('Nom de la pharmacie et email professionnels requis.');
       return;
     }
-    if (!payerLumicash.trim()) {
-      setError('Indiquez votre numéro Lumicash pour le paiement.');
+    if (!payerBurundiPay.trim()) {
+      setError('Indiquez votre numéro BurundiPay pour le paiement.');
       return;
     }
     setBusy(true);
@@ -282,14 +282,14 @@ export default function PublicWholesaleCatalog() {
         buyer_name: buyerName.trim(),
         buyer_email: buyerEmail.trim(),
         buyer_phone: buyerPhone.trim(),
-        payment_method: 'LUMICASH',
-        payer_phone: payerLumicash.trim(),
+        payment_method: 'BURUNDIPAY',
+        payer_phone: payerBurundiPay.trim(),
         items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
       });
       persist([]);
       setConfirmOpen(false);
       setCartOpen(false);
-      setPayerLumicash('');
+      setPayerBurundiPay('');
       setSuccess(order);
     } catch (e) {
       setError(e.message || 'Échec envoi commande');
@@ -299,7 +299,7 @@ export default function PublicWholesaleCatalog() {
   };
 
   if (loading) {
-    return <div className="min-h-[50vh] flex items-center justify-center text-ink-muted bg-[#F4F6F6]">Chargement du catalogue...</div>;
+    return <div className="min-h-[50vh] flex items-center justify-center text-ink-muted bg-surface">Chargement du catalogue...</div>;
   }
 
   if (success) {
@@ -316,7 +316,7 @@ export default function PublicWholesaleCatalog() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F6] text-[#132523]" style={{ fontFamily: 'Inter, IBM Plex Sans, sans-serif' }}>
+    <div className="min-h-screen bg-surface text-ink" style={{ fontFamily: 'Inter, IBM Plex Sans, sans-serif' }}>
       <div className="bg-primary text-white px-5 sm:px-10 py-4">
         <div className="max-w-[1180px] mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -346,7 +346,7 @@ export default function PublicWholesaleCatalog() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="bg-accent text-[#2B1B05] text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
+              className="bg-accent text-primary text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
             >
               <ShoppingCart className="w-3.5 h-3.5" />
               Panier · {cartCount} article{cartCount > 1 ? 's' : ''}
@@ -440,8 +440,7 @@ export default function PublicWholesaleCatalog() {
               return (
                 <article
                   key={p.id}
-                  className="relative rounded-2xl border border-border p-4 pb-0 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
-                  style={{ background: 'repeating-linear-gradient(135deg, #EDEFEF 0px, #EDEFEF 2px, #F6F7F7 2px, #F6F7F7 6px)' }}
+                  className="relative rounded-2xl border border-border bg-surface p-4 pb-0 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
                 >
                   <button type="button" onClick={() => { setSelected(p); setQty(1); }} className="w-full text-left">
                     <div className="bg-white border border-border rounded-xl h-40 sm:h-44 flex items-center justify-center overflow-hidden mb-0">
@@ -509,9 +508,9 @@ export default function PublicWholesaleCatalog() {
                 </div>
                 <p className="text-lg font-mono font-bold text-primary">{money(selected.wholesale_price, selected.currency)}</p>
                 <div className="flex items-center gap-2">
-                  <button type="button" className="p-2 border rounded-lg" onClick={() => setQty(Math.max(selected.min_order_quantity || 1, Number(qty) - 1))}><Minus className="w-4 h-4" /></button>
+                  <button type="button" className="icon-btn" onClick={() => setQty(Math.max(selected.min_order_quantity || 1, Number(qty) - 1))}><Minus className="w-4 h-4" /></button>
                   <input type="number" min={selected.min_order_quantity || 1} value={qty} onChange={(e) => setQty(e.target.value)} className="w-16 border rounded-lg px-2 py-2 text-center" />
-                  <button type="button" className="p-2 border rounded-lg" onClick={() => setQty(Number(qty) + 1)}><Plus className="w-4 h-4" /></button>
+                  <button type="button" className="icon-btn" onClick={() => setQty(Number(qty) + 1)}><Plus className="w-4 h-4" /></button>
                 </div>
                 <button
                   type="button"
@@ -578,7 +577,7 @@ export default function PublicWholesaleCatalog() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <button type="button" className="p-1 border rounded" onClick={() => updateQty(line.product_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
+                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
                       <input
                         type="number"
                         min={1}
@@ -586,7 +585,7 @@ export default function PublicWholesaleCatalog() {
                         value={line.quantity}
                         onChange={(e) => updateQty(line.product_id, e.target.value)}
                       />
-                      <button type="button" className="p-1 border rounded" onClick={() => updateQty(line.product_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
+                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
                     </div>
                     <span className="text-sm font-semibold">{money(line.line_total)}</span>
                   </div>
@@ -719,9 +718,9 @@ export default function PublicWholesaleCatalog() {
               <span className="text-slate-500">Téléphone professionnel</span>
               <input className="w-full border rounded-lg px-3 py-2" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} />
             </label>
-            <LumicashPayerField
-              value={payerLumicash}
-              onChange={setPayerLumicash}
+            <BurundiPayPayerField
+              value={payerBurundiPay}
+              onChange={setPayerBurundiPay}
               amountLabel={money(subtotal)}
             />
             <label className="flex items-start gap-2 text-sm">

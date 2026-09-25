@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import LumicashPayerField from '../shared/components/LumicashPayerField';
+import BurundiPayPayerField from '../shared/components/BurundiPayPayerField';
 import OrderPaymentSuccess from '../shared/components/OrderPaymentSuccess';
 import wholesaleService, { PROFORMA_STATUS_LABELS } from './wholesaleService';
 
@@ -14,7 +14,7 @@ export default function WholesaleCart() {
   const [clearCart, setClearCart] = useState(null);
   const [confirmCart, setConfirmCart] = useState(null);
   const [confirmChecked, setConfirmChecked] = useState(false);
-  const [payerLumicash, setPayerLumicash] = useState('');
+  const [payerBurundiPay, setPayerBurundiPay] = useState('');
   const [success, setSuccess] = useState(null);
 
   const load = async () => {
@@ -65,8 +65,8 @@ export default function WholesaleCart() {
 
   const sendOrder = async () => {
     if (!confirmCart || !confirmChecked) return;
-    if (!payerLumicash.trim()) {
-      setError('Indiquez votre numéro Lumicash pour le paiement.');
+    if (!payerBurundiPay.trim()) {
+      setError('Indiquez votre numéro BurundiPay pour le paiement.');
       return;
     }
     setBusy(true);
@@ -75,13 +75,13 @@ export default function WholesaleCart() {
       const order = await wholesaleService.checkout({
         wholesale_id: confirmCart.wholesale_business,
         notification_email: confirmCart._email || undefined,
-        payment_method: 'LUMICASH',
-        payer_phone: payerLumicash.trim(),
+        payment_method: 'BURUNDIPAY',
+        payer_phone: payerBurundiPay.trim(),
         confirmed: true,
       });
       setConfirmCart(null);
       setConfirmChecked(false);
-      setPayerLumicash('');
+      setPayerBurundiPay('');
       setSuccess(order);
       await load();
     } catch (e) {
@@ -210,7 +210,7 @@ export default function WholesaleCart() {
                   type="button"
                   disabled={hasErrors || !(cart.items || []).length}
                   onClick={() => {
-                    setPayerLumicash('');
+                    setPayerBurundiPay('');
                     setConfirmCart({ ...cart, _email: '' });
                     setConfirmChecked(false);
                   }}
@@ -334,9 +334,9 @@ export default function WholesaleCart() {
                 onChange={(e) => setConfirmCart({ ...confirmCart, _email: e.target.value })}
               />
             </label>
-            <LumicashPayerField
-              value={payerLumicash}
-              onChange={setPayerLumicash}
+            <BurundiPayPayerField
+              value={payerBurundiPay}
+              onChange={setPayerBurundiPay}
               amountLabel={money(confirmCart.total_amount)}
             />
             {error && <p className="text-sm text-red-600">{error}</p>}

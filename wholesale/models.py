@@ -148,10 +148,10 @@ class WholesaleOrder(models.Model):
         related_name='wholesale_orders_created'
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
-    # Paiement acheteur → marchand grossiste (Lumicash)
+    # Paiement acheteur → marchand grossiste (BurundiPay)
     PAYMENT_STATUS_CHOICES = (
         ('UNPAID', 'Non payée'),
-        ('AWAITING_PIN', 'En attente PIN Lumicash'),
+        ('AWAITING_PIN', 'En attente PIN BurundiPay'),
         ('PAID', 'Payée'),
         ('FAILED', 'Échec paiement'),
         ('REFUNDED', 'Remboursée'),
@@ -161,11 +161,11 @@ class WholesaleOrder(models.Model):
     )
     payment_method = models.CharField(
         max_length=40, blank=True,
-        help_text='Ex: LUMICASH, CASH, FREE',
+        help_text='Ex: BURUNDIPAY, CASH, FREE',
     )
     payer_phone = models.CharField(
         max_length=40, blank=True,
-        help_text='Numéro Lumicash de l\'acheteur (payeur)',
+        help_text='Numéro BurundiPay de l\'acheteur (payeur)',
     )
     payment_merchant_account = models.CharField(max_length=120, blank=True)
     payment_provider_reference = models.CharField(max_length=120, blank=True)

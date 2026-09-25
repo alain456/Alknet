@@ -26,6 +26,7 @@ class RetailProfileSerializer(serializers.ModelSerializer):
     address = serializers.CharField(source='business.address', read_only=True)
     commune = serializers.CharField(source='business.commune', read_only=True)
     description = serializers.CharField(source='business.description', read_only=True)
+    website = serializers.URLField(source='business.website', read_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = RetailPharmacyProfile
@@ -33,7 +34,7 @@ class RetailProfileSerializer(serializers.ModelSerializer):
             'id', 'business_id', 'business_name', 'commercial_name', 'license_number',
             'status', 'order_reference_prefix', 'acceptance_email_message',
             'is_open_for_orders', 'logo',
-            'phone', 'email', 'address', 'commune', 'description',
+            'phone', 'email', 'address', 'commune', 'description', 'website',
             'created_at', 'updated_at',
         ]
         read_only_fields = ('id', 'business_id', 'created_at', 'updated_at')
@@ -132,19 +133,33 @@ class PrescriptionSerializer(serializers.ModelSerializer):
     patient_account_email = serializers.EmailField(source='patient.email', read_only=True)
     reviewed_by_email = serializers.EmailField(source='reviewed_by.email', read_only=True)
     order_reference = serializers.CharField(source='order.reference', read_only=True)
+    file_url = serializers.SerializerMethodField()
+    has_file = serializers.SerializerMethodField()
 
     class Meta:
         model = Prescription
         fields = [
             'id', 'retail_business', 'order', 'order_reference', 'patient',
             'patient_account_email', 'patient_name', 'patient_email', 'file_url',
-            'status', 'review_comment', 'reviewed_by', 'reviewed_by_email',
+            'has_file', 'status', 'review_comment', 'reviewed_by', 'reviewed_by_email',
             'reviewed_at', 'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'patient', 'status', 'review_comment', 'reviewed_by',
-            'reviewed_at', 'created_at', 'updated_at',
+            'reviewed_at', 'created_at', 'updated_at', 'file_url', 'has_file',
         ]
+
+    def get_has_file(self, obj):
+        return bool(obj.file) or bool((obj.file_url or '').strip())
+
+    def get_file_url(self, obj):
+        if obj.file:
+            url = obj.file.url
+            request = self.context.get('request')
+            if request is not None:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.file_url or ''
 
 
 class ProformaInvoiceSerializer(serializers.ModelSerializer):

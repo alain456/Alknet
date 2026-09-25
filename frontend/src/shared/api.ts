@@ -105,10 +105,15 @@ async function refreshAccessToken(): Promise<string | null> {
 
 function extractErrorMessage(data: Record<string, unknown>, fallback: string): string {
   if (typeof data.detail === 'string') return data.detail;
+  if (typeof data.message === 'string' && data.message.trim()) return data.message;
+  if (typeof data.error === 'string' && data.error.trim()) return data.error;
   if (Array.isArray(data.non_field_errors) && data.non_field_errors.length) {
     return String(data.non_field_errors[0]);
   }
-  const firstKey = Object.keys(data)[0];
+  const firstKey = Object.keys(data).find((k) => {
+    const val = data[k];
+    return typeof val === 'string' || Array.isArray(val);
+  });
   if (firstKey) {
     const val = data[firstKey];
     if (Array.isArray(val)) return `${firstKey}: ${val[0]}`;
@@ -121,64 +126,163 @@ export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   auth?: boolean;
   skipRefresh?: boolean;
+  /** Skip short GET cache / in-flight dedupe */
+  noCache?: boolean;
+}
+
+/** Dédoublonnage Strict Mode + cache court pour listes publiques (réduit les 429). */
+const GET_CACHE_TTL_MS = 45_000;
+const getInflight = new Map<string, Promise<unknown>>();
+const getCache = new Map<string, { expires: number; data: unknown }>();
+
+/** File d’attente globale après un 429 — évite la rafale de retries simultanés. */
+let rateLimitUntil = 0;
+let rateLimitWait: Promise<void> | null = null;
+
+export function invalidateApiCache(match: string): void {
+  for (const key of getCache.keys()) {
+    if (key.includes(match)) getCache.delete(key);
+  }
+  for (const key of getInflight.keys()) {
+    if (key.includes(match)) getInflight.delete(key);
+  }
+}
+
+function getCacheKey(url: string, auth: boolean): string {
+  const token = auth ? (getToken() || '') : '';
+  return `${auth ? 'a' : 'n'}:${token.slice(-12)}:${url}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitIfRateLimited(): Promise<void> {
+  const waitMs = rateLimitUntil - Date.now();
+  if (waitMs <= 0) return;
+  if (!rateLimitWait) {
+    rateLimitWait = sleep(waitMs).finally(() => {
+      rateLimitWait = null;
+    });
+  }
+  await rateLimitWait;
+}
+
+function markRateLimited(retryAfterSec: number): void {
+  const ms = Math.min(Math.max(retryAfterSec, 1), 12) * 1000;
+  rateLimitUntil = Math.max(rateLimitUntil, Date.now() + ms);
 }
 
 export async function apiRequest<T = unknown>(
   path: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
-  const { body, auth = false, skipRefresh = false, headers: customHeaders, ...rest } = options;
+  const {
+    body,
+    auth = false,
+    skipRefresh = false,
+    noCache = false,
+    headers: customHeaders,
+    ...rest
+  } = options;
 
-  const headers: Record<string, string> = {
-    ...(customHeaders as Record<string, string>),
-  };
-
-  if (body !== undefined && !(body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
-  }
-
-  if (auth) {
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
-
+  const method = String(rest.method || 'GET').toUpperCase();
   const url = path.startsWith('/api') ? path : `/api/v1/${path.replace(/^\//, '')}`;
+  const canCacheGet = method === 'GET' && !noCache && body === undefined;
 
-  let response = await fetch(url, {
-    ...rest,
-    headers,
-    body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  if (canCacheGet) {
+    const key = getCacheKey(url, auth);
+    const hit = getCache.get(key);
+    if (hit && hit.expires > Date.now()) {
+      return hit.data as T;
+    }
+    const pending = getInflight.get(key);
+    if (pending) return pending as Promise<T>;
+  }
 
-  if (response.status === 401 && auth && !skipRefresh) {
-    const newToken = await refreshAccessToken();
-    if (newToken) {
-      headers['Authorization'] = `Bearer ${newToken}`;
-      response = await fetch(url, {
+  const run = async (): Promise<T> => {
+    await waitIfRateLimited();
+
+    const headers: Record<string, string> = {
+      ...(customHeaders as Record<string, string>),
+    };
+
+    if (body !== undefined && !(body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    if (auth) {
+      const token = getToken() || (headers.Authorization || '').replace(/^Bearer\s+/i, '') || null;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else if (!headers.Authorization) {
+        throw new ApiError('Session expirée. Veuillez vous reconnecter.', 401, {
+          detail: 'Aucun jeton d\'accès disponible.',
+        });
+      }
+    }
+
+    const doFetch = async () =>
+      fetch(url, {
         ...rest,
+        method,
         headers,
         body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
       });
-    } else {
-      // Pas de refresh / refresh échoué : déconnexion explicite
-      clearAuthStorage();
-      notifyAuthLogout();
+
+    let response = await doFetch();
+
+    if (response.status === 401 && auth && !skipRefresh) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`;
+        response = await doFetch();
+      } else {
+        clearAuthStorage();
+        notifyAuthLogout();
+      }
     }
+
+    // Un seul retry après backoff partagé (évite stampede Strict Mode / navigation)
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get('Retry-After') || '3');
+      markRateLimited(retryAfter);
+      await waitIfRateLimited();
+      response = await doFetch();
+    }
+
+    if (response.status === 204) return null as T;
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const fallback =
+        response.status === 429
+          ? 'Trop de requêtes. Patientez quelques secondes puis réessayez.'
+          : `Erreur HTTP ${response.status}`;
+      throw new ApiError(extractErrorMessage(data, fallback), response.status, data);
+    }
+
+    if (canCacheGet) {
+      getCache.set(getCacheKey(url, auth), {
+        expires: Date.now() + GET_CACHE_TTL_MS,
+        data,
+      });
+    }
+
+    return data as T;
+  };
+
+  if (!canCacheGet) {
+    return run();
   }
 
-  if (response.status === 204) return null as T;
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new ApiError(
-      extractErrorMessage(data, `Erreur HTTP ${response.status}`),
-      response.status,
-      data
-    );
-  }
-
-  return data as T;
+  const key = getCacheKey(url, auth);
+  const promise = run().finally(() => {
+    getInflight.delete(key);
+  });
+  getInflight.set(key, promise);
+  return promise as Promise<T>;
 }
 
 export const api = {

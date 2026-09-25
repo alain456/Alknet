@@ -103,9 +103,16 @@ export default function LandingPage() {
 
   return (
     <div className="w-full">
-      <section className="bg-gradient-to-br from-primary to-secondary py-20 px-4 text-center">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight">
+      <section className="bg-primary py-20 px-4 text-center text-surface relative overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(ellipse at 20% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)',
+          }}
+        />
+        <div className="max-w-4xl mx-auto relative">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-surface mb-6 leading-tight">
             {heroTitleLines.map((line, idx) => (
               <React.Fragment key={idx}>
                 {idx > 0 && <br />}
@@ -113,7 +120,7 @@ export default function LandingPage() {
               </React.Fragment>
             ))}
           </h1>
-          <p className="text-lg md:text-xl text-teal-50 mb-10 max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl text-surface/95 font-medium mb-10 max-w-2xl mx-auto leading-relaxed">
             {settings?.hero_subtitle
               || 'Find trusted professionals, book services, order from the best businesses, and discover new opportunities in Burundi.'}
           </p>
@@ -121,36 +128,36 @@ export default function LandingPage() {
           <div className="flex justify-center gap-4 mb-12 flex-wrap">
             <button
               onClick={() => go(settings?.hero_cta_primary_url || '/register-business')}
-              className="bg-accent hover:bg-yellow-400 text-gray-900 font-semibold py-3 px-8 rounded-lg shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
+              className="bg-accent hover:opacity-95 text-surface font-bold text-base py-3.5 px-8 rounded-xl border-2 border-surface/20 shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
             >
               <Building2 className="w-5 h-5" /> {settings?.hero_cta_primary_label || 'Créer une Entreprise'}
             </button>
             <button
               onClick={() => go(settings?.hero_cta_secondary_url || '/services')}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/30 font-semibold py-3 px-8 rounded-lg transition backdrop-blur-sm"
+              className="bg-surface/15 hover:bg-surface/25 text-surface border-2 border-surface/70 font-bold text-base py-3.5 px-8 rounded-xl transition backdrop-blur-sm"
             >
               {settings?.hero_cta_secondary_label || 'Explore Services'}
             </button>
           </div>
 
-          <div className="bg-white p-2 rounded-full shadow-2xl flex max-w-3xl mx-auto items-center">
-            <div className="flex-1 flex items-center px-4 border-r border-gray-200">
-              <Search className="text-gray-400 w-5 h-5 mr-2" />
+          <div className="bg-surface p-2 rounded-full shadow-2xl flex max-w-3xl mx-auto items-center border-2 border-accent">
+            <div className="flex-1 flex items-center px-4 border-r border-border">
+              <Search className="text-accent w-5 h-5 mr-2 shrink-0" />
               <input
                 type="text"
                 placeholder={settings?.search_placeholder || 'Profession, Business, Restaurant, Product...'}
-                className="w-full py-3 outline-none text-gray-700"
+                className="w-full py-3 outline-none text-ink text-base font-medium bg-transparent border-0"
               />
             </div>
             <div className="w-1/3 flex items-center px-4">
-              <MapPin className="text-gray-400 w-5 h-5 mr-2" />
+              <MapPin className="text-accent w-5 h-5 mr-2 shrink-0" />
               <input
                 type="text"
                 placeholder={settings?.search_location_placeholder || 'Location'}
-                className="w-full py-3 outline-none text-gray-700"
+                className="w-full py-3 outline-none text-ink text-base font-medium bg-transparent border-0"
               />
             </div>
-            <button className="bg-primary hover:bg-secondary text-white font-semibold py-3 px-8 rounded-full transition">
+            <button className="bg-primary hover:opacity-95 text-surface font-bold text-base py-3 px-8 rounded-full transition border-2 border-accent shrink-0">
               Search
             </button>
           </div>
@@ -438,13 +445,13 @@ export default function LandingPage() {
       )}
 
       {settings?.show_app_banner !== false && (
-      <section className="py-20 px-4 bg-primary text-white text-center">
+      <section className="py-20 px-4 bg-primary text-surface text-center">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-4xl font-bold mb-6">{settings?.app_banner_title || 'Take Isoko Hub everywhere'}</h2>
-          <p className="text-teal-100 text-lg mb-8">
+          <h2 className="text-3xl sm:text-4xl font-extrabold mb-6 text-surface">{settings?.app_banner_title || 'Take Isoko Hub everywhere'}</h2>
+          <p className="text-surface/90 text-lg sm:text-xl font-medium mb-8">
             {settings?.app_banner_subtitle || 'The official Isoko Hub mobile app is currently under development.'}
           </p>
-          <div className="inline-block border-2 border-white/20 rounded-full px-8 py-3 font-semibold tracking-wide text-white bg-white/5 backdrop-blur-md">
+          <div className="inline-block border-2 border-accent rounded-full px-8 py-3.5 font-bold tracking-wide text-surface text-base sm:text-lg bg-surface/10">
             {settings?.app_banner_badge || 'COMING SOON'}
           </div>
         </div>

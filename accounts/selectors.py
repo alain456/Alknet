@@ -1,12 +1,11 @@
 from django.contrib.auth import get_user_model
+from .email_identity import get_user_by_login_email, normalize_login_email
 
 User = get_user_model()
 
-def get_user_by_email(email: str) -> User | None:
+
+def get_user_by_email(email: str):
     """
-    Récupère un utilisateur par son adresse e-mail.
+    Récupère un utilisateur par email de connexion — égalité STRICTE uniquement.
     """
-    try:
-        return User.objects.get(email=email)
-    except User.DoesNotExist:
-        return None
+    return get_user_by_login_email(email)

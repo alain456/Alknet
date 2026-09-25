@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'analytics',
     'locations',
     'hospital',
+    'hotel.apps.HotelConfig',
     'wholesale',
     'retail',
     'bookings',
@@ -172,6 +173,13 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Uploads (ordonnances retail, etc.)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+# Ordonnance max ~8 Mo (images / PDF)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 8 * 1024 * 1024
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -216,13 +224,14 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     # Limitation de débit — protège l'API à grande échelle
+    # Soft* : pas de throttle en DEBUG (SPA locale multiplie les GET).
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'config.throttling.SoftAnonRateThrottle',
+        'config.throttling.SoftUserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': os.environ.get('THROTTLE_ANON', '60/min'),
-        'user': os.environ.get('THROTTLE_USER', '300/min'),
+        'anon': os.environ.get('THROTTLE_ANON', '120/min'),
+        'user': os.environ.get('THROTTLE_USER', '600/min'),
     },
 }
 
@@ -259,20 +268,42 @@ if _secure:
 BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', str(BASE_DIR / 'backups')))
 BACKUP_RETENTION_DAYS = int(os.environ.get('BACKUP_RETENTION_DAYS', '14'))
 
-# --- Lumicash (abonnements SaaS → compte marchand Isoko Hub) ---
-LUMICASH_STUB = os.environ.get('LUMICASH_STUB', '1') in ('1', 'true', 'True', 'yes')
-LUMICASH_MERCHANT_ACCOUNT = os.environ.get('LUMICASH_MERCHANT_ACCOUNT', 'ISOKO_HUB_MERCHANT').strip()
-LUMICASH_API_URL = os.environ.get('LUMICASH_API_URL', '').strip()
-LUMICASH_API_KEY = os.environ.get('LUMICASH_API_KEY', '').strip()
-LUMICASH_WEBHOOK_SECRET = os.environ.get('LUMICASH_WEBHOOK_SECRET', '').strip()
-# Prod : stub interdit sauf override explicite (LUMICASH_ALLOW_STUB_IN_PROD=1)
-if (not DEBUG) and LUMICASH_STUB and os.environ.get('LUMICASH_ALLOW_STUB_IN_PROD', '0') not in (
-    '1', 'true', 'True', 'yes',
-):
+# --- BurundiPay (paiements instantanés banques + mobile money) ---
+# Compat : LUMICASH_* encore accepté en fallback pendant la transition.
+def _env_first(*keys, default=''):
+    for key in keys:
+        val = os.environ.get(key)
+        if val is not None and str(val).strip() != '':
+            return str(val).strip()
+    return default
+
+BURUNDIPAY_STUB = _env_first('BURUNDIPAY_STUB', 'LUMICASH_STUB', default='1') in ('1', 'true', 'True', 'yes')
+BURUNDIPAY_MERCHANT_ACCOUNT = _env_first(
+    'BURUNDIPAY_MERCHANT_ACCOUNT', 'LUMICASH_MERCHANT_ACCOUNT', default='ISOKO_HUB_MERCHANT'
+)
+BURUNDIPAY_API_URL = _env_first('BURUNDIPAY_API_URL', 'LUMICASH_API_URL', default='')
+BURUNDIPAY_API_KEY = _env_first('BURUNDIPAY_API_KEY', 'LUMICASH_API_KEY', default='')
+BURUNDIPAY_WEBHOOK_SECRET = _env_first('BURUNDIPAY_WEBHOOK_SECRET', 'LUMICASH_WEBHOOK_SECRET', default='')
+BURUNDIPAY_CALLBACK_URL = _env_first('BURUNDIPAY_CALLBACK_URL', 'LUMICASH_CALLBACK_URL', default='')
+BURUNDIPAY_COLLECT_PATH = _env_first('BURUNDIPAY_COLLECT_PATH', default='/v1/collections')
+BURUNDIPAY_STATUS_PATH = _env_first('BURUNDIPAY_STATUS_PATH', default='/v1/collections/{id}')
+BURUNDIPAY_REFUND_PATH = _env_first('BURUNDIPAY_REFUND_PATH', default='/v1/refunds')
+BURUNDIPAY_HTTP_TIMEOUT = _env_first('BURUNDIPAY_HTTP_TIMEOUT', default='30')
+# Alias historiques pour code / imports legacy
+LUMICASH_STUB = BURUNDIPAY_STUB
+LUMICASH_MERCHANT_ACCOUNT = BURUNDIPAY_MERCHANT_ACCOUNT
+LUMICASH_API_URL = BURUNDIPAY_API_URL
+LUMICASH_API_KEY = BURUNDIPAY_API_KEY
+LUMICASH_WEBHOOK_SECRET = BURUNDIPAY_WEBHOOK_SECRET
+LUMICASH_CALLBACK_URL = BURUNDIPAY_CALLBACK_URL
+# Prod : stub interdit sauf override explicite
+if (not DEBUG) and BURUNDIPAY_STUB and _env_first(
+    'BURUNDIPAY_ALLOW_STUB_IN_PROD', 'LUMICASH_ALLOW_STUB_IN_PROD', default='0'
+) not in ('1', 'true', 'True', 'yes'):
     raise ImproperlyConfigured(
-        'LUMICASH_STUB=1 est interdit hors DEBUG. '
-        'Configurez LUMICASH_API_URL/KEY et LUMICASH_STUB=0, '
-        'ou forcez LUMICASH_ALLOW_STUB_IN_PROD=1 uniquement pour un staging contrôlé.'
+        'BURUNDIPAY_STUB=1 est interdit hors DEBUG. '
+        'Configurez BURUNDIPAY_API_URL/KEY et BURUNDIPAY_STUB=0, '
+        'ou forcez BURUNDIPAY_ALLOW_STUB_IN_PROD=1 uniquement pour un staging contrôlé.'
     )
 
 # Allow large payloads (e.g. Base64 images)

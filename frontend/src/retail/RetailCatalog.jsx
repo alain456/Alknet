@@ -229,7 +229,7 @@ export default function RetailCatalog({ clientMode = false }) {
                       <ShoppingCart className="w-3.5 h-3.5" /> Ajouter
                     </button>
                   ) : (
-                    <button type="button" onClick={() => edit(product)} className="p-2 hover:bg-green-50 rounded-lg text-primary" aria-label={`Modifier ${product.name}`}>
+                    <button type="button" onClick={() => edit(product)} className="icon-btn" aria-label={`Modifier ${product.name}`}>
                       <Pencil className="w-4 h-4" />
                     </button>
                   )}

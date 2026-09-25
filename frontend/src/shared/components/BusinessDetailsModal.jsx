@@ -6,6 +6,7 @@ import {
   FileText, CheckCircle2, AlertTriangle, Utensils, Hotel, 
   Check, Sparkles, User, Package, History
 } from 'lucide-react';
+import { websiteHref } from '../websiteUrl';
 
 function isWholesalePharmacy(business) {
   const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
@@ -29,6 +30,18 @@ function isCommerceShop(business) {
   return keys.some((k) => name.includes(k) || slug.includes(k));
 }
 
+function isHotelBusiness(business) {
+  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
+  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
+  return (
+    name.includes('hôtel')
+    || name.includes('hotel')
+    || name.includes('hôtellerie')
+    || name.includes('hotellerie')
+    || slug.includes('hotel')
+  );
+}
+
 export default function BusinessDetailsModal({
   isOpen, onClose, business, categories = [], showModerationStatus = false,
 }) {
@@ -38,6 +51,7 @@ export default function BusinessDetailsModal({
   const wholesale = isWholesalePharmacy(business);
   const retail = isRetailPharmacy(business);
   const commerce = isCommerceShop(business);
+  const hotel = isHotelBusiness(business);
 
   // Resolve category names
   const primaryCategoryName = business.primary_category_name || 
@@ -219,7 +233,12 @@ export default function BusinessDetailsModal({
                 <Globe className="w-3.5 h-3.5 text-gray-400" /> Site Web
               </span>
               {business.website ? (
-                <a href={business.website} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline text-xs truncate block">
+                <a
+                  href={websiteHref(business.website)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-blue-600 dark:text-blue-400 hover:underline text-xs truncate block"
+                >
                   {business.website}
                 </a>
               ) : (
@@ -323,6 +342,18 @@ export default function BusinessDetailsModal({
             >
               <History className="w-4 h-4" /> Historique
             </button>
+            {hotel && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/hotels/${business.id}`);
+                }}
+                className="px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Hotel className="w-4 h-4" /> Voir l&apos;établissement
+              </button>
+            )}
             {wholesale && (
               <button
                 type="button"

@@ -1,12 +1,17 @@
-Oui. Pour AlkNet, je te conseille de donner à Cursor un **prompt d'architecture IA**, et non pas simplement « ajoute de l'IA ». Le prompt doit préciser **ce que l'IA fait, ce qu'elle ne doit pas faire, comment elle communique avec Django et comment elle évoluera**.
+Oui. Pour AlkNet, je te conseille de donner à Cursor un 
+**prompt d'architecture IA**, et non pas simplement « ajoute de l'IA ».
+ Le prompt doit préciser **ce que l'IA fait, ce qu'elle ne doit pas faire, 
+ comment elle communique avec Django et comment elle évoluera**.
 
 Voici un prompt que tu peux directement donner à Cursor :
 
 # ALKNET — MODULE IA INTELLIGENT
 
-Tu es un architecte logiciel senior spécialisé en IA, Django, systèmes de recommandation, NLP, recherche sémantique et plateformes SaaS.
+Tu es un architecte logiciel senior spécialisé en IA, Django, systèmes de recommandation, NLP, 
+recherche sémantique et plateformes SaaS.
 
-Je développe **AlkNet**, une plateforme numérique multiservices SaaS qui commence au Burundi et qui a pour objectif de s'étendre progressivement à d'autres pays africains.
+Je développe **AlkNet**, une plateforme numérique multiservices SaaS qui commence au Burundi et
+ qui a pour objectif de s'étendre progressivement à d'autres pays africains.
 
 AlkNet met en relation :
 
@@ -59,7 +64,9 @@ Une application mobile Flutter pourra être ajoutée ultérieurement.
 
 L'objectif du module IA est de rendre AlkNet intelligent.
 
-L'IA doit pouvoir comprendre les besoins des utilisateurs, analyser les données de la plateforme et proposer automatiquement les services, entreprises, professionnels, produits et opportunités les plus pertinents.
+L'IA doit pouvoir comprendre les besoins des utilisateurs, analyser les données de la plateforme et 
+proposer automatiquement les services, entreprises, professionnels, produits et opportunités les plus 
+pertinents.
 
 L'IA ne doit pas remplacer le backend Django.
 
@@ -132,7 +139,8 @@ Chaque fonctionnalité IA doit pouvoir être développée, testée et remplacée
 
 # 3. RECOMMANDATION INTELLIGENTE
 
-Créer un moteur de recommandation inspiré du fonctionnement de plateformes comme LinkedIn, Airbnb et autres marketplaces.
+Créer un moteur de recommandation inspiré du fonctionnement de plateformes comme LinkedIn,
+ Airbnb et autres marketplaces.
 
 Le système doit recommander :
 
@@ -222,7 +230,8 @@ Services potentiels :
 * électricien
 * plombier
 
-L'IA doit transformer la requête en représentation sémantique et rechercher les résultats les plus pertinents.
+L'IA doit transformer la requête en représentation sémantique et rechercher les résultats 
+les plus pertinents.
 
 Utiliser des embeddings et une recherche vectorielle.
 

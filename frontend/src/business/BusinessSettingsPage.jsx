@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Building2, MapPin, Phone, Globe, Save, Star, Upload } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Settings, Building2, MapPin, Phone, Globe, Save, Star, Upload, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getBusinessCategoryKey } from '../auth/roleAccess';
 import SectorSpecificFields from '../shared/components/SectorSpecificFields';
 import LocationSelector from '../shared/components/LocationSelector';
 import { readImageAsDataUrl } from '../shared/imageUpload';
 import api from '../shared/api';
+import { normalizeWebsiteUrl } from '../shared/websiteUrl';
+import WholesaleOperationalSettings from './WholesaleOperationalSettings';
+import RetailOperationalSettings from './RetailOperationalSettings';
+import HospitalOperationalSettings from './HospitalOperationalSettings';
 
 export default function BusinessSettingsPage() {
   const [categories, setCategories] = useState([]);
@@ -15,6 +20,7 @@ export default function BusinessSettingsPage() {
     logo: '',
     description: '',
     primary_category: '',
+    primary_category_name: '',
     category_ids: [],
     extra_attributes: {},
     province: 'Bujumbura Mairie',
@@ -33,7 +39,19 @@ export default function BusinessSettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState('');
-  const { token, authFetch } = useAuth();
+  const { token, authFetch, user } = useAuth();
+
+  const sectorKey = useMemo(() => {
+    const fromUser = getBusinessCategoryKey(user);
+    if (fromUser && fromUser !== 'business') return fromUser;
+    const cat = categories.find((c) => String(c.id) === String(formData.primary_category));
+    const name = (cat?.name || formData.primary_category_name || '').toLowerCase();
+    if (name.includes('pharmac') && name.includes('gros')) return 'wholesale';
+    if (name.includes('pharmac')) return 'retail_pharmacy';
+    if (name.includes('hôpital') || name.includes('hopital') || name.includes('sant') || name.includes('clinique')) return 'hospital';
+    if (name.includes('hôtel') || name.includes('hotel')) return 'hotel';
+    return fromUser || 'business';
+  }, [user, categories, formData.primary_category, formData.primary_category_name]);
 
   useEffect(() => {
     const load = async () => {
@@ -52,6 +70,7 @@ export default function BusinessSettingsPage() {
               logo: b.logo || '',
               description: b.description || '',
               primary_category: b.primary_category || '',
+              primary_category_name: b.primary_category_name || '',
               category_ids: b.category_ids || [],
               extra_attributes: b.extra_attributes || {},
               province: b.province || 'Bujumbura Mairie',
@@ -105,7 +124,8 @@ export default function BusinessSettingsPage() {
     setError('');
 
     try {
-      const payload = { ...formData };
+      const payload = { ...formData, website: normalizeWebsiteUrl(formData.website) };
+      delete payload.primary_category_name;
       if (!payload.logo && hasExistingLogo) {
         delete payload.logo;
       }
@@ -290,8 +310,20 @@ export default function BusinessSettingsPage() {
                 <input name="phone" value={formData.phone} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 flex items-center gap-1"><Globe className="w-4 h-4" /> Site web</label>
-                <input name="website" value={formData.website} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800" />
+                <label className="block text-sm font-medium mb-1 flex items-center gap-1"><Mail className="w-4 h-4" /> E-mail</label>
+                <input name="email" type="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1 flex items-center gap-1"><Globe className="w-4 h-4" /> Site web officiel</label>
+                <input
+                  name="website"
+                  type="url"
+                  placeholder="https://www.exemple.com"
+                  value={formData.website}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800"
+                />
+                <p className="text-xs text-gray-500 mt-1">Visible côté clients dans les informations de l&apos;entreprise.</p>
               </div>
             </div>
           </div>
@@ -308,6 +340,14 @@ export default function BusinessSettingsPage() {
           </div>
         </form>
       </div>
+
+      {(sectorKey === 'wholesale' || sectorKey === 'retail_pharmacy' || sectorKey === 'hospital') && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 md:p-8">
+          {sectorKey === 'wholesale' && <WholesaleOperationalSettings />}
+          {sectorKey === 'retail_pharmacy' && <RetailOperationalSettings />}
+          {sectorKey === 'hospital' && <HospitalOperationalSettings />}
+        </div>
+      )}
     </div>
   );
 }

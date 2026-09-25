@@ -306,7 +306,7 @@ export default function AdminLocationsPage() {
                       onClick={() => toggleProvince(province.id)}
                       className="flex items-center gap-3 cursor-pointer select-none flex-1"
                     >
-                      <button className="p-1 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 transition">
+                      <button className="icon-btn">
                         {isProvExpanded ? <ChevronDown className="w-5 h-5 text-green-700" /> : <ChevronRight className="w-5 h-5" />}
                       </button>
                       
@@ -335,14 +335,14 @@ export default function AdminLocationsPage() {
 
                       <button 
                         onClick={() => openModal('edit-province', province)}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer"
+                        className="icon-btn"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
 
                       <button 
                         onClick={() => handleDelete('province', province.id, province.name)}
-                        className="p-1.5 text-red-400 hover:text-red-600 transition cursor-pointer"
+                        className="icon-btn icon-btn--danger"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -367,7 +367,7 @@ export default function AdminLocationsPage() {
                                   onClick={() => toggleCommune(commune.id)}
                                   className="flex items-center gap-3 cursor-pointer select-none flex-1"
                                 >
-                                  <button className="p-1 rounded text-gray-400 hover:text-gray-700">
+                                  <button className="icon-btn">
                                     {isComExpanded ? <ChevronDown className="w-4 h-4 text-green-600" /> : <ChevronRight className="w-4 h-4" />}
                                   </button>
                                   <Building className="w-4 h-4 text-green-600" />
@@ -390,14 +390,14 @@ export default function AdminLocationsPage() {
 
                                   <button 
                                     onClick={() => openModal('edit-commune', commune, { province_id: province.id })}
-                                    className="p-1 text-gray-400 hover:text-gray-700"
+                                    className="icon-btn"
                                   >
                                     <Edit className="w-3.5 h-3.5" />
                                   </button>
 
                                   <button 
                                     onClick={() => handleDelete('commune', commune.id, commune.name)}
-                                    className="p-1 text-red-400 hover:text-red-600"
+                                    className="icon-btn icon-btn--danger"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -445,14 +445,14 @@ export default function AdminLocationsPage() {
 
                                               <button 
                                                 onClick={() => openModal('edit-zone', zone, { commune_id: commune.id })}
-                                                className="p-1 text-gray-400 hover:text-gray-700"
+                                                className="icon-btn"
                                               >
                                                 <Edit className="w-3 h-3" />
                                               </button>
 
                                               <button 
                                                 onClick={() => handleDelete('zone', zone.id, zone.name)}
-                                                className="p-1 text-red-400 hover:text-red-600"
+                                                className="icon-btn icon-btn--danger"
                                               >
                                                 <Trash2 className="w-3 h-3" />
                                               </button>

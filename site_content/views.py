@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.utils import timezone
 from datetime import timedelta
-from permissions.api_permissions import IsSuperAdmin
+from permissions.custom_permissions import PlatformResourcePermission, PlatformMethodPermission
 from .models import SiteSettings, FooterLink, Partner, ContentPage, ContactMessage
 from .serializers import (
     SiteSettingsSerializer,
@@ -86,10 +86,28 @@ def _super_admin_emails():
     return [e for e in emails if e]
 
 
+def _platform_inbox_emails():
+    """Super Admin + acteurs Support (PLATFORM_SUPPORT)."""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    emails = list(
+        User.objects.filter(
+            role__in=('SUPER_ADMIN', 'PLATFORM_SUPPORT'),
+            is_active=True,
+        ).exclude(email='').values_list('email', flat=True)
+    )
+    # Fallback DEFAULT_FROM / CONTACT
+    emails = list(dict.fromkeys([e.strip() for e in emails if e and str(e).strip()]))
+    if not emails:
+        return _super_admin_emails()
+    return emails
+
+
 def notify_super_admins_contact(msg: ContactMessage):
-    recipients = _super_admin_emails()
+    """Notifie Super Admin + Support d’un nouveau message Contact Us."""
+    recipients = _platform_inbox_emails()
     if not recipients:
-        return {"status": "SKIPPED", "reason": "Aucun email Super Admin"}
+        return {"status": "SKIPPED", "reason": "Aucun email Support / Super Admin"}
 
     subject = f"[Isoko Hub] Contact : {msg.subject}"
     body = (
@@ -100,6 +118,7 @@ def notify_super_admins_contact(msg: ContactMessage):
         f"Objet : {msg.subject}\n\n"
         f"Message :\n{msg.message}\n\n"
         f"— Reçu le {timezone.localtime(msg.created_at).strftime('%d/%m/%Y %H:%M')}\n"
+        f"Répondre dans l’admin : /admin/support\n"
     )
     try:
         send_mail(
@@ -172,7 +191,8 @@ def public_contact_submit(request):
 
 
 class SiteSettingsAdminView(viewsets.ViewSet):
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformResourcePermission]
+    platform_resource = 'cms'
 
     def list(self, request):
         settings = ensure_defaults()
@@ -191,30 +211,43 @@ class SiteSettingsAdminView(viewsets.ViewSet):
 
 class FooterLinkViewSet(viewsets.ModelViewSet):
     serializer_class = FooterLinkSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformResourcePermission]
+    platform_resource = 'cms'
     queryset = FooterLink.objects.all()
 
 
 class PartnerViewSet(viewsets.ModelViewSet):
     serializer_class = PartnerSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformResourcePermission]
+    platform_resource = 'cms'
     queryset = Partner.objects.all()
 
 
 class ContentPageViewSet(viewsets.ModelViewSet):
     serializer_class = ContentPageSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformResourcePermission]
+    platform_resource = 'cms'
     queryset = ContentPage.objects.all()
     lookup_field = "slug"
 
 
 class ContactMessageAdminViewSet(viewsets.ModelViewSet):
-    """Boîte de réception Super Admin pour les messages Contact Us."""
+    """Boîte de réception Support / Super Admin pour Contact Us."""
 
     serializer_class = ContactMessageAdminSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        "GET": ("platform.cms.view", "platform.users.view"),
+        "HEAD": ("platform.cms.view", "platform.users.view"),
+        "OPTIONS": ("platform.cms.view", "platform.users.view"),
+        # Support a users.view (sans cms.update pages) — peut lire/répondre/marquer lu
+        "POST": ("platform.cms.update", "platform.users.view"),
+        "PATCH": ("platform.cms.update", "platform.users.view"),
+        "PUT": ("platform.cms.update", "platform.users.view"),
+        "DELETE": "platform.cms.delete",
+    }
     queryset = ContactMessage.objects.all()
-    http_method_names = ["get", "patch", "delete", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def list(self, request, *args, **kwargs):
         qs = self.get_queryset()
@@ -233,3 +266,52 @@ class ContactMessageAdminViewSet(viewsets.ModelViewSet):
     def mark_all_read(self, request):
         updated = ContactMessage.objects.filter(is_read=False).update(is_read=True)
         return Response({"updated": updated})
+
+    @action(detail=True, methods=["post"])
+    def reply(self, request, pk=None):
+        """Envoie une réponse email au client et journalise le suivi."""
+        msg = self.get_object()
+        body = (request.data.get("body") or request.data.get("reply") or request.data.get("message") or "").strip()
+        if len(body) < 3:
+            return Response(
+                {"detail": "Réponse trop courte (min. 3 caractères)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        notes = (request.data.get("admin_notes") or msg.admin_notes or "").strip()
+        subject = f"Re: {msg.subject}"
+        mail_body = (
+            f"Bonjour {msg.name},\n\n"
+            f"{body}\n\n"
+            f"— L’équipe Isoko Hub\n\n"
+            f"---\nVotre message du "
+            f"{timezone.localtime(msg.created_at).strftime('%d/%m/%Y %H:%M')} :\n"
+            f"{msg.message}\n"
+        )
+        try:
+            send_mail(
+                subject=subject,
+                message=mail_body,
+                from_email=getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@isokohub.bi"),
+                recipient_list=[msg.email],
+                fail_silently=False,
+            )
+        except Exception as exc:
+            logger.exception("Échec reply contact %s", msg.id)
+            return Response(
+                {"detail": f"Envoi impossible : {exc}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        msg.reply_body = body
+        msg.replied_at = timezone.now()
+        msg.replied_by = request.user if request.user.is_authenticated else None
+        msg.is_read = True
+        if notes:
+            msg.admin_notes = notes
+        msg.save(update_fields=[
+            "reply_body", "replied_at", "replied_by", "is_read", "admin_notes", "updated_at",
+        ])
+        return Response({
+            **self.get_serializer(msg).data,
+            "message": f"Réponse envoyée à {msg.email}.",
+        })

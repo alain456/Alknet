@@ -1,5 +1,7 @@
 from decimal import Decimal
+import json
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Case, IntegerField, Q, Sum, When
 from django.utils import timezone
@@ -35,6 +37,10 @@ from .order_workflow import (
     sync_draft_proforma,
 )
 from .permissions import IsRetailPharmacyAdmin, is_retail_pharmacy
+from .prescription_files import (
+    attach_prescription_file,
+    extract_prescription_upload,
+)
 from .serializers import (
     PrescriptionSerializer,
     ProformaInvoiceSerializer,
@@ -69,26 +75,77 @@ def _patient_details(user, data):
     return name, email, phone
 
 
-def _lumicash_payment_from_request(data):
-    """Extrait moyen de paiement + numéro Lumicash (requis) pour une commande."""
-    from businesses.lumicash import normalize_phone
+def _burundipay_payment_from_request(data):
+    """Extrait moyen de paiement + numéro BurundiPay (requis) pour une commande."""
+    from businesses.burundipay import is_burundipay_method, normalize_phone
 
-    method = (data.get('payment_method') or 'LUMICASH').strip().upper() or 'LUMICASH'
+    method = (data.get('payment_method') or 'BURUNDIPAY').strip().upper() or 'BURUNDIPAY'
+    if method == 'LUMICASH':
+        method = 'BURUNDIPAY'
     raw_phone = (
         data.get('payer_phone')
+        or data.get('burundipay_phone')
+        or data.get('payer_burundipay')
         or data.get('lumicash_phone')
         or data.get('payer_lumicash')
         or ''
     ).strip()
-    if method != 'LUMICASH':
+    if not is_burundipay_method(method):
         return method, raw_phone[:40], None
     if not raw_phone:
-        return None, None, 'Indiquez votre numéro Lumicash pour le paiement.'
+        return None, None, 'Indiquez votre numéro BurundiPay (banque ou mobile money) pour le paiement.'
     phone = normalize_phone(raw_phone)
     digits = ''.join(c for c in phone if c.isdigit())
     if len(digits) < 8:
-        return None, None, 'Numéro Lumicash invalide.'
-    return 'LUMICASH', phone[:40], None
+        return None, None, 'Numéro BurundiPay invalide.'
+    return 'BURUNDIPAY', phone[:40], None
+
+
+def _parse_items_payload(raw):
+    if raw is None or raw == '':
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+    if not isinstance(raw, list):
+        return None
+    return raw
+
+
+def _create_order_prescription(*, business, order, patient, name, email, request):
+    """Crée une Prescription depuis upload fichier (prioritaire) ou URL legacy."""
+    uploaded = extract_prescription_upload(request.data)
+    if uploaded is None and hasattr(request, 'FILES'):
+        uploaded = extract_prescription_upload(request.FILES)
+    legacy_url = (request.data.get('prescription_file_url') or request.data.get('file_url') or '').strip()
+    if not uploaded and not legacy_url:
+        return None
+    prescription = Prescription(
+        retail_business=business,
+        order=order,
+        patient=patient,
+        patient_name=name,
+        patient_email=email,
+        file_url=legacy_url if not uploaded else '',
+    )
+    if uploaded:
+        attach_prescription_file(prescription, uploaded)
+    prescription.save()
+    return prescription
+
+
+def _prescription_required_error(needs_rx, request):
+    if not needs_rx:
+        return None
+    uploaded = extract_prescription_upload(request.data)
+    if uploaded is None and hasattr(request, 'FILES'):
+        uploaded = extract_prescription_upload(request.FILES)
+    legacy_url = (request.data.get('prescription_file_url') or request.data.get('file_url') or '').strip()
+    if uploaded or legacy_url:
+        return None
+    return 'Ordonnance obligatoire : joignez un fichier (image ou PDF).'
 
 
 class RetailProfileViewSet(viewsets.ModelViewSet):
@@ -113,7 +170,7 @@ class RetailProfileViewSet(viewsets.ModelViewSet):
         serializer.save()
         fields = {
             key: request.data[key]
-            for key in ('phone', 'email', 'address', 'description')
+            for key in ('phone', 'email', 'address', 'description', 'website')
             if key in request.data
         }
         if fields:
@@ -262,14 +319,34 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
         ).prefetch_related(
             'items', 'events', 'prescriptions', 'notification_logs'
         )
-        if business:
+
+        params = self.request.query_params
+        pharmacy_id = (
+            params.get('pharmacy')
+            or params.get('retail_business')
+            or params.get('business')
+        )
+
+        # Historique client pour une pharmacie précise (ex. JoyPharma) :
+        # commandes du compte OU passées en invité avec le même email.
+        # Prioritaire même si l'utilisateur est aussi admin ailleurs / SUPER_ADMIN.
+        if pharmacy_id and user.is_authenticated:
+            email = (getattr(user, 'email', None) or '').strip()
+            own = Q(patient=user) | Q(created_by=user)
+            if email:
+                own |= Q(patient_email__iexact=email) | Q(notification_email__iexact=email)
+            qs = qs.filter(retail_business_id=pharmacy_id).filter(own)
+        elif business:
             qs = qs.filter(retail_business=business)
-        elif user.is_authenticated and user.role == 'CUSTOMER':
-            qs = qs.filter(Q(patient=user) | Q(created_by=user))
+        elif user.is_authenticated:
+            email = (getattr(user, 'email', None) or '').strip()
+            own = Q(patient=user) | Q(created_by=user)
+            if email:
+                own |= Q(patient_email__iexact=email) | Q(notification_email__iexact=email)
+            qs = qs.filter(own)
         else:
             return qs.none()
 
-        params = self.request.query_params
         if params.get('status'):
             qs = qs.filter(status=params['status'])
         if params.get('patient_email'):
@@ -301,8 +378,8 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['post'])
     def pay(self, request, pk=None):
-        """Client : paie la commande via Lumicash → marchand pharmacie."""
-        from businesses import lumicash as lumicash_client
+        """Client : paie la commande via BurundiPay → marchand pharmacie."""
+        from businesses import burundipay as burundipay_client
         from .order_payment import initiate_order_payment
 
         order = self.get_object()
@@ -313,7 +390,7 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
             or ''
         ).strip()
         if not payer_phone:
-            return Response({'error': 'payer_phone (Lumicash) requis.'}, status=400)
+            return Response({'error': 'payer_phone (BurundiPay) requis.'}, status=400)
         result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = self.get_serializer(order).data
@@ -321,7 +398,7 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
             'ok': result.get('ok'),
             'already_paid': result.get('already_paid', False),
             'message': result.get('message') or '',
-            'stub_mode': result.get('stub_mode', lumicash_client.is_stub_mode()),
+            'stub_mode': result.get('stub_mode', burundipay_client.is_stub_mode()),
             'amount_bif': result.get('amount_bif'),
             'currency': result.get('currency'),
             'merchant_account': result.get('merchant_account'),
@@ -331,7 +408,7 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='confirm-payment')
     def confirm_payment(self, request, pk=None):
-        """Simulation : confirme le PIN Lumicash pour une commande."""
+        """Simulation : confirme le PIN BurundiPay pour une commande."""
         from .order_payment import confirm_order_payment_stub
 
         order = self.get_object()
@@ -539,7 +616,7 @@ class RetailCartViewSet(viewsets.ViewSet):
                 status=400,
             )
         name, email, phone = _patient_details(request.user, request.data)
-        payment_method, payer_phone, pay_err = _lumicash_payment_from_request(request.data)
+        payment_method, payer_phone, pay_err = _burundipay_payment_from_request(request.data)
         if pay_err:
             return Response({'error': pay_err}, status=400)
         file_url = (request.data.get('prescription_file_url') or '').strip()
@@ -547,11 +624,9 @@ class RetailCartViewSet(viewsets.ViewSet):
             item.product and item.product.prescription_required
             for item in cart.items.all()
         )
-        if needs_rx and not file_url:
-            return Response(
-                {'error': 'Ordonnance obligatoire pour au moins un produit du panier.'},
-                status=400,
-            )
+        rx_err = _prescription_required_error(needs_rx, request)
+        if rx_err:
+            return Response({'error': rx_err}, status=400)
         try:
             order = create_order_from_items(
                 cart.retail_business,
@@ -563,19 +638,24 @@ class RetailCartViewSet(viewsets.ViewSet):
                 payer_phone=payer_phone, payment_method=payment_method,
             )
             proforma = create_order_proforma(order)
-            if file_url:
-                Prescription.objects.create(
-                    retail_business=cart.retail_business, order=order,
-                    patient=request.user, patient_name=name, patient_email=email,
-                    file_url=file_url,
+            try:
+                _create_order_prescription(
+                    business=cart.retail_business,
+                    order=order,
+                    patient=request.user,
+                    name=name,
+                    email=email,
+                    request=request,
                 )
+            except DjangoValidationError as exc:
+                raise ValueError(exc.messages[0] if getattr(exc, 'messages', None) else str(exc))
             proforma.cart = None
             proforma.save(update_fields=['cart', 'updated_at'])
             cart.items.all().delete()
         except (RetailProduct.DoesNotExist, ValueError) as exc:
             return Response({'error': str(exc)}, status=400)
         from .order_payment import initiate_order_payment
-        from businesses import lumicash as lumicash_client
+        from businesses import burundipay as burundipay_client
         pay_result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = RetailOrderSerializer(order).data
@@ -583,7 +663,7 @@ class RetailCartViewSet(viewsets.ViewSet):
             'ok': pay_result.get('ok'),
             'already_paid': pay_result.get('already_paid', False),
             'message': pay_result.get('message') or '',
-            'stub_mode': pay_result.get('stub_mode', lumicash_client.is_stub_mode()),
+            'stub_mode': pay_result.get('stub_mode', burundipay_client.is_stub_mode()),
             'amount_bif': pay_result.get('amount_bif'),
             'merchant_account': pay_result.get('merchant_account'),
             'provider_reference': pay_result.get('provider_reference'),
@@ -625,17 +705,29 @@ class PrescriptionViewSet(
         owns_order = bool(user and order.patient_id == user.id)
         if not owns_order and supplied_email != order.patient_email.lower():
             return Response({'error': 'Informations patient invalides.'}, status=403)
-        file_url = (request.data.get('file_url') or '').strip()
-        if not file_url:
-            return Response({'error': 'file_url requis.'}, status=400)
-        prescription = Prescription.objects.create(
+        uploaded = extract_prescription_upload(request.data)
+        if uploaded is None and hasattr(request, 'FILES'):
+            uploaded = extract_prescription_upload(request.FILES)
+        legacy_url = (request.data.get('file_url') or request.data.get('prescription_file_url') or '').strip()
+        if not uploaded and not legacy_url:
+            return Response({'error': 'Joignez un fichier ordonnance (image ou PDF).'}, status=400)
+        prescription = Prescription(
             retail_business=order.retail_business,
             order=order,
             patient=order.patient,
             patient_name=order.patient_name,
             patient_email=order.patient_email,
-            file_url=file_url,
+            file_url=legacy_url if not uploaded else '',
         )
+        try:
+            if uploaded:
+                attach_prescription_file(prescription, uploaded)
+            prescription.save()
+        except DjangoValidationError as exc:
+            return Response(
+                {'error': (exc.messages[0] if getattr(exc, 'messages', None) else str(exc))},
+                status=400,
+            )
         return Response(self.get_serializer(prescription).data, status=201)
 
     @action(detail=True, methods=['post'])
@@ -690,7 +782,9 @@ def list_retail_pharmacies(request):
 @transaction.atomic
 def guest_checkout(request):
     pharmacy_id = request.data.get('retail_id') or request.data.get('pharmacy_id')
-    rows = request.data.get('items') or []
+    rows = _parse_items_payload(request.data.get('items'))
+    if rows is None:
+        return Response({'error': 'Format items invalide.'}, status=400)
     name, email, phone = _patient_details(
         request.user if request.user.is_authenticated else None, request.data
     )
@@ -698,7 +792,7 @@ def guest_checkout(request):
         return Response({'error': 'Pharmacie et articles requis.'}, status=400)
     if not name or not email:
         return Response({'error': 'Nom et email du patient requis.'}, status=400)
-    payment_method, payer_phone, pay_err = _lumicash_payment_from_request(request.data)
+    payment_method, payer_phone, pay_err = _burundipay_payment_from_request(request.data)
     if pay_err:
         return Response({'error': pay_err}, status=400)
     try:
@@ -715,17 +809,17 @@ def guest_checkout(request):
             {'error': 'Cette pharmacie a temporairement bloqué les nouvelles commandes.'},
             status=400,
         )
-    user = request.user if request.user.is_authenticated and request.user.role == 'CUSTOMER' else None
-    file_url = (request.data.get('prescription_file_url') or '').strip()
+    # Client connecté → rattacher la commande à son compte (historique visible)
+    user = request.user if request.user.is_authenticated else None
+    if user and getattr(user, 'role', None) == 'SUPER_ADMIN':
+        user = None
     product_ids = [row.get('product_id') for row in rows if row.get('product_id')]
     needs_rx = RetailProduct.objects.filter(
         id__in=product_ids, retail_business=business, prescription_required=True,
     ).exists()
-    if needs_rx and not file_url:
-        return Response(
-            {'error': 'Ordonnance obligatoire pour au moins un produit de la commande.'},
-            status=400,
-        )
+    rx_err = _prescription_required_error(needs_rx, request)
+    if rx_err:
+        return Response({'error': rx_err}, status=400)
     try:
         order = create_order_from_items(
             business, rows, name, email, phone,
@@ -733,15 +827,19 @@ def guest_checkout(request):
             payer_phone=payer_phone, payment_method=payment_method,
         )
         create_order_proforma(order)
+        _create_order_prescription(
+            business=business, order=order, patient=user,
+            name=name, email=email, request=request,
+        )
+    except DjangoValidationError as exc:
+        return Response(
+            {'error': (exc.messages[0] if getattr(exc, 'messages', None) else str(exc))},
+            status=400,
+        )
     except (RetailProduct.DoesNotExist, ValueError) as exc:
         return Response({'error': str(exc)}, status=400)
-    if file_url:
-        Prescription.objects.create(
-            retail_business=business, order=order, patient=user,
-            patient_name=name, patient_email=email, file_url=file_url,
-        )
     from .order_payment import initiate_order_payment
-    from businesses import lumicash as lumicash_client
+    from businesses import burundipay as burundipay_client
     pay_result = initiate_order_payment(order, payer_phone)
     order.refresh_from_db()
     data = RetailOrderSerializer(order).data
@@ -749,7 +847,7 @@ def guest_checkout(request):
         'ok': pay_result.get('ok'),
         'already_paid': pay_result.get('already_paid', False),
         'message': pay_result.get('message') or '',
-        'stub_mode': pay_result.get('stub_mode', lumicash_client.is_stub_mode()),
+        'stub_mode': pay_result.get('stub_mode', burundipay_client.is_stub_mode()),
         'amount_bif': pay_result.get('amount_bif'),
         'merchant_account': pay_result.get('merchant_account'),
         'provider_reference': pay_result.get('provider_reference'),

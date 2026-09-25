@@ -3,7 +3,9 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView, ProfileView, AdminUserListView, AdminProfessionalListView,
-    CustomTokenObtainPairView, AdminUserCreateView, AdminUserDetailView, AdminAuditLogListView,
+    CustomTokenObtainPairView,     AdminUserCreateView, AdminUserDetailView, AdminAuditLogListView,
+    AdminPlatformRoleListView, AdminPlatformRoleDetailView,
+    AdminPlatformActorListCreateView, AdminPlatformActorDetailView,
     VerifyEmailView, ResendVerificationEmailView,
     PasswordResetRequestView, PasswordResetConfirmView,
     OAuthProvidersStatusView, OAuthStartView, OAuthCallbackView,
@@ -26,5 +28,9 @@ urlpatterns = [
     path('admin/users/<uuid:pk>/', AdminUserDetailView.as_view(), name='admin_user_detail'),
     path('admin/professionals/', AdminProfessionalListView.as_view(), name='admin_professional_list'),
     path('admin/audit-logs/', AdminAuditLogListView.as_view(), name='admin_audit_logs'),
+    path('admin/platform-roles/', AdminPlatformRoleListView.as_view(), name='admin_platform_roles'),
+    path('admin/platform-roles/<slug:code>/', AdminPlatformRoleDetailView.as_view(), name='admin_platform_role_detail'),
+    path('admin/platform-actors/', AdminPlatformActorListCreateView.as_view(), name='admin_platform_actors'),
+    path('admin/platform-actors/<uuid:pk>/', AdminPlatformActorDetailView.as_view(), name='admin_platform_actor_detail'),
 ]
 

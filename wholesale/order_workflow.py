@@ -162,7 +162,7 @@ def accept_order(order, user):
         raise ValueError('Seules les commandes envoyees peuvent etre acceptees.')
     if order.payment_status != 'PAID':
         raise ValueError(
-            'L\'acheteur doit d\'abord payer via Lumicash avant que la commande puisse être acceptée.'
+            'L\'acheteur doit d\'abord payer via BurundiPay avant que la commande puisse être acceptée.'
         )
 
     for item in order.items.select_related('product'):
@@ -208,7 +208,7 @@ def accept_order(order, user):
 
 @transaction.atomic
 def mark_order_paid(order, user, payment_method='', payment_note=''):
-    """Fallback caisse : marque payée (espèces / autre). Flux normal = Lumicash client."""
+    """Fallback caisse : marque payée (espèces / autre). Flux normal = BurundiPay client."""
     if order.status not in ('SUBMITTED', 'PROCESSING', 'ACCEPTED'):
         raise ValueError('Cette commande ne peut pas être marquée payée.')
     if order.payment_status == 'PAID':

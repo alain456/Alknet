@@ -2,7 +2,7 @@ import React from 'react';
 
 export default function AdminChartCard({ title, subtitle, children }) {
   return (
-    <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-[10px] p-6 flex flex-col w-full shadow-sm">
+    <div className="bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-[10px] p-6 flex flex-col w-full shadow-sm">
       <div className="mb-5">
         <h3 className="text-[15px] font-semibold text-green-900 dark:text-white">{title}</h3>
         {subtitle && (

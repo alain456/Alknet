@@ -242,7 +242,7 @@ export default function ManageMedicalRecords() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleViewRecord(record)}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                              className="icon-btn"
                               title="Voir le dossier"
                             >
                               <Eye className="w-4 h-4" />
@@ -341,7 +341,7 @@ export default function ManageMedicalRecords() {
                     className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
                   >
                     <option value="">Sélectionner un médecin</option>
-                    {doctors.map(d => (
+                    {doctors.filter(d => d.staff_category !== 'ACCOUNTANT' && d.staff_category !== 'NURSE' && d.staff_category !== 'RECEPTIONIST').map(d => (
                       <option key={d.id} value={d.id}>
                         Dr. {d.user_details?.first_name} {d.user_details?.last_name}
                       </option>

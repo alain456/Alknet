@@ -17,7 +17,7 @@ export default function PasswordInput({
       <input
         {...props}
         type={visible ? 'text' : 'password'}
-        className={`w-full pr-10 ${className}`.trim()}
+        className={`w-full pr-10 text-ink bg-surface ${className}`.trim()}
         autoComplete={props.autoComplete || 'current-password'}
       />
       <button

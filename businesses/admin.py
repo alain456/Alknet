@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import SubscriptionPlan, BusinessSubscription, SubscriptionPayment, PlatformNotification
+from .models import SubscriptionPlan, BusinessSubscription, SubscriptionPayment, PlatformNotification, PlatformSubscriptionSettings
 
 
 @admin.register(SubscriptionPlan)
@@ -15,6 +15,11 @@ class BusinessSubscriptionAdmin(admin.ModelAdmin):
     list_filter = ('status', 'plan')
     search_fields = ('business__name', 'payment_reference')
     raw_id_fields = ('business', 'plan')
+
+
+@admin.register(PlatformSubscriptionSettings)
+class PlatformSubscriptionSettingsAdmin(admin.ModelAdmin):
+    list_display = ('grace_period_days', 'updated_at')
 
 
 @admin.register(SubscriptionPayment)

@@ -122,41 +122,41 @@ export default function HospitalDashboard() {
     return parseFloat(amount || 0).toLocaleString('fr-FR') + ' BIF';
   };
 
-  const StatCard = ({ icon: Icon, title, value, subtitle, color }) => (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <p className="text-sm text-gray-500 mb-1">{title}</p>
-          <p className="text-3xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+  const StatCard = ({ icon: Icon, title, value, subtitle, borderClass = 'border-accent' }) => (
+    <div className={`bg-surface rounded-2xl border-2 ${borderClass} shadow-sm p-6 text-ink`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-ink mb-1">{title}</p>
+          <p className="text-3xl font-extrabold text-ink">{value}</p>
+          {subtitle && <p className="text-sm text-ink-muted mt-1 font-medium">{subtitle}</p>}
         </div>
-        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${color}`}>
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-primary text-surface border-2 border-accent shrink-0">
           <Icon className="w-6 h-6" />
         </div>
       </div>
     </div>
   );
 
-  if (loading) return <div className="p-8">Chargement du dashboard...</div>;
+  if (loading) return <div className="p-8 text-ink font-semibold">Chargement du dashboard...</div>;
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-10 text-ink">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <HeartPulse className="text-teal-600" />
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink flex items-center gap-2">
+          <HeartPulse className="text-accent" />
           Dashboard Hôpital
         </h1>
-        <p className="text-gray-500 text-sm mt-1">Vue d'ensemble de l'activité de votre établissement.</p>
+        <p className="text-ink-muted text-base mt-1 font-medium">Vue d&apos;ensemble de l&apos;activité de votre établissement.</p>
       </div>
 
       {loadError && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm">
+        <div className="rounded-xl border-2 border-alert bg-alert/10 text-ink px-4 py-3 text-sm font-medium">
           {loadError}
         </div>
       )}
 
       {!hospitalId && !loadError && (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-6 text-center text-gray-600">
+        <div className="rounded-xl border-2 border-accent bg-primary/5 px-4 py-6 text-center text-ink font-medium">
           Aucun hôpital associé à votre compte.
         </div>
       )}
@@ -164,75 +164,35 @@ export default function HospitalDashboard() {
       {hospitalId && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={Stethoscope}
-              title="Médecins"
-              value={stats.totalDoctors}
-              color="bg-teal-50 text-teal-600"
-            />
-            <StatCard
-              icon={Activity}
-              title="Services"
-              value={stats.totalServices}
-              color="bg-blue-50 text-blue-600"
-            />
-            <StatCard
-              icon={Calendar}
-              title="RDV aujourd'hui"
-              value={stats.todayAppointments}
-              color="bg-indigo-50 text-indigo-600"
-            />
-            <StatCard
-              icon={Clock}
-              title="En attente"
-              value={stats.pendingAppointments}
-              color="bg-amber-50 text-amber-600"
-            />
-            <StatCard
-              icon={CheckCircle}
-              title="Terminés (jour)"
-              value={stats.completedAppointments}
-              color="bg-green-50 text-green-600"
-            />
-            <StatCard
-              icon={Users}
-              title="Patients (récents)"
-              value={stats.totalPatients}
-              color="bg-purple-50 text-purple-600"
-            />
-            <StatCard
-              icon={DollarSign}
-              title="Revenus encaissés"
-              value={formatCurrency(stats.totalRevenue)}
-              color="bg-emerald-50 text-emerald-600"
-            />
-            <StatCard
-              icon={TrendingUp}
-              title="Factures en attente"
-              value={formatCurrency(stats.pendingRevenue)}
-              color="bg-rose-50 text-rose-600"
-            />
+            <StatCard icon={Stethoscope} title="Médecins" value={stats.totalDoctors} borderClass="border-accent" />
+            <StatCard icon={Activity} title="Services" value={stats.totalServices} borderClass="border-alert" />
+            <StatCard icon={Calendar} title="RDV aujourd'hui" value={stats.todayAppointments} borderClass="border-accent" />
+            <StatCard icon={Clock} title="En attente" value={stats.pendingAppointments} borderClass="border-alert" />
+            <StatCard icon={CheckCircle} title="Terminés (jour)" value={stats.completedAppointments} borderClass="border-accent" />
+            <StatCard icon={Users} title="Patients (récents)" value={stats.totalPatients} borderClass="border-alert" />
+            <StatCard icon={DollarSign} title="Revenus encaissés" value={formatCurrency(stats.totalRevenue)} borderClass="border-accent" />
+            <StatCard icon={TrendingUp} title="Factures en attente" value={formatCurrency(stats.pendingRevenue)} borderClass="border-alert" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900">Rendez-vous récents</h2>
-                <Link to="/hospital/appointments" className="text-sm text-teal-600 hover:underline">
+            <div className="bg-surface rounded-2xl border-2 border-accent shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <h2 className="font-extrabold text-ink text-lg">Rendez-vous récents</h2>
+                <Link to="/hospital/appointments" className="text-sm font-bold text-primary hover:text-accent">
                   Voir tout
                 </Link>
               </div>
               {recentAppointments.length === 0 ? (
-                <p className="text-sm text-gray-500">Aucun rendez-vous.</p>
+                <p className="text-sm text-ink-muted font-medium">Aucun rendez-vous.</p>
               ) : (
                 <ul className="space-y-3">
                   {recentAppointments.map((apt) => (
-                    <li key={apt.id} className="flex items-start justify-between gap-3 text-sm border-b border-gray-50 pb-3 last:border-0">
+                    <li key={apt.id} className="flex items-start justify-between gap-3 text-sm border-b border-border pb-3 last:border-0">
                       <div>
-                        <p className="font-medium text-gray-900">{apt.patient_name || 'Patient'}</p>
-                        <p className="text-gray-500">{doctorLabel(apt)}</p>
+                        <p className="font-bold text-ink text-base">{apt.patient_name || 'Patient'}</p>
+                        <p className="text-ink-muted font-medium">{doctorLabel(apt)}</p>
                       </div>
-                      <span className="text-xs text-gray-500 whitespace-nowrap">
+                      <span className="text-xs font-bold text-ink whitespace-nowrap bg-primary/10 border border-accent px-2 py-1 rounded-lg">
                         {apt.status_display || apt.status}
                       </span>
                     </li>
@@ -241,24 +201,24 @@ export default function HospitalDashboard() {
               )}
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-gray-900">Factures récentes</h2>
-                <Link to="/hospital/invoices" className="text-sm text-teal-600 hover:underline">
+            <div className="bg-surface rounded-2xl border-2 border-alert shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <h2 className="font-extrabold text-ink text-lg">Factures récentes</h2>
+                <Link to="/hospital/invoices" className="text-sm font-bold text-primary hover:text-accent">
                   Voir tout
                 </Link>
               </div>
               {recentInvoices.length === 0 ? (
-                <p className="text-sm text-gray-500">Aucune facture.</p>
+                <p className="text-sm text-ink-muted font-medium">Aucune facture.</p>
               ) : (
                 <ul className="space-y-3">
                   {recentInvoices.map((inv) => (
-                    <li key={inv.id} className="flex items-start justify-between gap-3 text-sm border-b border-gray-50 pb-3 last:border-0">
+                    <li key={inv.id} className="flex items-start justify-between gap-3 text-sm border-b border-border pb-3 last:border-0">
                       <div>
-                        <p className="font-medium text-gray-900">{inv.patient_name || inv.invoice_number || 'Facture'}</p>
-                        <p className="text-gray-500">{inv.status}</p>
+                        <p className="font-bold text-ink text-base">{inv.patient_name || inv.invoice_number || 'Facture'}</p>
+                        <p className="text-ink-muted font-medium">{inv.status}</p>
                       </div>
-                      <span className="text-xs font-medium text-gray-700 whitespace-nowrap">
+                      <span className="text-xs font-bold text-ink whitespace-nowrap">
                         {formatCurrency(inv.amount)}
                       </span>
                     </li>
@@ -268,19 +228,19 @@ export default function HospitalDashboard() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-r from-teal-700 to-teal-600 rounded-2xl p-6 text-white">
-            <h2 className="font-semibold mb-3">Accès rapide</h2>
+          <div className="bg-primary rounded-2xl p-6 text-surface border-2 border-accent">
+            <h2 className="font-bold mb-3 text-surface text-lg">Accès rapide</h2>
             <div className="flex flex-wrap gap-3">
-              <Link to="/hospital/appointments" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+              <Link to="/hospital/appointments" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
                 <Calendar className="w-4 h-4" /> Rendez-vous
               </Link>
-              <Link to="/hospital/doctors" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+              <Link to="/hospital/doctors" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
                 <Stethoscope className="w-4 h-4" /> Médecins
               </Link>
-              <Link to="/hospital/patients" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+              <Link to="/hospital/patients" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
                 <Users className="w-4 h-4" /> Patients
               </Link>
-              <Link to="/hospital/services" className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-3 rounded-xl transition">
+              <Link to="/hospital/services" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
                 <AlertCircle className="w-4 h-4" /> Services
               </Link>
             </div>

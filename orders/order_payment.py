@@ -1,9 +1,9 @@
-"""Paiement commande Commerce : client → marchand de la boutique (Lumicash)."""
+"""Paiement commande Commerce : client → marchand de la boutique (BurundiPay)."""
 from __future__ import annotations
 
 from django.utils import timezone
 
-from businesses import lumicash
+from businesses import burundipay
 
 
 def shop_merchant_account(business) -> str:
@@ -49,16 +49,16 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
         }
 
     merchant = shop_merchant_account(order.business)
-    result = lumicash.initiate_collection(
+    result = burundipay.initiate_collection(
         amount_bif=amount,
         payer_phone=payer_phone,
         external_id=f'commerce-{order.id}',
         description=f'Commande {order.reference_code or order.id} — {order.business.name}',
         merchant=merchant,
     )
-    order.payer_phone = lumicash.normalize_phone(payer_phone)
+    order.payer_phone = burundipay.normalize_phone(payer_phone)
     order.payment_merchant_account = merchant
-    order.payment_method = 'LUMICASH'
+    order.payment_method = 'BURUNDIPAY'
     if result.get('ok'):
         order.payment_status = 'AWAITING_PIN'
         order.payment_provider_reference = result.get('provider_reference') or ''

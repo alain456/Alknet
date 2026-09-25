@@ -134,7 +134,7 @@ export default function CommerceOrders() {
         </div>
         <button
           type="button"
-          onClick={() => load()}
+          onClick={() => load(true)}
           className="inline-flex items-center gap-2 px-3 py-2 border rounded-xl text-sm font-semibold hover:bg-gray-50"
         >
           <RefreshCw className="w-4 h-4" /> Actualiser
@@ -201,7 +201,7 @@ function OrderCard({
         <button
           type="button"
           onClick={onPrint}
-          className="p-1.5 text-gray-500 hover:text-primary hover:bg-green-50 rounded-lg shrink-0"
+          className="icon-btn"
           title="Imprimer ticket de retrait"
         >
           <Printer className="w-4 h-4" />

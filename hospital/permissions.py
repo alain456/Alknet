@@ -56,6 +56,26 @@ class IsMedicalStaff(BasePermission):
         ).exists()
 
 
+def _active_employees(user, hospital):
+    return list(
+        BusinessEmployee.objects.filter(
+            business=hospital, user=user, is_active=True,
+        ).select_related('role')
+    )
+
+
+def _employee_grants(emps, *codes):
+    from .permission_catalog import expand_hospital_permissions
+    for emp in emps:
+        role = emp.role
+        if not role:
+            continue
+        expanded = expand_hospital_permissions(role.permissions or [])
+        if any(code in expanded for code in codes):
+            return True
+    return False
+
+
 def user_is_lab_technician(user, hospital):
     """Laborantin opérationnel — crée et fait avancer les résultats jusqu'à notification patient."""
     if not user or not getattr(user, 'is_authenticated', False) or not hospital:
@@ -65,14 +85,38 @@ def user_is_lab_technician(user, hospital):
     # L'admin / propriétaire n'est PAS laborantin (lecture seule côté admin).
     if getattr(hospital, 'owner_id', None) == user.id:
         return False
-    return BusinessEmployee.objects.filter(
-        Q(position='LAB_TECHNICIAN')
-        | Q(role__system_access_level='LAB_ACCESS')
-        | Q(role__permissions__contains='can_manage_lab_results'),
-        business=hospital,
-        user=user,
-        is_active=True,
-    ).exists()
+    emps = _active_employees(user, hospital)
+    for emp in emps:
+        if emp.position == 'LAB_TECHNICIAN':
+            return True
+        if emp.role and emp.role.system_access_level == 'LAB_ACCESS':
+            return True
+    return _employee_grants(emps, 'can_manage_lab_results', 'hospital.lab.create', 'hospital.lab.update')
+
+
+def user_can_validate_lab_results(user, hospital):
+    """P1 — validation clinique : médecin / admin / droit hospital.lab.validate."""
+    if not user or not getattr(user, 'is_authenticated', False) or not hospital:
+        return False
+    if getattr(user, 'role', None) == 'SUPER_ADMIN':
+        return False
+    if getattr(hospital, 'owner_id', None) == user.id:
+        return True
+    doctor = getattr(user, 'doctor_profile', None)
+    if doctor and doctor.hospital_id == hospital.id:
+        return True
+    emps = _active_employees(user, hospital)
+    for emp in emps:
+        if emp.position in ('ADMIN', 'LOCAL_DOCTOR', 'REMOTE_SPECIALIST'):
+            return True
+        if emp.role and emp.role.system_access_level in ('ADMIN_ACCESS', 'MEDICAL_ACCESS'):
+            return True
+    return _employee_grants(
+        emps,
+        'hospital.lab.validate',
+        'can_manage_hospital',
+        'hospital.manage',
+    )
 
 
 def user_can_view_lab_results(user, hospital):
@@ -85,23 +129,29 @@ def user_can_view_lab_results(user, hospital):
         return True
     if user_is_lab_technician(user, hospital):
         return True
-    return BusinessEmployee.objects.filter(
-        Q(role__system_access_level__in=['ADMIN_ACCESS', 'MEDICAL_ACCESS', 'LAB_ACCESS'])
-        | Q(role__permissions__contains='can_manage_hospital')
-        | Q(role__permissions__contains='can_view_medical_records')
-        | Q(role__permissions__contains='can_manage_lab_results')
-        | Q(position__in=['ADMIN', 'LOCAL_DOCTOR', 'REMOTE_SPECIALIST', 'LAB_TECHNICIAN']),
-        business=hospital,
-        user=user,
-        is_active=True,
-    ).exists()
+    if user_can_validate_lab_results(user, hospital):
+        return True
+    emps = _active_employees(user, hospital)
+    for emp in emps:
+        if emp.position in ('ADMIN', 'LOCAL_DOCTOR', 'REMOTE_SPECIALIST', 'LAB_TECHNICIAN'):
+            return True
+        if emp.role and emp.role.system_access_level in ('ADMIN_ACCESS', 'MEDICAL_ACCESS', 'LAB_ACCESS'):
+            return True
+    return _employee_grants(
+        emps,
+        'can_manage_hospital',
+        'can_view_medical_records',
+        'can_manage_lab_results',
+        'hospital.lab.view',
+    )
 
 
 class IsLabTechnician(BasePermission):
     """
     Laboratoire :
     - Lecture : admin / médecin / laborantin (tenant)
-    - Écriture (création, workflow) : laborantin uniquement
+    - Écriture technique : laborantin
+    - Validation (update_status VALIDATED) : médecin / validateur aussi autorisé au niveau permission
     """
     def has_permission(self, request, view):
         user = request.user
@@ -118,6 +168,10 @@ class IsLabTechnician(BasePermission):
 
         if request.method in SAFE_METHODS:
             return user_can_view_lab_results(user, hospital)
+
+        action = getattr(view, 'action', None)
+        if action in ('update_status', 'upload_document') and user_can_validate_lab_results(user, hospital):
+            return True
         return user_is_lab_technician(user, hospital)
 
     def has_object_permission(self, request, view, obj):
@@ -127,16 +181,68 @@ class IsLabTechnician(BasePermission):
 
         if hasattr(obj, 'patient') and obj.patient_id == request.user.id:
             if request.method in SAFE_METHODS:
-                return getattr(obj, 'status', None) in ('VALIDATED', 'COMMUNICATED')
+                return getattr(obj, 'status', None) == 'COMMUNICATED'
             return False
 
         if request.method in SAFE_METHODS:
             return user_can_view_lab_results(request.user, business)
+
+        action = getattr(view, 'action', None)
+        if action in ('update_status', 'upload_document') and user_can_validate_lab_results(request.user, business):
+            return True
         return user_is_lab_technician(request.user, business)
 
 
+def user_can_manage_billing(user, hospital):
+    """Comptable, caissier ou admin de l'hôpital — factures et clôture."""
+    if not user or not getattr(user, 'is_authenticated', False) or not hospital:
+        return False
+    if getattr(user, 'role', None) == 'SUPER_ADMIN':
+        return False
+    if getattr(hospital, 'owner_id', None) == user.id:
+        return True
+    employees = BusinessEmployee.objects.filter(
+        business=hospital,
+        user=user,
+        is_active=True,
+    ).select_related('role')
+    for emp in employees:
+        if emp.position in ('CASHIER', 'ADMIN', 'COMPTABLE'):
+            return True
+        role = emp.role
+        if role is None:
+            continue
+        if role.system_access_level in ('CASHIER_ACCESS', 'ADMIN_ACCESS'):
+            return True
+        name = (role.name or '').lower()
+        if 'comptab' in name or 'caiss' in name:
+            return True
+        perms = set(role.permissions or [])
+        if 'can_manage_invoices' in perms or 'can_manage_hospital' in perms:
+            return True
+        from hospital.permission_catalog import grants
+        if grants(perms, 'hospital.billing.view', 'hospital.billing.create', 'hospital.manage'):
+            return True
+    return False
+
+
 class IsCashier(BasePermission):
-    """Caissiers ou admin de l'hôpital — facturation."""
+    """Caissiers, comptables ou admin de l'hôpital — facturation."""
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.role == 'CUSTOMER':
+            return request.method in SAFE_METHODS
+        if user.role == 'SUPER_ADMIN':
+            return False
+        hospital = get_user_tenant_business(user)
+        if not hospital:
+            return False
+        if request.method in SAFE_METHODS and user.role == 'BUSINESS_OWNER':
+            return True
+        return user_can_manage_billing(user, hospital) or user.role == 'BUSINESS_OWNER'
+
     def has_object_permission(self, request, view, obj):
         if request.user.role == 'SUPER_ADMIN':
             return False

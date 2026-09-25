@@ -79,4 +79,5 @@ class ContactMessageAdminSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id", "name", "email", "phone", "subject", "message",
             "ip_address", "created_at", "updated_at",
+            "reply_body", "replied_at", "replied_by",
         )

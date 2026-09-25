@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import DataSummaryCard from './components/DataSummaryCard';
 import AdminChartCard from './components/AdminChartCard';
 import { useAuth } from '../context/AuthContext';
+import { platformHomePath, userHasPlatformPerm } from '../auth/platformPermissions';
 import api from '../shared/api';
 
 const STATUS_LABELS = {
@@ -15,10 +16,11 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canViewDashboard = userHasPlatformPerm(user, 'platform.analytics.view');
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !canViewDashboard) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -33,7 +35,11 @@ export default function AdminDashboardPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, canViewDashboard]);
+
+  if (user && !canViewDashboard) {
+    return <Navigate to={platformHomePath(user)} replace />;
+  }
 
   if (loading) {
     return (
@@ -66,28 +72,28 @@ export default function AdminDashboardPage() {
     <div className="space-y-8 max-w-350 mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4">
         <div>
-          <h1 className="text-3xl font-display font-semibold text-green-900 dark:text-white tracking-tight">Vue d&apos;ensemble</h1>
-          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">
+          <h1 className="text-3xl font-display font-semibold text-ink tracking-tight">Vue d&apos;ensemble</h1>
+          <p className="text-base text-ink-muted mt-1 font-medium">
             Données réelles de la plateforme
             {data?.generated_at ? ` · maj ${new Date(data.generated_at).toLocaleString('fr-FR')}` : ''}.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <Link
             to="/admin/payments"
-            className="px-4 py-2 text-[14px] font-semibold bg-surface dark:bg-transparent border-[1.5px] border-border dark:border-white/20 text-green-700 dark:text-green-100 rounded-md hover:bg-green-50 dark:hover:bg-white/5 transition-colors shadow-sm"
+            className="px-4 py-2.5 text-sm sm:text-base font-bold bg-surface border-2 border-accent text-ink rounded-xl hover:bg-primary/5 transition-colors shadow-sm"
           >
             Abonnements / paiements
           </Link>
           <Link
             to="/admin/businesses"
-            className="px-4 py-2 text-[14px] font-semibold bg-surface dark:bg-transparent border-[1.5px] border-border dark:border-white/20 text-green-700 dark:text-green-100 rounded-md hover:bg-green-50 dark:hover:bg-white/5 transition-colors shadow-sm"
+            className="px-4 py-2.5 text-sm sm:text-base font-bold bg-surface border-2 border-alert text-ink rounded-xl hover:bg-primary/5 transition-colors shadow-sm"
           >
             Entreprises
           </Link>
           <Link
             to="/admin/analytics"
-            className="px-4 py-2 text-[14px] font-semibold bg-green-700 text-white rounded-md hover:bg-green-900 transition-colors shadow-sm"
+            className="px-4 py-2.5 text-sm sm:text-base font-bold bg-primary text-surface rounded-xl border-2 border-accent hover:opacity-95 transition-colors shadow-sm"
           >
             Voir Analytique
           </Link>
@@ -186,10 +192,10 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="border border-border dark:border-white/10 rounded-lg bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm">
+        <div className="border border-border dark:border-white/10 rounded-lg bg-surface dark:bg-primary overflow-hidden shadow-sm">
           <div className="px-5 py-4 border-b border-border dark:border-white/10 flex justify-between items-center">
             <h3 className="text-[15px] font-semibold text-green-900 dark:text-white">Activité récente</h3>
-            <Link to="/admin/audit-logs" className="text-[13px] font-medium text-green-700 hover:text-green-900 dark:text-green-100/70 dark:hover:text-white transition-colors">
+            <Link to="/admin/audit-logs?scope=platform" className="text-[13px] font-medium text-green-700 hover:text-green-900 dark:text-green-100/70 dark:hover:text-white transition-colors">
               Tout voir
             </Link>
           </div>
@@ -215,7 +221,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className="border border-border dark:border-white/10 rounded-lg bg-surface dark:bg-[#1A2E25] overflow-hidden flex flex-col shadow-sm">
+        <div className="border border-border dark:border-white/10 rounded-lg bg-surface dark:bg-primary overflow-hidden flex flex-col shadow-sm">
           <div className="px-5 py-4 border-b border-border dark:border-white/10 flex justify-between items-center">
             <h3 className="text-[15px] font-semibold text-green-900 dark:text-white">Dernières entreprises</h3>
             <Link to="/admin/businesses" className="text-[13px] font-medium text-green-700 hover:text-green-900 dark:text-green-100/70 dark:hover:text-white transition-colors">

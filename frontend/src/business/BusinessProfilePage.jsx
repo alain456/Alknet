@@ -8,6 +8,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { getBusinessCategoryKey } from '../auth/roleAccess';
 import { readImageAsDataUrl } from '../shared/imageUpload';
+import { normalizeWebsiteUrl } from '../shared/websiteUrl';
 
 const emptyHospitalExtras = {
   category_type: 'Hôpital Général de Référence',
@@ -58,6 +59,7 @@ export default function BusinessProfilePage() {
     proof_document: '',
     logo: '',
     lumicash_merchant_account: '',
+    burundipay_merchant_account: '',
   });
 
   const [hospitalData, setHospitalData] = useState(emptyHospitalExtras);
@@ -97,7 +99,8 @@ export default function BusinessProfilePage() {
           longitude: b.longitude || '',
           proof_document: b.proof_document || '',
           logo: b.logo || '',
-          lumicash_merchant_account: b.lumicash_merchant_account || '',
+          lumicash_merchant_account: b.lumicash_merchant_account || b.burundipay_merchant_account || '',
+          burundipay_merchant_account: b.burundipay_merchant_account || b.lumicash_merchant_account || '',
         });
         setHasExistingLogo(Boolean(b.has_logo || b.logo));
 
@@ -189,6 +192,7 @@ export default function BusinessProfilePage() {
     try {
       const payload = {
         ...formData,
+        website: normalizeWebsiteUrl(formData.website),
         extra_attributes: isCommerce
           ? {
               ...rawExtras,
@@ -411,21 +415,26 @@ export default function BusinessProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Site web</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Site web officiel</label>
                 <input
                   type="url"
                   value={formData.website}
                   onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="https://…"
+                  placeholder="https://www.exemple.com"
                 />
+                <p className="text-xs text-gray-500 mt-1">Visible côté clients dans les informations de l&apos;entreprise.</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Compte marchand Lumicash</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Compte marchand BurundiPay</label>
                 <input
                   type="text"
-                  value={formData.lumicash_merchant_account}
-                  onChange={(e) => setFormData({ ...formData, lumicash_merchant_account: e.target.value })}
+                  value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    burundipay_merchant_account: e.target.value,
+                    lumicash_merchant_account: e.target.value,
+                  })}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Compte pour encaisser les commandes"
                 />
@@ -702,11 +711,15 @@ export default function BusinessProfilePage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Compte marchand Lumicash (consultations)</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Compte marchand BurundiPay (consultations)</label>
               <input
                 type="text"
-                value={formData.lumicash_merchant_account}
-                onChange={(e) => setFormData({ ...formData, lumicash_merchant_account: e.target.value })}
+                value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  burundipay_merchant_account: e.target.value,
+                  lumicash_merchant_account: e.target.value,
+                })}
                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
                 placeholder="Ex. HOSP-BAHO-LC"
               />

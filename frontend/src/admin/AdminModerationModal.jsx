@@ -29,7 +29,9 @@ function DetailRow({ label, value, mono = false }) {
   );
 }
 
-export default function AdminModerationModal({ isOpen, onClose, onRefresh }) {
+export default function AdminModerationModal({
+  isOpen, onClose, onRefresh, embedded = false, refreshKey = 0,
+}) {
   const [pendingBusinesses, setPendingBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
@@ -43,14 +45,16 @@ export default function AdminModerationModal({ isOpen, onClose, onRefresh }) {
       const data = await api.get('businesses/admin/moderation/', { auth: true });
       const list = Array.isArray(data) ? data : (data?.results || []);
       setPendingBusinesses(list);
-      if (selectedBusiness) {
-        const still = list.find((b) => b.id === selectedBusiness.id);
-        setSelectedBusiness(still || null);
+      setSelectedBusiness((prev) => {
+        if (!prev) return null;
+        const still = list.find((b) => b.id === prev.id);
         if (!still) {
           setDecisionMode(null);
           setDecisionMessage('');
+          return null;
         }
-      }
+        return still;
+      });
     } catch (err) {
       console.error('Err fetch moderation:', err);
     } finally {
@@ -59,15 +63,18 @@ export default function AdminModerationModal({ isOpen, onClose, onRefresh }) {
   };
 
   useEffect(() => {
-    if (isOpen) {
-      fetchPending();
-      setSelectedBusiness(null);
-      setDecisionMode(null);
-      setDecisionMessage('');
-    }
-  }, [isOpen]);
+    if (!(isOpen || embedded)) return;
+    fetchPending();
+  }, [isOpen, embedded, refreshKey]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen || embedded) return;
+    setSelectedBusiness(null);
+    setDecisionMode(null);
+    setDecisionMessage('');
+  }, [isOpen, embedded]);
+
+  if (!isOpen && !embedded) return null;
 
   const openDecision = (mode) => {
     if (!selectedBusiness) return;
@@ -116,16 +123,18 @@ export default function AdminModerationModal({ isOpen, onClose, onRefresh }) {
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-      <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-5xl shadow-xl relative max-h-[90vh] overflow-y-auto">
+    <div className={embedded ? '' : 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto'}>
+      <div className={`bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-xl p-6 w-full shadow-xl relative ${embedded ? '' : 'max-w-5xl max-h-[90vh] overflow-y-auto'}`}>
         <div className="flex justify-between items-center pb-4 mb-4 border-b border-border dark:border-white/10">
           <div className="flex items-center gap-2 text-green-900 dark:text-white font-bold text-lg">
             <ShieldAlert className="w-5 h-5 text-gold-600 dark:text-gold-400" />
             Espace de Modération
           </div>
+          {!embedded && (
           <button onClick={onClose} className="text-ink-faint hover:text-ink dark:hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
           </button>
+          )}
         </div>
 
         {loading ? (
@@ -302,7 +311,7 @@ export default function AdminModerationModal({ isOpen, onClose, onRefresh }) {
 
         {decisionMode && selectedBusiness && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-            <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-lg shadow-2xl">
+            <div className="bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-lg shadow-2xl">
               <h4
                 className={`font-bold text-sm mb-2 flex items-center gap-2 ${
                   decisionMode === 'approve' ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Clock, Plus, Calendar, Trash2, Edit2, Stethoscope,
-  Users, CalendarRange, Loader2,
+  Users, CalendarRange, Loader2, AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import hospitalService from '../hospitalService';
@@ -34,6 +34,133 @@ function doctorLabel(doc) {
     || 'Médecin';
 }
 
+const HOSPITAL_TZ = 'Africa/Bujumbura';
+const WEEKDAY_INDEX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+
+function hospitalParts(date) {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: HOSPITAL_TZ,
+    weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+  const bag = Object.fromEntries(fmt.formatToParts(date).map((part) => [part.type, part.value]));
+  return {
+    weekday: WEEKDAY_INDEX[bag.weekday] ?? 0,
+    year: Number(bag.year),
+    month: Number(bag.month),
+    day: Number(bag.day),
+    minutes: Number(bag.hour) * 60 + Number(bag.minute),
+  };
+}
+
+function parseClock(value) {
+  const [hour, minute] = String(value || '00:00').slice(0, 5).split(':').map((n) => parseInt(n, 10));
+  return (hour || 0) * 60 + (minute || 0);
+}
+
+function todayIso(now = new Date()) {
+  const parts = hospitalParts(now);
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+function weekdayFromIso(iso) {
+  if (!iso) return 0;
+  const [year, month, day] = iso.split('-').map(Number);
+  return hospitalParts(new Date(Date.UTC(year, month - 1, day, 10, 0, 0))).weekday;
+}
+
+function formatCivilDate(iso) {
+  if (!iso) return '';
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: HOSPITAL_TZ,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(Date.UTC(year, month - 1, day, 10, 0, 0)));
+}
+
+function addDaysIso(iso, days) {
+  const [year, month, day] = iso.split('-').map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days, 10, 0, 0));
+  const parts = hospitalParts(next);
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+function endMoment(scheduleDate, startTime, endTime) {
+  if (!scheduleDate || !startTime || !endTime) return null;
+  const overnight = parseClock(endTime) <= parseClock(startTime);
+  const endDate = overnight ? addDaysIso(scheduleDate, 1) : scheduleDate;
+  return {
+    overnight,
+    endDate,
+    label: `${formatCivilDate(endDate)} à ${String(endTime).slice(0, 5)}`,
+  };
+}
+
+function nextDateForWeekday(dayOfWeek, now = new Date()) {
+  const parts = hospitalParts(now);
+  const delta = (dayOfWeek - parts.weekday + 7) % 7;
+  return addDaysIso(todayIso(now), delta);
+}
+
+function civilKey(iso) {
+  const [year, month, day] = iso.split('-').map(Number);
+  return year * 10000 + month * 100 + day;
+}
+
+function describeDatedWindow(scheduleDate, startTime, endTime, now = new Date()) {
+  const end = endMoment(scheduleDate, startTime, endTime);
+  const parts = hospitalParts(now);
+  const nowKey = parts.year * 10000 + parts.month * 100 + parts.day;
+  const startKey = civilKey(scheduleDate);
+  const endKey = civilKey(end.endDate);
+  const started = nowKey > startKey || (nowKey === startKey && parts.minutes >= parseClock(startTime));
+  const finished = nowKey > endKey || (nowKey === endKey && parts.minutes >= parseClock(endTime));
+  const nextDate = finished ? addDaysIso(scheduleDate, 7) : scheduleDate;
+  return {
+    status: finished ? 'elapsed' : (started ? 'in_progress' : 'upcoming'),
+    nextLabel: formatCivilDate(nextDate),
+    endLabel: end.label,
+  };
+}
+function describeWindow(dayOfWeek, startTime, endTime, now = new Date()) {
+  const parts = hospitalParts(now);
+  const start = parseClock(startTime);
+  const end = parseClock(endTime);
+  let delta = (dayOfWeek - parts.weekday + 7) % 7;
+  let status = 'upcoming';
+  if (delta === 0 && parts.minutes >= end) {
+    delta = 7;
+    status = 'elapsed';
+  } else if (delta === 0 && parts.minutes >= start) {
+    status = 'in_progress';
+  }
+  const next = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + delta, 12, 0, 0));
+  const nextLabel = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: HOSPITAL_TZ,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).format(next);
+  return { status, nextLabel, endLabel: '' };
+}
+
+function formatHospitalClock(date) {
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: HOSPITAL_TZ,
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(date);
+}
+
 export default function ManageSchedules() {
   const { isAuthenticated } = useAuth();
   const [schedules, setSchedules] = useState([]);
@@ -46,6 +173,7 @@ export default function ManageSchedules() {
   const [editingScheduleId, setEditingScheduleId] = useState(null);
   const [formData, setFormData] = useState({
     doctor: '',
+    schedule_date: '',
     day_of_week: 0,
     start_time: '08:00',
     end_time: '16:00',
@@ -61,6 +189,8 @@ export default function ManageSchedules() {
     doctor_ids: [],
   });
 
+  const [planningAlerts, setPlanningAlerts] = useState(null);
+  const [clock, setClock] = useState(() => new Date());
   const [monthGenerating, setMonthGenerating] = useState(false);
   const [monthResult, setMonthResult] = useState(null);
   const [monthForm, setMonthForm] = useState({
@@ -82,7 +212,7 @@ export default function ManageSchedules() {
         if (list.length > 0) {
           const hid = list[0].id;
           setHospitalId(hid);
-          await Promise.all([fetchDoctors(hid), fetchSchedules(hid)]);
+          await Promise.all([fetchDoctors(hid), fetchSchedules(hid), fetchPlanningAlerts(hid)]);
         }
       } catch (err) {
         console.error(err);
@@ -97,7 +227,10 @@ export default function ManageSchedules() {
     try {
       const data = await hospitalService.getDoctors({ hospital: hid, is_active: 'true' });
       const list = normalizeList(data).filter(
-        (d) => d.staff_category !== 'NURSE' && d.professional_title !== 'INFIRMIER'
+        (d) => d.staff_category !== 'NURSE'
+          && d.staff_category !== 'RECEPTIONIST'
+          && d.staff_category !== 'ACCOUNTANT'
+          && d.professional_title !== 'INFIRMIER'
       );
       setDoctors(list);
       if (list.length > 0) {
@@ -124,16 +257,38 @@ export default function ManageSchedules() {
     }
   };
 
+  const fetchPlanningAlerts = async (hid) => {
+    try {
+      const data = await hospitalService.getPlanningAlerts(hid);
+      setPlanningAlerts(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!hospitalId) return undefined;
+    const id = setInterval(() => fetchPlanningAlerts(hospitalId), 60000);
+    return () => clearInterval(id);
+  }, [hospitalId]);
+
   const handleDoctorFilterChange = (docId) => {
     setSelectedDoctorId(docId);
     if (hospitalId) fetchSchedules(hospitalId, docId);
   };
 
   const openCreateModal = () => {
+    const scheduleDate = todayIso();
     setEditingScheduleId(null);
     setFormData({
       doctor: doctors[0]?.id || '',
-      day_of_week: 0,
+      schedule_date: scheduleDate,
+      day_of_week: weekdayFromIso(scheduleDate),
       start_time: '08:00',
       end_time: '16:00',
       is_available: true,
@@ -142,10 +297,12 @@ export default function ManageSchedules() {
   };
 
   const openEditModal = (sch) => {
+    const scheduleDate = sch.schedule_date || nextDateForWeekday(sch.day_of_week);
     setEditingScheduleId(sch.id);
     setFormData({
       doctor: sch.doctor,
-      day_of_week: sch.day_of_week,
+      schedule_date: scheduleDate,
+      day_of_week: weekdayFromIso(scheduleDate),
       start_time: sch.start_time?.slice(0, 5) || '08:00',
       end_time: sch.end_time?.slice(0, 5) || '16:00',
       is_available: sch.is_available,
@@ -158,15 +315,34 @@ export default function ManageSchedules() {
     try {
       await hospitalService.deleteSchedule(id);
       fetchSchedules(hospitalId, selectedDoctorId);
+      fetchPlanningAlerts(hospitalId);
     } catch (err) {
+      if (err?.status === 404) {
+        fetchSchedules(hospitalId, selectedDoctorId);
+        fetchPlanningAlerts(hospitalId);
+        alert("Ce créneau n'est plus là. La liste a été actualisée.");
+        return;
+      }
       alert(err.message || 'Erreur lors de la suppression');
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.schedule_date) {
+      alert("Indiquez la date du créneau pour déterminer l'heure de fin.");
+      return;
+    }
+    if (formData.start_time === formData.end_time) {
+      alert("L'heure de fin doit être différente de l'heure de début.");
+      return;
+    }
     try {
-      const body = { ...formData, hospital: hospitalId };
+      const body = {
+        ...formData,
+        hospital: hospitalId,
+        day_of_week: weekdayFromIso(formData.schedule_date),
+      };
       if (editingScheduleId) {
         await hospitalService.updateSchedule(editingScheduleId, body);
       } else {
@@ -174,7 +350,15 @@ export default function ManageSchedules() {
       }
       setIsModalOpen(false);
       fetchSchedules(hospitalId, selectedDoctorId);
+      fetchPlanningAlerts(hospitalId);
     } catch (err) {
+      if (err?.status === 404) {
+        setIsModalOpen(false);
+        fetchSchedules(hospitalId, selectedDoctorId);
+        fetchPlanningAlerts(hospitalId);
+        alert("Ce créneau n'est plus là. La liste a été actualisée.");
+        return;
+      }
       alert(err.message || 'Erreur lors de la sauvegarde');
     }
   };
@@ -227,7 +411,8 @@ export default function ManageSchedules() {
         ...(templateForm.doctor_ids.length > 0 ? { doctor_ids: templateForm.doctor_ids } : {}),
       });
       alert(result.message || 'Modèle appliqué.');
-      fetchSchedules(hospitalId, selectedDoctorId);
+      await fetchSchedules(hospitalId, selectedDoctorId);
+      await fetchPlanningAlerts(hospitalId);
     } catch (err) {
       alert(err.message || 'Erreur lors de l’application du modèle');
     } finally {
@@ -248,6 +433,7 @@ export default function ManageSchedules() {
         publish: monthForm.publish,
       });
       setMonthResult(result);
+      fetchPlanningAlerts(hospitalId);
     } catch (err) {
       alert(err.message || 'Erreur lors de la génération');
     } finally {
@@ -262,14 +448,18 @@ export default function ManageSchedules() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 rounded-2xl border-duo bg-surface p-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Clock className="w-7 h-7 text-teal-600 dark:text-teal-400" />
+            <Clock className="w-7 h-7 text-accent" />
             Gestion des Horaires & Planning
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            Appliquez un modèle à tous les médecins, puis générez le planning mensuel en une fois.
+            Les créneaux se réinitialisent dès que l&apos;heure de fin est passée. L&apos;admin est prévenu s&apos;il manque un créneau ou un rendez-vous.
+          </p>
+          <p className="text-xs font-semibold text-teal-700 dark:text-teal-300 mt-2 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            Heure hôpital (Bujumbura) : {formatHospitalClock(clock)}
           </p>
         </div>
         <button
@@ -282,11 +472,51 @@ export default function ManageSchedules() {
         </button>
       </div>
 
+      {(planningAlerts?.alert_count > 0 || planningAlerts?.rolled_count > 0) && (
+        <section className="rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700 p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h2 className="font-bold text-amber-950 dark:text-amber-100">
+                Signalement planning
+                {planningAlerts.alert_count > 0 ? ` · ${planningAlerts.alert_count}` : ''}
+              </h2>
+              <p className="text-sm text-amber-900/80 dark:text-amber-100/80">
+                Un créneau dont le jour et l&apos;heure sont dépassés est fermé, puis repris à la prochaine occurrence avec la capacité au complet.
+                {planningAlerts.rolled_count > 0
+                  ? ` ${planningAlerts.rolled_count} créneau(x) vient d'être réinitialisé.`
+                  : ''}
+              </p>
+            </div>
+          </div>
+          {(planningAlerts.missing_slots || []).length > 0 && (
+            <ul className="text-sm space-y-1 text-amber-950 dark:text-amber-50">
+              {planningAlerts.missing_slots.map((item) => (
+                <li key={`slot-${item.doctor_id}-${item.next_date || 'none'}`}>
+                  <span className="font-semibold">{item.doctor_name}</span>
+                  {item.next_date ? ` — ${item.next_date}` : ''} — {item.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+          {(planningAlerts.missing_appointments || []).length > 0 && (
+            <ul className="text-sm space-y-1 text-amber-950 dark:text-amber-50">
+              {planningAlerts.missing_appointments.map((item) => (
+                <li key={`rdv-${item.slot_id}`}>
+                  <span className="font-semibold">{item.doctor_name}</span>
+                  {' '}— {item.slot_date} {item.start_time}–{item.end_time} : {item.reason}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* Formulaires toujours visibles */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* Modèle d'horaires pour tous */}
-        <section className="rounded-2xl border-2 border-teal-200 dark:border-teal-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 bg-teal-600 text-white flex items-center gap-2">
+        <section className="rounded-2xl border-2 border-accent bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 bg-primary text-white flex items-center gap-2 border-b-2 border-accent">
             <Users className="w-5 h-5" />
             <div>
               <h2 className="font-bold text-base">Modèle d’horaires pour tous</h2>
@@ -424,12 +654,12 @@ export default function ManageSchedules() {
         </section>
 
         {/* Planning mensuel — tous */}
-        <section className="rounded-2xl border-2 border-emerald-200 dark:border-emerald-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 bg-emerald-600 text-white flex items-center gap-2">
-            <CalendarRange className="w-5 h-5" />
+        <section className="rounded-2xl border-2 border-alert bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 bg-primary text-white flex items-center gap-2 border-b-2 border-alert">
+            <CalendarRange className="w-5 h-5 text-accent" />
             <div>
               <h2 className="font-bold text-base">Planning mensuel — tous les médecins</h2>
-              <p className="text-emerald-100 text-xs mt-0.5">Génération des créneaux RDV du mois</p>
+              <p className="text-surface/80 text-xs mt-0.5">Génération des créneaux RDV du mois</p>
             </div>
           </div>
           <form onSubmit={handleGenerateMonth} className="p-5 space-y-4">
@@ -520,7 +750,7 @@ export default function ManageSchedules() {
         </section>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm flex flex-col sm:flex-row items-center gap-4">
+      <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border-2 border-accent shadow-sm flex flex-col sm:flex-row items-center gap-4">
         <label className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2 whitespace-nowrap">
           <Stethoscope className="w-4 h-4 text-teal-600" />
           Filtrer la grille par médecin :
@@ -542,7 +772,9 @@ export default function ManageSchedules() {
         {DAYS_OF_WEEK.map((day) => {
           const daySchedules = schedules.filter((s) => s.day_of_week === day.id);
           return (
-            <div key={day.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm flex flex-col">
+            <div key={day.id} className={`bg-white dark:bg-gray-900 rounded-2xl border-2 overflow-hidden shadow-sm flex flex-col ${
+              day.id % 2 === 0 ? 'border-accent' : 'border-alert'
+            }`}>
               <div className="px-5 py-3.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                 <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-teal-600" />
@@ -556,25 +788,47 @@ export default function ManageSchedules() {
                 {daySchedules.length === 0 ? (
                   <p className="text-xs text-gray-400 italic text-center py-4">Aucun horaire configuré</p>
                 ) : (
-                  daySchedules.map((sch) => (
-                    <div key={sch.id} className="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between">
-                      <div>
+                  daySchedules.map((sch) => {
+                    const windowInfo = sch.schedule_date
+                      ? describeDatedWindow(sch.schedule_date, sch.start_time, sch.end_time, clock)
+                      : describeWindow(sch.day_of_week, sch.start_time, sch.end_time, clock);
+                    const statusLabel = windowInfo.status === 'in_progress'
+                      ? `En cours jusqu'à ${sch.end_time?.slice(0, 5)}`
+                      : windowInfo.status === 'elapsed'
+                        ? `Terminé — reprise le ${windowInfo.nextLabel}`
+                        : `Prochain créneau : ${windowInfo.nextLabel}`;
+                    const statusClass = windowInfo.status === 'in_progress'
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : windowInfo.status === 'elapsed'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-gray-500 dark:text-gray-400';
+                    return (
+                    <div key={sch.id} className="p-3 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
                         <div className="font-semibold text-xs text-gray-900 dark:text-white">{sch.doctor_name}</div>
+                        {sch.schedule_date && (
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            {formatCivilDate(sch.schedule_date)}
+                            {windowInfo.endLabel ? ` · fin ${windowInfo.endLabel}` : ''}
+                          </div>
+                        )}
                         <div className="text-xs font-mono text-teal-600 dark:text-teal-400 font-bold mt-0.5 flex items-center gap-1">
                           <Clock className="w-3 h-3" />
                           {sch.start_time?.slice(0, 5)} - {sch.end_time?.slice(0, 5)}
                         </div>
+                        <p className={`text-[11px] font-semibold mt-1 ${statusClass}`}>{statusLabel}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => openEditModal(sch)} className="p-1.5 text-gray-400 hover:text-teal-600 transition cursor-pointer">
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button type="button" onClick={() => openEditModal(sch)} className="icon-btn">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button type="button" onClick={() => handleDelete(sch.id)} className="p-1.5 text-gray-400 hover:text-red-600 transition cursor-pointer">
+                        <button type="button" onClick={() => handleDelete(sch.id)} className="icon-btn icon-btn--danger">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -607,16 +861,24 @@ export default function ManageSchedules() {
                 </select>
               </div>
               <div>
-                <label className={labelClass}>Jour</label>
-                <select
-                  value={formData.day_of_week}
-                  onChange={(e) => setFormData({ ...formData, day_of_week: parseInt(e.target.value, 10) })}
+                <label className={labelClass}>Date du créneau</label>
+                <input
+                  type="date"
+                  required
+                  value={formData.schedule_date}
+                  onChange={(e) => {
+                    const scheduleDate = e.target.value;
+                    setFormData({
+                      ...formData,
+                      schedule_date: scheduleDate,
+                      day_of_week: weekdayFromIso(scheduleDate),
+                    });
+                  }}
                   className={fieldClass}
-                >
-                  {DAYS_OF_WEEK.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
+                />
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                  Jour déduit : {DAYS_OF_WEEK.find((d) => d.id === formData.day_of_week)?.name || '—'}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -632,6 +894,12 @@ export default function ManageSchedules() {
                     className={fieldClass} />
                 </div>
               </div>
+              {formData.schedule_date && formData.start_time && formData.end_time && formData.start_time !== formData.end_time && (
+                <p className="text-xs font-semibold text-teal-700 dark:text-teal-300">
+                  Heure de fin : {endMoment(formData.schedule_date, formData.start_time, formData.end_time)?.label}
+                  {parseClock(formData.end_time) <= parseClock(formData.start_time) ? ' (lendemain)' : ''}
+                </p>
+              )}
               <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-800 dark:text-gray-200">
                 <input type="checkbox" checked={formData.is_available}
                   onChange={(e) => setFormData({ ...formData, is_available: e.target.checked })}

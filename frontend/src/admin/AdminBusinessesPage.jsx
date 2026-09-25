@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, CheckCircle2, Clock, Mail, Building2, Pill, Stethoscope, Hotel, LayoutGrid, Plus, X, Phone, Globe, Tag, ChevronDown, ChevronRight, MoreHorizontal, Edit, Trash2, Power, Star, ShieldCheck, Utensils, Bed, Sparkles, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Upload, Crown } from 'lucide-react';
+import { Search, Filter, CheckCircle2, Mail, Plus, X, Edit, Trash2, Power, Star, ShieldCheck, Utensils, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Crown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
-import SectorSpecificFields from '../shared/components/SectorSpecificFields';
-import LocationSelector from '../shared/components/LocationSelector';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
+import BusinessRegistrationForm, {
+  emptyBusinessRegistrationForm,
+  validateBusinessRegistrationForm,
+  buildBusinessRegistrationPayload,
+} from '../shared/components/BusinessRegistrationForm';
 import SectorAnalyticsWidget from './SectorAnalyticsWidget';
 import BusinessCSVImporter from './BusinessCSVImporter';
 import AdminModerationModal from './AdminModerationModal';
+import { normalizeWebsiteUrl } from '../shared/websiteUrl';
 
 export default function AdminBusinessesPage() {
   const [businesses, setBusinesses] = useState([]);
@@ -26,27 +30,10 @@ export default function AdminBusinessesPage() {
   
   const [editingBusiness, setEditingBusiness] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
   const { token } = useAuth();
 
-  const [formData, setFormData] = useState({
-    name: '',
-    logo: '',
-    owner_email_input: '',
-    phone: '',
-    email: '',
-    address: '',
-    province: 'Bujumbura Mairie',
-    commune: 'Mukaza',
-    quartier: 'Rohero I',
-    latitude: '',
-    longitude: '',
-    website: '',
-    description: '',
-    is_active: true,
-    primary_category: '',
-    category_ids: [],
-    extra_attributes: {}
-  });
+  const [formData, setFormData] = useState(() => emptyBusinessRegistrationForm());
 
   const fetchBusinessesAndCategories = async () => {
     if (!token) {
@@ -74,67 +61,54 @@ export default function AdminBusinessesPage() {
 
   const pendingModerationCount = businesses.filter(b => b.verification_status === 'PENDING').length;
 
-  const handleCategoryToggle = (catId) => {
-    setFormData(prev => {
-      const exists = prev.category_ids.includes(catId);
-      if (exists) {
-        return { ...prev, category_ids: prev.category_ids.filter(id => id !== catId) };
-      } else {
-        return { ...prev, category_ids: [...prev.category_ids, catId] };
-      }
-    });
-  };
-
   const openCreateModal = () => {
     setEditingBusiness(null);
+    setFormError(null);
     const defaultPrimary = categories.length > 0 ? categories[0].id : '';
-    setFormData({
-      name: '',
-      logo: '',
-      owner_email_input: '',
-      phone: '',
-      email: '',
-      address: '',
-      province: 'Bujumbura Mairie',
-      commune: 'Mukaza',
-      quartier: 'Rohero I',
-      latitude: '',
-      longitude: '',
-      website: '',
-      description: '',
-      is_active: true,
+    setFormData(emptyBusinessRegistrationForm({
       primary_category: defaultPrimary,
-      category_ids: [],
-      extra_attributes: {}
-    });
+    }));
     setIsModalOpen(true);
   };
 
   const openEditModal = (business) => {
     setEditingBusiness(business);
-    const catIds = business.categories_detail 
-      ? business.categories_detail.map(c => c.id) 
+    setFormError(null);
+    const catIds = business.categories_detail
+      ? business.categories_detail.map((c) => c.id)
       : [];
 
-    setFormData({
+    setFormData(emptyBusinessRegistrationForm({
+      first_name: business.owner_first_name || '',
+      last_name: business.owner_last_name || '',
+      password: '',
+      owner_avatar: business.owner_avatar || '',
       name: business.name || '',
       logo: business.logo || '',
       owner_email_input: business.owner_email || '',
       phone: business.phone || '',
-      email: business.email || '',
       address: business.address || '',
       province: business.province || 'Bujumbura Mairie',
       commune: business.commune || '',
+      zone: business.zone || '',
       quartier: business.quartier || '',
+      avenue: business.avenue || '',
       latitude: business.latitude || '',
       longitude: business.longitude || '',
       website: business.website || '',
       description: business.description || '',
-      is_active: business.is_active !== undefined ? business.is_active : true,
       primary_category: business.primary_category || (catIds.length > 0 ? catIds[0] : ''),
       category_ids: catIds,
-      extra_attributes: business.extra_attributes || {}
-    });
+      extra_attributes: {
+        ...(business.extra_attributes || {}),
+        ...(business.commerce_compliance?.nif_number
+          ? { nif_number: business.commerce_compliance.nif_number }
+          : {}),
+        ...(business.commerce_compliance?.nif_document
+          ? { nif_document: business.commerce_compliance.nif_document }
+          : {}),
+      },
+    }));
     setIsModalOpen(true);
   };
 
@@ -215,18 +189,35 @@ export default function AdminBusinessesPage() {
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setFormError(null);
     try {
+      const requirePassword = !editingBusiness;
+      const validationError = validateBusinessRegistrationForm(formData, categories, {
+        requirePassword,
+        requireOwnerAvatar: !editingBusiness,
+        requireCommerceDocs: !editingBusiness,
+      });
+      if (validationError) throw new Error(validationError);
+
+      const payload = {
+        ...buildBusinessRegistrationPayload(formData),
+        website: normalizeWebsiteUrl(formData.website),
+      };
+      if (editingBusiness && !payload.password) {
+        delete payload.password;
+      }
+
       if (editingBusiness) {
-        await api.patch(`businesses/admin/${editingBusiness.id}/`, formData, { auth: true });
+        await api.patch(`businesses/admin/${editingBusiness.id}/`, payload, { auth: true });
       } else {
-        await api.post('businesses/admin/list/', formData, { auth: true });
+        await api.post('businesses/admin/list/', payload, { auth: true });
       }
 
       setIsModalOpen(false);
       setEditingBusiness(null);
       fetchBusinessesAndCategories();
     } catch (err) {
-      alert(`Erreur lors de l'enregistrement : ${err.message}`);
+      setFormError(err.message || 'Erreur lors de l’enregistrement.');
     } finally {
       setSubmitting(false);
     }
@@ -243,8 +234,6 @@ export default function AdminBusinessesPage() {
       ? 'bg-green-100 text-green-700 dark:bg-success/20 dark:text-green-100'
       : 'bg-clay-100 text-clay-600 dark:bg-error/20 dark:text-red-200';
   };
-
-  const parentCategories = categories.filter(c => !c.parent);
 
   const filteredBusinesses = businesses.filter(business => {
     const matchesSearch = business.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -303,7 +292,7 @@ export default function AdminBusinessesPage() {
       <SectorAnalyticsWidget businesses={businesses} categories={categories} />
 
       {/* Table Container */}
-      <div className="border border-border dark:border-white/10 rounded-md bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm flex flex-col">
+      <div className="border border-border dark:border-white/10 rounded-md bg-surface dark:bg-primary overflow-hidden shadow-sm flex flex-col">
         
         {/* Toolbar */}
         <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-paper dark:bg-black/10">
@@ -471,7 +460,7 @@ export default function AdminBusinessesPage() {
                               type="button"
                               onClick={() => handleApproveBusiness(business)}
                               title="Rendre Actif & Approuvé"
-                              className="p-1.5 text-ink-faint hover:text-emerald-600 dark:text-green-100/60 dark:hover:text-emerald-400 rounded-md hover:bg-emerald-50 dark:hover:bg-white/10"
+                              className="icon-btn"
                             >
                               <CheckCircle2 className="w-4 h-4" />
                             </button>
@@ -480,7 +469,7 @@ export default function AdminBusinessesPage() {
                             type="button"
                             onClick={() => handleActivateSubscription(business)}
                             title="Activer / prolonger l'abonnement SaaS"
-                            className="p-1.5 text-ink-faint hover:text-teal-700 dark:text-green-100/60 dark:hover:text-teal-300 rounded-md hover:bg-teal-50 dark:hover:bg-white/10"
+                            className="icon-btn"
                           >
                             <Crown className="w-4 h-4" />
                           </button>
@@ -490,28 +479,28 @@ export default function AdminBusinessesPage() {
                               setIsDetailModalOpen(true);
                             }}
                             title="Voir toutes les informations complètes"
-                            className="p-1.5 text-ink-faint hover:text-blue-600 dark:text-green-100/60 dark:hover:text-blue-400 rounded-md hover:bg-blue-50 dark:hover:bg-white/10"
+                            className="icon-btn"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => handleToggleActiveStatus(business)}
                             title={business.is_active ? "Suspendre l'entreprise" : "Activer l'entreprise"}
-                            className="p-1.5 text-ink-faint hover:text-gold-600 dark:text-green-100/60 dark:hover:text-gold-400 rounded-md hover:bg-paper dark:hover:bg-white/10"
+                            className="icon-btn"
                           >
                             <Power className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => openEditModal(business)}
                             title="Modifier l'entreprise"
-                            className="p-1.5 text-ink-faint hover:text-green-700 dark:text-green-100/60 dark:hover:text-white rounded-md hover:bg-paper dark:hover:bg-white/10"
+                            className="icon-btn"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => handleDeleteBusiness(business)}
                             title="Supprimer l'entreprise"
-                            className="p-1.5 text-ink-faint hover:text-red-600 dark:text-red-400/70 dark:hover:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="icon-btn icon-btn--danger"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -558,236 +547,36 @@ export default function AdminBusinessesPage() {
         onRefresh={fetchBusinessesAndCategories}
       />
 
-      {/* Modal Créer / Modifier Entreprise & Catégories */}
+      {/* Modal Créer / Modifier — même formulaire que l'inscription client */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
-          <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-xl p-6 w-full max-w-2xl shadow-xl relative max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center pb-4 mb-4 border-b border-border dark:border-white/10">
-              <h3 className="text-lg font-bold text-green-900 dark:text-white">
-                {editingBusiness ? "Modifier l'Entreprise" : "Créer une Entreprise & Champs Métiers"}
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="w-full max-w-3xl my-6 shadow-xl relative">
+            <div className="flex justify-between items-center mb-3 px-1">
+              <h3 className="text-lg font-extrabold text-surface drop-shadow">
+                {editingBusiness ? "Modifier l'entreprise" : 'Créer une entreprise'}
               </h3>
-              <button 
+              <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-ink-faint hover:text-ink dark:hover:text-white"
+                className="p-1.5 rounded-lg bg-surface/90 text-ink hover:bg-surface border-2 border-accent"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              
-              {/* Logo / Image de l'entreprise avec Aperçu Intégré */}
-              <div className="bg-paper dark:bg-black/20 p-3.5 rounded-xl border border-border dark:border-white/10 space-y-2">
-                <label className="block text-xs font-bold text-green-900 dark:text-green-100 flex items-center gap-1.5">
-                  <Upload className="w-4 h-4 text-gold-600" /> Logo & Image de l'Entreprise
-                </label>
-                
-                <div className="flex items-center gap-4">
-                  {/* Visual Preview Box */}
-                  <div className="w-16 h-16 rounded-xl bg-gold-500/20 border border-gold-500/40 flex items-center justify-center text-gold-700 dark:text-gold-300 font-bold text-2xl shrink-0 overflow-hidden shadow-inner relative">
-                    {formData.logo ? (
-                      <img src={formData.logo} alt="Aperçu Logo" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="uppercase">{formData.name ? formData.name[0] : 'E'}</span>
-                    )}
-                  </div>
-
-                  {/* Actions & File Input */}
-                  <div className="flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white rounded-md text-xs font-semibold cursor-pointer transition flex items-center gap-1.5 shadow-2xs">
-                        <Upload className="w-3.5 h-3.5" /> Téléverser une Image...
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          className="hidden" 
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                setFormData(prev => ({ ...prev, logo: reader.result }));
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          }}
-                        />
-                      </label>
-
-                      {formData.logo && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData(prev => ({ ...prev, logo: '' }))}
-                          className="px-2.5 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 text-xs font-semibold rounded-md transition"
-                        >
-                          Effacer le logo
-                        </button>
-                      )}
-                    </div>
-
-                    <input 
-                      type="url"
-                      placeholder="Ou coller directement l'URL d'une image (ex: https://.../logo.png)"
-                      value={formData.logo}
-                      onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
-                      className="w-full px-2.5 py-1 text-xs bg-surface dark:bg-black/40 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Nom de l'entreprise *</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="Nom de l'entreprise"
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">E-mail de l'entreprise*</label>
-                  <input 
-                    type="email" 
-                    required
-                    disabled={!!editingBusiness}
-                    placeholder="ex: Entreprise@isokohub.com"
-                    value={formData.owner_email_input}
-                    onChange={(e) => setFormData({...formData, owner_email_input: e.target.value})}
-                    className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700 disabled:opacity-60"
-                  />
-                </div>
-              </div>
-
-              {/* Primary Category Dropdown */}
-              <div>
-                <label className="block text-xs font-bold text-gold-700 dark:text-gold-400 mb-1 flex items-center gap-1.5">
-                  <Star className="w-4 h-4 fill-gold-500 text-gold-600" /> Catégorie Principale (Métier Cœur) *
-                </label>
-                <select 
-                  required
-                  value={formData.primary_category}
-                  onChange={(e) => setFormData({...formData, primary_category: e.target.value})}
-                  className="w-full px-3 py-2 text-sm font-semibold bg-gold-500/10 dark:bg-gold-500/20 border border-gold-500/30 rounded-md text-ink dark:text-white focus:outline-none focus:border-gold-600"
-                >
-                  <option value="" disabled>-- Sélectionner le métier cœur principal --</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.parent_name ? `${cat.parent_name} → ${cat.name}` : `Secteur: ${cat.name}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Dynamic Sector Specific Fields Component */}
-              <SectorSpecificFields 
-                primaryCategory={formData.primary_category}
-                categories={categories}
-                attributes={formData.extra_attributes}
-                onChange={(updatedAttrs) => setFormData({...formData, extra_attributes: updatedAttrs})}
-              />
-
-              {/* Mandatory Location Selector (Province, Commune, Quartier, GPS) */}
-              <LocationSelector 
-                province={formData.province}
-                commune={formData.commune}
-                zone={formData.zone}
-                quartier={formData.quartier}
-                avenue={formData.avenue}
-                address={formData.address}
-                latitude={formData.latitude}
-                longitude={formData.longitude}
-                onChange={(loc) => setFormData({...formData, ...loc})}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Téléphone</label>
-                  <input 
-                    type="text" 
-                    placeholder="+257 79 00 00 00"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Adresse / Ville</label>
-                  <input 
-                    type="text" 
-                    placeholder="Bujumbura, Rohero..."
-                    value={formData.address}
-                    onChange={(e) => setFormData({...formData, address: e.target.value})}
-                    className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
-                  />
-                </div>
-              </div>
-
-              {/* Secondary Categories Checkboxes */}
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Catégories & Services Secondaires (Optionnel)</label>
-                <div className="border border-border dark:border-white/10 rounded-md p-3 max-h-48 overflow-y-auto space-y-4 bg-paper/50 dark:bg-black/20">
-                  {parentCategories.map((parent) => {
-                    const children = categories.filter(c => c.parent === parent.id || (c.parent_name && c.parent_name === parent.name));
-
-                    return (
-                      <div key={parent.id} className="space-y-1.5">
-                        <div className="font-semibold text-xs text-green-900 dark:text-gold-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <ChevronRight className="w-3.5 h-3.5" /> {parent.name}
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pl-4">
-                          {children.map((child) => (
-                            <label key={child.id} className="flex items-center gap-2 text-xs text-ink-muted dark:text-green-100/80 cursor-pointer select-none hover:text-ink">
-                              <input 
-                                type="checkbox"
-                                checked={formData.category_ids.includes(child.id)}
-                                onChange={() => handleCategoryToggle(child.id)}
-                                className="rounded border-border text-green-700 focus:ring-green-700"
-                              />
-                              <span>{child.name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Description</label>
-                <textarea 
-                  rows="2"
-                  placeholder="Présentation rapide de l'établissement..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({...formData, description: e.target.value})}
-                  className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700 resize-none"
-                ></textarea>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold border border-border dark:border-white/10 rounded-md text-ink-muted hover:bg-paper"
-                >
-                  Annuler
-                </button>
-                <button 
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 text-xs font-semibold bg-green-700 text-white rounded-md hover:bg-green-800 disabled:opacity-50"
-                >
-                  {submitting ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
-              </div>
-            </form>
+            <BusinessRegistrationForm
+              formData={formData}
+              onChange={setFormData}
+              categories={categories}
+              error={formError}
+              submitting={submitting}
+              onSubmit={handleFormSubmit}
+              onCancel={() => setIsModalOpen(false)}
+              submitLabel={editingBusiness ? 'Enregistrer' : 'Créer l’entreprise'}
+              emailDisabled={!!editingBusiness}
+              requirePassword={!editingBusiness}
+              showWebsite
+              compactFooter
+            />
           </div>
         </div>
       )}

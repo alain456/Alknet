@@ -1,10 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Home, Link2, Handshake, FileText, Plus, Pencil, Trash2, Save, RefreshCw, Eye, EyeOff,
-  Mail, CheckCheck,
+  Mail, CheckCheck, Upload, ImageIcon, X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import api from '../shared/api';
+import api, { invalidateApiCache } from '../shared/api';
+import { clearSiteContentCache } from '../shared/useSiteContent';
+import { userHasPlatformPerm } from '../auth/platformPermissions';
+import { notifyContactUnread } from './contactInbox';
 
 const TABS = [
   { key: 'home', label: 'Home', icon: Home },
@@ -16,8 +20,8 @@ const TABS = [
 
 const COLUMN_OPTIONS = [
   { value: 'COMPANY', label: 'Company' },
-  { value: 'SUPPORT', label: 'Support' },
-  { value: 'LEGAL', label: 'Legal' },
+  { value: 'SUPPORT', label: 'Help / Support' },
+  { value: 'LEGAL', label: 'Legal (bas du footer)' },
   { value: 'OTHER', label: 'Other' },
 ];
 
@@ -58,10 +62,44 @@ function Field({ label, children }) {
 const inputClass =
   'w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm outline-none focus:ring-2 focus:ring-primary';
 
+/** Compresse une image pour stockage CMS (base64) sans dépasser les limites API. */
+function compressImageFile(file, { maxWidth = 1600, quality = 0.72 } = {}) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Lecture fichier impossible'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image invalide'));
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / Math.max(img.width, 1));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Canvas indisponible'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = String(reader.result || '');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function AdminCmsPage() {
   const { token, user } = useAuth();
-  const isPlatformAdmin = user?.role === 'SUPER_ADMIN' || user?.is_superuser;
-  const [tab, setTab] = useState('home');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canCms = userHasPlatformPerm(user, 'platform.cms.view')
+    || user?.role === 'SUPER_ADMIN'
+    || user?.is_superuser;
+  const tabFromUrl = searchParams.get('tab');
+  const initialTab = TABS.some((t) => t.key === tabFromUrl) ? tabFromUrl : 'home';
+  const [tab, setTab] = useState(initialTab);
   const [settings, setSettings] = useState(null);
   const [footerLinks, setFooterLinks] = useState([]);
   const [partners, setPartners] = useState([]);
@@ -80,11 +118,84 @@ export default function AdminCmsPage() {
   const [editingPartnerId, setEditingPartnerId] = useState(null);
   const [pageForm, setPageForm] = useState(emptyPage);
   const [editingPageSlug, setEditingPageSlug] = useState(null);
+  const contactHeroFileRef = useRef(null);
+  const [heroUploading, setHeroUploading] = useState(false);
 
   const authOpts = useMemo(() => ({ auth: true }), []);
 
-  const loadAll = async () => {
-    setLoading(true);
+  const handleContactHeroUpload = async (file) => {
+    if (!file || !file.type?.startsWith('image/')) {
+      setError('Veuillez choisir un fichier image.');
+      return;
+    }
+    setHeroUploading(true);
+    setError('');
+    try {
+      const dataUrl = await compressImageFile(file);
+      // Publication immédiate — ne dépend plus du bouton « Enregistrer Home » en bas
+      const updated = await api.patch(
+        'cms/admin/settings/',
+        { contact_hero_image: dataUrl },
+        authOpts,
+      );
+      setSettings((prev) => ({ ...prev, ...updated, contact_hero_image: updated.contact_hero_image || dataUrl }));
+      clearSiteContentCache();
+      invalidateApiCache('cms');
+      flash('Image hero Contact publiée.');
+    } catch (err) {
+      setError(err.message || 'Échec upload / enregistrement image hero');
+    } finally {
+      setHeroUploading(false);
+    }
+  };
+
+  const publishContactHeroFromUrl = async () => {
+    const raw = String(settings?.contact_hero_image || '').trim();
+    if (!raw || raw.startsWith('data:')) {
+      setError('Indiquez une URL http(s) dans le champ, ou utilisez Upload.');
+      return;
+    }
+    setHeroUploading(true);
+    setError('');
+    try {
+      const updated = await api.patch(
+        'cms/admin/settings/',
+        { contact_hero_image: raw },
+        authOpts,
+      );
+      setSettings((prev) => ({ ...prev, ...updated }));
+      clearSiteContentCache();
+      invalidateApiCache('cms');
+      flash('URL image hero Contact publiée.');
+    } catch (err) {
+      setError(err.message || 'Échec publication URL image');
+    } finally {
+      setHeroUploading(false);
+    }
+  };
+
+  const removeContactHero = async () => {
+    setHeroUploading(true);
+    setError('');
+    try {
+      const updated = await api.patch(
+        'cms/admin/settings/',
+        { contact_hero_image: '' },
+        authOpts,
+      );
+      setSettings((prev) => ({ ...prev, ...updated, contact_hero_image: '' }));
+      clearSiteContentCache();
+      invalidateApiCache('cms');
+      flash('Image hero Contact retirée.');
+    } catch (err) {
+      setError(err.message || 'Échec suppression image');
+    } finally {
+      setHeroUploading(false);
+    }
+  };
+
+  const loadAll = async ({ soft = false } = {}) => {
+    if (!soft) setLoading(true);
     setError('');
     try {
       const [s, f, p, pg, msgs] = await Promise.all([
@@ -100,24 +211,38 @@ export default function AdminCmsPage() {
       setPages(Array.isArray(pg) ? pg : pg?.results || []);
       const msgList = Array.isArray(msgs) ? msgs : (msgs?.results || []);
       setContactMessages(msgList);
-      setUnreadCount(msgs?.unread_count ?? msgList.filter((m) => !m.is_read).length);
+      const unread = Number(msgs?.unread_count ?? msgList.filter((m) => !m.is_read).length);
+      setUnreadCount(unread);
+      notifyContactUnread(unread);
     } catch (err) {
       setError(err.message || 'Erreur de chargement CMS');
     } finally {
-      setLoading(false);
+      if (!soft) setLoading(false);
     }
   };
 
   const openMessage = async (msg) => {
     setSelectedMessage(msg);
     if (!msg.is_read) {
+      // Optimistic badge
+      setContactMessages((prev) => {
+        const next = prev.map((m) => (m.id === msg.id ? { ...m, is_read: true } : m));
+        notifyContactUnread(next.filter((m) => !m.is_read).length);
+        return next;
+      });
+      setUnreadCount((c) => Math.max(0, c - 1));
       try {
-        const updated = await api.post(`cms/admin/contact-messages/${msg.id}/mark_read/`, {}, authOpts);
+        let updated;
+        try {
+          updated = await api.patch(`cms/admin/contact-messages/${msg.id}/`, { is_read: true }, authOpts);
+        } catch {
+          updated = await api.post(`cms/admin/contact-messages/${msg.id}/mark_read/`, {}, authOpts);
+        }
+        invalidateApiCache('cms/admin/contact-messages');
         setContactMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...updated, is_read: true } : m)));
         setSelectedMessage((prev) => (prev?.id === msg.id ? { ...prev, ...updated, is_read: true } : prev));
-        setUnreadCount((c) => Math.max(0, c - 1));
       } catch {
-        /* lecture locale ok */
+        /* déjà marqué localement */
       }
     }
   };
@@ -127,6 +252,7 @@ export default function AdminCmsPage() {
       await api.post('cms/admin/contact-messages/mark_all_read/', {}, authOpts);
       setContactMessages((prev) => prev.map((m) => ({ ...m, is_read: true })));
       setUnreadCount(0);
+      notifyContactUnread(0);
       setMessage('Tous les messages marqués comme lus.');
     } catch (err) {
       setError(err.message || 'Échec');
@@ -137,7 +263,11 @@ export default function AdminCmsPage() {
     if (!window.confirm('Supprimer ce message ?')) return;
     try {
       await api.delete(`cms/admin/contact-messages/${id}/`, authOpts);
-      setContactMessages((prev) => prev.filter((m) => m.id !== id));
+      setContactMessages((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        notifyContactUnread(next.filter((m) => !m.is_read).length);
+        return next;
+      });
       if (selectedMessage?.id === id) setSelectedMessage(null);
       setMessage('Message supprimé.');
     } catch (err) {
@@ -147,13 +277,28 @@ export default function AdminCmsPage() {
 
   useEffect(() => {
     if (!token) return;
-    if (!isPlatformAdmin) {
+    if (!canCms) {
       setLoading(false);
-      setError('Accès réservé au Super Admin plateforme. Reconnectez-vous avec un compte Super Admin (ex: admin@isokohub.com).');
+      setError('Accès CMS requis (permission platform.cms.view).');
       return;
     }
     loadAll();
-  }, [token, isPlatformAdmin]);
+  }, [token, canCms]);
+
+  useEffect(() => {
+    const next = searchParams.get('tab');
+    if (next && TABS.some((t) => t.key === next) && next !== tab) {
+      setTab(next);
+    }
+  }, [searchParams, tab]);
+
+  const selectTab = (key) => {
+    setTab(key);
+    const next = new URLSearchParams(searchParams);
+    if (key === 'home') next.delete('tab');
+    else next.set('tab', key);
+    setSearchParams(next, { replace: true });
+  };
 
   const flash = (msg) => {
     setMessage(msg);
@@ -165,9 +310,26 @@ export default function AdminCmsPage() {
     setSaving(true);
     setError('');
     try {
-      const updated = await api.patch('cms/admin/settings/', settings, authOpts);
+      let social = settings.footer_social_links;
+      if (typeof social === 'string') {
+        try {
+          social = JSON.parse(social || '[]');
+        } catch {
+          setError('JSON des réseaux sociaux invalide.');
+          setSaving(false);
+          return;
+        }
+      }
+      if (!Array.isArray(social)) social = [];
+      const updated = await api.patch(
+        'cms/admin/settings/',
+        { ...settings, footer_social_links: social },
+        authOpts,
+      );
       setSettings(updated);
-      flash('Home enregistrée');
+      clearSiteContentCache();
+      invalidateApiCache('cms');
+      flash('Paramètres enregistrés (Contact Us inclus)');
     } catch (err) {
       setError(err.message || 'Échec enregistrement');
     } finally {
@@ -187,6 +349,7 @@ export default function AdminCmsPage() {
       setFooterForm(emptyFooter);
       setEditingFooterId(null);
       await loadAll();
+      clearSiteContentCache();
       flash('Lien footer enregistré');
     } catch (err) {
       setError(err.message || 'Échec footer');
@@ -256,7 +419,21 @@ export default function AdminCmsPage() {
     flash('Page supprimée');
   };
 
-  if (loading || !settings) {
+  if (!settings) {
+    if (error) {
+      return (
+        <div className="p-8 space-y-3">
+          <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>
+          <button
+            type="button"
+            onClick={() => loadAll()}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-gray-50"
+          >
+            <RefreshCw className="w-4 h-4" /> Réessayer
+          </button>
+        </div>
+      );
+    }
     return <div className="p-8 text-gray-500">Chargement du CMS...</div>;
   }
 
@@ -264,12 +441,16 @@ export default function AdminCmsPage() {
     <div className="space-y-6 pb-12 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contenu du site (Home & Footer)</h1>
-          <p className="text-sm text-gray-500 mt-1">Géré uniquement par le Super Admin — visible côté client.</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contenu du site (Home, Footer & Messages)</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Contenu public et boîte de réception Contact Us.
+            {' '}
+            <a href="/admin/support" className="text-primary font-semibold hover:underline">Messages contact →</a>
+          </p>
         </div>
         <button
           type="button"
-          onClick={loadAll}
+          onClick={() => loadAll({ soft: true })}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium hover:bg-gray-50"
         >
           <RefreshCw className="w-4 h-4" /> Rafraîchir
@@ -286,7 +467,7 @@ export default function AdminCmsPage() {
             <button
               key={t.key}
               type="button"
-              onClick={() => setTab(t.key)}
+              onClick={() => selectTab(t.key)}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                 tab === t.key
                   ? 'bg-primary text-white'
@@ -337,6 +518,201 @@ export default function AdminCmsPage() {
               </div>
             ) : null}
           </Field>
+
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-4">
+            <h3 className="font-bold text-primary text-sm uppercase tracking-wide">Footer (design dynamique)</h3>
+            <Field label="Titre principal footer (headline)">
+              <input
+                className={inputClass}
+                value={settings.footer_headline || ''}
+                onChange={(e) => setSettings({ ...settings, footer_headline: e.target.value })}
+                placeholder="Tout ce dont vous avez besoin — en une seule plateforme."
+              />
+            </Field>
+            <Field label="Tagline (repli si headline vide)">
+              <textarea rows={2} className={inputClass} value={settings.footer_tagline || ''} onChange={(e) => setSettings({ ...settings, footer_tagline: e.target.value })} />
+            </Field>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Field label="Titre newsletter">
+                <input className={inputClass} value={settings.footer_newsletter_title || ''} onChange={(e) => setSettings({ ...settings, footer_newsletter_title: e.target.value })} />
+              </Field>
+              <Field label="Bouton newsletter">
+                <input className={inputClass} value={settings.footer_newsletter_button || ''} onChange={(e) => setSettings({ ...settings, footer_newsletter_button: e.target.value })} />
+              </Field>
+              <Field label="Placeholder email">
+                <input className={inputClass} value={settings.footer_newsletter_placeholder || ''} onChange={(e) => setSettings({ ...settings, footer_newsletter_placeholder: e.target.value })} />
+              </Field>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 pt-6">
+                <input
+                  type="checkbox"
+                  checked={settings.footer_show_newsletter !== false}
+                  onChange={(e) => setSettings({ ...settings, footer_show_newsletter: e.target.checked })}
+                />
+                Afficher la newsletter
+              </label>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Field label="Titre colonne contact">
+                <input className={inputClass} value={settings.footer_contact_title || ''} onChange={(e) => setSettings({ ...settings, footer_contact_title: e.target.value })} />
+              </Field>
+              <Field label="Titre Follow us">
+                <input className={inputClass} value={settings.footer_follow_title || ''} onChange={(e) => setSettings({ ...settings, footer_follow_title: e.target.value })} />
+              </Field>
+              <Field label="Email contact footer">
+                <input type="email" className={inputClass} value={settings.footer_contact_email || ''} onChange={(e) => setSettings({ ...settings, footer_contact_email: e.target.value })} />
+              </Field>
+              <Field label="Téléphone contact footer">
+                <input className={inputClass} value={settings.footer_contact_phone || ''} onChange={(e) => setSettings({ ...settings, footer_contact_phone: e.target.value })} placeholder="+257 …" />
+              </Field>
+            </div>
+            <Field label="Réseaux sociaux (JSON)">
+              <textarea
+                rows={4}
+                className={inputClass + ' font-mono text-xs'}
+                value={typeof settings.footer_social_links === 'string'
+                  ? settings.footer_social_links
+                  : JSON.stringify(settings.footer_social_links || [], null, 2)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  try {
+                    const parsed = JSON.parse(raw || '[]');
+                    setSettings({ ...settings, footer_social_links: parsed });
+                  } catch {
+                    setSettings({ ...settings, footer_social_links: raw });
+                  }
+                }}
+                placeholder={'[\n  {"network":"facebook","url":"https://facebook.com/…"},\n  {"network":"instagram","url":"https://instagram.com/…"}\n]'}
+              />
+              <span className="text-[11px] text-gray-500">
+                Réseaux : facebook, instagram, youtube, linkedin, twitter
+              </span>
+            </Field>
+          </div>
+
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-4">
+            <h3 className="font-bold text-primary text-sm uppercase tracking-wide">Page Contact Us</h3>
+            <Field label="Sous-titre hero">
+              <input className={inputClass} value={settings.contact_hero_subtitle || ''} onChange={(e) => setSettings({ ...settings, contact_hero_subtitle: e.target.value })} />
+            </Field>
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Image hero Contact
+              </span>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    ref={contactHeroFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleContactHeroUpload(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={heroUploading}
+                    onClick={() => contactHeroFileRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:opacity-95 border border-accent/40 shadow-sm transition disabled:opacity-60"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {heroUploading ? 'Publication…' : 'Upload & publier'}
+                  </button>
+                  {settings.contact_hero_image ? (
+                    <button
+                      type="button"
+                      disabled={heroUploading}
+                      onClick={removeContactHero}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-alert/40 text-alert text-sm font-bold hover:bg-alert/5 transition disabled:opacity-60"
+                    >
+                      <X className="w-4 h-4" />
+                      Retirer
+                    </button>
+                  ) : null}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    className={inputClass}
+                    value={
+                      settings.contact_hero_image?.startsWith('data:')
+                        ? ''
+                        : (settings.contact_hero_image || '')
+                    }
+                    onChange={(e) => setSettings({ ...settings, contact_hero_image: e.target.value })}
+                    placeholder="Ou collez une URL https://…"
+                  />
+                  <button
+                    type="button"
+                    disabled={heroUploading}
+                    onClick={publishContactHeroFromUrl}
+                    className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg border-2 border-primary text-primary text-sm font-bold hover:bg-primary/5 transition disabled:opacity-60"
+                  >
+                    <Save className="w-4 h-4" />
+                    Publier URL
+                  </button>
+                </div>
+                {settings.contact_hero_image?.startsWith('data:') ? (
+                  <p className="text-[11px] text-emerald-700 font-medium">Image uploadée (fichier) — déjà publiée.</p>
+                ) : null}
+                {settings.contact_hero_image ? (
+                  <div className="relative mt-1 rounded-lg overflow-hidden border border-primary/20 bg-white max-w-md">
+                    <img
+                      src={settings.contact_hero_image}
+                      alt="Aperçu hero contact"
+                      className="w-full h-36 object-cover"
+                    />
+                    <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-black/60 text-white text-[10px] font-bold">
+                      <ImageIcon className="w-3 h-3" /> Aperçu publié
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-gray-500">Upload publie immédiatement l’image sur /pages/contact.</p>
+                )}
+              </div>
+            </div>
+            <Field label="Intro « Get in touch »">
+              <textarea rows={2} className={inputClass} value={settings.contact_intro || ''} onChange={(e) => setSettings({ ...settings, contact_intro: e.target.value })} />
+            </Field>
+            <Field label="Adresse Head Office">
+              <input className={inputClass} value={settings.contact_office_address || ''} onChange={(e) => setSettings({ ...settings, contact_office_address: e.target.value })} />
+            </Field>
+            <Field label="Lien Google Maps (partage ou embed)">
+              <textarea
+                rows={2}
+                className={inputClass + ' font-mono text-xs'}
+                value={settings.contact_google_maps_url || ''}
+                onChange={(e) => {
+                  const url = e.target.value;
+                  const at = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+                  const ll = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/i);
+                  const coords = at || ll;
+                  setSettings({
+                    ...settings,
+                    contact_google_maps_url: url,
+                    ...(coords
+                      ? { contact_map_lat: coords[1], contact_map_lng: coords[2] }
+                      : {}),
+                  });
+                }}
+                placeholder="Collez l’URL Google Maps (ex. https://www.google.com/maps/place/…/@-3.37,29.91,17z…)"
+              />
+              <span className="text-[11px] text-gray-500">
+                Collez le lien Google Maps : la latitude/longitude sont extraites automatiquement si présentes.
+              </span>
+            </Field>
+            <div className="grid md:grid-cols-2 gap-4">
+              <Field label="Carte — latitude">
+                <input className={inputClass} value={settings.contact_map_lat || ''} onChange={(e) => setSettings({ ...settings, contact_map_lat: e.target.value })} placeholder="-3.3731" />
+              </Field>
+              <Field label="Carte — longitude">
+                <input className={inputClass} value={settings.contact_map_lng || ''} onChange={(e) => setSettings({ ...settings, contact_map_lng: e.target.value })} placeholder="29.9189" />
+              </Field>
+            </div>
+            <p className="text-[11px] text-gray-500">Email / téléphone / réseaux : section Footer ci-dessus. Page slug : <code>/pages/contact</code></p>
+          </div>
+
           <div className="grid md:grid-cols-2 gap-4">
             <Field label="Titre page Services">
               <input className={inputClass} value={settings.services_page_title || ''} onChange={(e) => setSettings({ ...settings, services_page_title: e.target.value })} />
@@ -345,9 +721,6 @@ export default function AdminCmsPage() {
               <input className={inputClass} value={settings.services_page_subtitle || ''} onChange={(e) => setSettings({ ...settings, services_page_subtitle: e.target.value })} />
             </Field>
           </div>
-          <Field label="Tagline footer">
-            <textarea rows={2} className={inputClass} value={settings.footer_tagline || ''} onChange={(e) => setSettings({ ...settings, footer_tagline: e.target.value })} />
-          </Field>
           <Field label="Titre Hero (utilisez \\n pour un retour à la ligne)">
             <textarea rows={2} className={inputClass} value={settings.hero_title || ''} onChange={(e) => setSettings({ ...settings, hero_title: e.target.value })} />
           </Field>
@@ -490,10 +863,10 @@ export default function AdminCmsPage() {
                     <div className="text-[11px] text-gray-400 mt-1">ordre {link.display_order} · {link.is_active ? 'actif' : 'inactif'}</div>
                   </div>
                   <div className="flex gap-1">
-                    <button type="button" className="p-2 rounded-lg hover:bg-gray-100" onClick={() => { setEditingFooterId(link.id); setFooterForm(link); }}>
+                    <button type="button" className="icon-btn" onClick={() => { setEditingFooterId(link.id); setFooterForm(link); }}>
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button type="button" className="p-2 rounded-lg hover:bg-red-50 text-red-600" onClick={() => deleteFooter(link.id)}>
+                    <button type="button" className="icon-btn icon-btn--danger" onClick={() => deleteFooter(link.id)}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -551,10 +924,10 @@ export default function AdminCmsPage() {
                     </div>
                   </div>
                   <div className="flex gap-1">
-                    <button type="button" className="p-2 rounded-lg hover:bg-gray-100" onClick={() => { setEditingPartnerId(p.id); setPartnerForm(p); }}>
+                    <button type="button" className="icon-btn" onClick={() => { setEditingPartnerId(p.id); setPartnerForm(p); }}>
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button type="button" className="p-2 rounded-lg hover:bg-red-50 text-red-600" onClick={() => deletePartner(p.id)}>
+                    <button type="button" className="icon-btn icon-btn--danger" onClick={() => deletePartner(p.id)}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -606,10 +979,10 @@ export default function AdminCmsPage() {
                     <div className="text-xs text-gray-500">/pages/{pg.slug}</div>
                   </div>
                   <div className="flex gap-1">
-                    <button type="button" className="p-2 rounded-lg hover:bg-gray-100" onClick={() => { setEditingPageSlug(pg.slug); setPageForm(pg); }}>
+                    <button type="button" className="icon-btn" onClick={() => { setEditingPageSlug(pg.slug); setPageForm(pg); }}>
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button type="button" className="p-2 rounded-lg hover:bg-red-50 text-red-600" onClick={() => deletePage(pg.slug)}>
+                    <button type="button" className="icon-btn icon-btn--danger" onClick={() => deletePage(pg.slug)}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
@@ -695,7 +1068,7 @@ export default function AdminCmsPage() {
                     <button
                       type="button"
                       onClick={() => deleteMessage(selectedMessage.id)}
-                      className="p-2 rounded-lg hover:bg-red-50 text-red-600"
+                      className="icon-btn icon-btn--danger"
                       title="Supprimer"
                     >
                       <Trash2 className="w-4 h-4" />

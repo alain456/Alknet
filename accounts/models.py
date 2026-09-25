@@ -6,6 +6,20 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseU
 from django.utils import timezone
 
 class CustomUserManager(BaseUserManager):
+    @classmethod
+    def normalize_email(cls, email):
+        """Minuscules sur toute l'adresse — m@gmail.com ≠ ma@gmail.com restent distincts."""
+        from .email_identity import normalize_login_email
+        return normalize_login_email(email)
+
+    def get_by_natural_key(self, username):
+        """Login : correspondance email STRICTE (pas de préfixe / contains)."""
+        from .email_identity import get_user_by_login_email
+        user = get_user_by_login_email(username, queryset=self.get_queryset())
+        if user is None:
+            raise self.model.DoesNotExist(f'{self.model.__name__} matching email does not exist')
+        return user
+
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError('L\'adresse e-mail est obligatoire')
@@ -30,6 +44,10 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = (
         ('SUPER_ADMIN', 'Super Admin'),
+        ('PLATFORM_FINANCE', 'Finance plateforme'),
+        ('PLATFORM_MODERATION', 'Modération'),
+        ('PLATFORM_SUPPORT', 'Support'),
+        ('PLATFORM_CONTENT', 'Contenu'),
         ('CUSTOMER', 'Customer'),
         ('PROFESSIONAL', 'Professional'),
         ('BUSINESS_OWNER', 'Business Owner'),
@@ -121,4 +139,23 @@ class AuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {self.user_email} - {self.action} ({self.status})"
+
+
+class PlatformRole(models.Model):
+    """Rôle plateforme (finance, modération, support, contenu) et ses droits CRUD."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.SlugField(max_length=40, unique=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    permissions = models.JSONField(default=list, blank=True)
+    is_locked = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Rôle plateforme'
+        verbose_name_plural = 'Rôles plateforme'
+
+    def __str__(self):
+        return self.name
 

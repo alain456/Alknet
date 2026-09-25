@@ -7,12 +7,12 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
-from datetime import timedelta
+from datetime import datetime, timedelta
 from businesses.models import BusinessRole, BusinessEmployee, Business
 from businesses.tenant import filter_queryset_by_hospital_tenant, get_user_tenant_business
 from .models import (
     Specialty, DoctorProfile, Appointment, AppointmentSlot, MedicalService, DoctorSchedule,
-    MedicalRecord, LabResult, Invoice, Notification, Prescription, HospitalProfile, ServiceAssignment,
+    MedicalRecord,     LabResult, Invoice, Notification, Prescription, HospitalProfile, ServiceAssignment,
     ServiceCategory, HospitalExam
 )
 from .serializers import (
@@ -25,8 +25,14 @@ from .serializers import (
 )
 from .permissions import (
     IsMedicalRecordViewer, IsLabTechnician, IsCashier, IsHospitalAdmin,
-    user_is_lab_technician, user_can_view_lab_results,
+    user_is_lab_technician, user_can_view_lab_results, user_can_manage_billing,
+    user_can_validate_lab_results,
 )
+from .accounting import (
+    allocate_invoice_number, build_desk, close_day, create_invoice_for_appointment,
+    day_is_closed, export_invoices_csv,
+)
+from .schedule_dynamics import planning_alert_payload, roll_expired_slots, hospital_now
 from .appointment_workflow import (
     validate_slot_for_booking, notify_appointment_booked,
     notify_appointment_confirmed, notify_appointment_rejected,
@@ -80,33 +86,23 @@ class HospitalProfileViewSet(viewsets.ModelViewSet):
         return HospitalProfileSerializer
 
     def get_queryset(self):
-        from businesses.subscription import (
-            ACTIVE_SUBSCRIPTION_STATUSES,
-            business_has_active_subscription,
-        )
+        from businesses.subscription import business_has_active_subscription, subscription_access_q
         from businesses.tenant import get_user_tenant_business
-        from django.utils import timezone as dj_tz
 
         queryset = HospitalProfile.objects.select_related('business').all()
-        # Catalogue public : masquer sans abonnement SaaS actif
+        # Catalogue public : masquer sans abonnement SaaS encore utilisable (grâce comprise)
         if self.action in ('list', 'nearby'):
-            queryset = queryset.filter(
-                business__subscription__status__in=ACTIVE_SUBSCRIPTION_STATUSES,
-                business__subscription__ends_at__gte=dj_tz.now(),
-            )
+            queryset = queryset.filter(subscription_access_q('business__subscription__'))
         elif self.action in ('retrieve', 'services', 'doctors'):
             user = self.request.user
             tenant = get_user_tenant_business(user) if user and user.is_authenticated else None
             if not tenant or not business_has_active_subscription(tenant):
-                # Visiteur / abo inactif : uniquement les hôpitaux avec abo actif
+                # Visiteur / abo inactif : uniquement les hôpitaux avec abo encore ouvert
                 # (le tenant bloqué voit encore sa fiche via filtre ci-dessous)
                 if tenant:
                     queryset = queryset.filter(business_id=tenant.id)
                 else:
-                    queryset = queryset.filter(
-                        business__subscription__status__in=ACTIVE_SUBSCRIPTION_STATUSES,
-                        business__subscription__ends_at__gte=dj_tz.now(),
-                    )
+                    queryset = queryset.filter(subscription_access_q('business__subscription__'))
         # Filtres
         hospital_type = self.request.query_params.get('hospital_type')
         level = self.request.query_params.get('level')
@@ -152,15 +148,12 @@ class HospitalProfileViewSet(viewsets.ModelViewSet):
             )
 
         # Filtrer les hôpitaux ayant des coordonnées GPS + abo actif
-        from businesses.subscription import ACTIVE_SUBSCRIPTION_STATUSES
-        from django.utils import timezone as dj_tz
+        from businesses.subscription import subscription_access_q
 
         hospitals = HospitalProfile.objects.select_related('business').filter(
             business__latitude__isnull=False,
             business__longitude__isnull=False,
-            business__subscription__status__in=ACTIVE_SUBSCRIPTION_STATUSES,
-            business__subscription__ends_at__gte=dj_tz.now(),
-        )
+        ).filter(subscription_access_q('business__subscription__'))
 
         def haversine_distance(lat1, lng1, lat2, lng2):
             """Distance en km entre deux points GPS (formule Haversine)."""
@@ -440,7 +433,26 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         'CASHIER_ACCESS',
         'LAB_ACCESS',
     )
-    NON_PUBLIC_STAFF_CATEGORIES = ('NURSE', 'RECEPTIONIST')
+    NON_PUBLIC_STAFF_CATEGORIES = ('NURSE', 'RECEPTIONIST', 'ACCOUNTANT')
+    ACCOUNTANT_NAME_MARKERS = ('comptable', 'comptab', 'caissier', 'caisse')
+
+    @staticmethod
+    def _is_accountant_role(role_obj):
+        if not role_obj:
+            return False
+        if getattr(role_obj, 'system_access_level', None) == 'CASHIER_ACCESS':
+            return True
+        name = (getattr(role_obj, 'name', '') or '').lower()
+        if any(marker in name for marker in DoctorProfileViewSet.ACCOUNTANT_NAME_MARKERS):
+            return True
+        perms = set(getattr(role_obj, 'permissions', None) or [])
+        clinical = {
+            'can_manage_hospital',
+            'can_view_medical_records',
+            'can_edit_medical_records',
+            'can_manage_lab_results',
+        }
+        return bool(perms) and 'can_manage_invoices' in perms and not clinical.intersection(perms)
 
     @staticmethod
     def _is_receptionist_role(role_obj):
@@ -450,7 +462,10 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
     def _is_non_public_staff_role(role_obj):
         return bool(
             role_obj
-            and role_obj.system_access_level in DoctorProfileViewSet.NON_PUBLIC_ACCESS_LEVELS
+            and (
+                role_obj.system_access_level in DoctorProfileViewSet.NON_PUBLIC_ACCESS_LEVELS
+                or DoctorProfileViewSet._is_accountant_role(role_obj)
+            )
         )
 
     @staticmethod
@@ -467,15 +482,18 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
             doctor_profile.is_physical_consultation = False
             access = getattr(role_obj, 'system_access_level', None) if role_obj else None
             if doctor_profile.staff_category not in DoctorProfileViewSet.NON_PUBLIC_STAFF_CATEGORIES:
-                if access == 'CASHIER_ACCESS' or access == 'LAB_ACCESS':
-                    # Garder la catégorie métier si déjà NURSE ; sinon forcer hors annuaire médecin
-                    pass
+                if DoctorProfileViewSet._is_accountant_role(role_obj):
+                    doctor_profile.staff_category = 'ACCOUNTANT'
+                    doctor_profile.professional_title = 'AUTRE'
                 elif access == 'RECEPTIONIST_ACCESS':
                     doctor_profile.staff_category = 'RECEPTIONIST'
+            elif DoctorProfileViewSet._is_accountant_role(role_obj):
+                doctor_profile.staff_category = 'ACCOUNTANT'
+                doctor_profile.professional_title = 'AUTRE'
             doctor_profile.save(update_fields=[
                 'is_public_directory', 'is_accepting_new_patients',
                 'is_available_for_telemedicine', 'is_physical_consultation',
-                'staff_category', 'updated_at',
+                'staff_category', 'professional_title', 'updated_at',
             ])
         elif role_obj and not DoctorProfileViewSet._is_non_public_staff_role(role_obj):
             if (
@@ -491,12 +509,16 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
     @staticmethod
     def _filter_public_directory(queryset):
         """Exclut infirmiers, caissiers, labo, agents d'accueil et profils non publiés."""
-        from django.db.models import Exists, OuterRef
+        from django.db.models import Exists, OuterRef, Q
         non_public_emp = BusinessEmployee.objects.filter(
             user_id=OuterRef('user_id'),
             business_id=OuterRef('hospital_id'),
             is_active=True,
-            role__system_access_level__in=DoctorProfileViewSet.NON_PUBLIC_ACCESS_LEVELS,
+        ).filter(
+            Q(role__system_access_level__in=DoctorProfileViewSet.NON_PUBLIC_ACCESS_LEVELS)
+            | Q(role__name__icontains='comptable')
+            | Q(role__name__icontains='comptab')
+            | Q(role__name__icontains='caissier')
         )
         return queryset.filter(
             is_public_directory=True,
@@ -603,7 +625,11 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
                     business=hospital_obj,
                     defaults={
                         'role': role_obj,
-                        'position': 'RECEPTIONIST' if self._is_receptionist_role(role_obj) else 'Médecin',
+                        'position': (
+                            'COMPTABLE' if self._is_accountant_role(role_obj)
+                            else 'RECEPTIONIST' if self._is_receptionist_role(role_obj)
+                            else 'Médecin'
+                        ),
                     }
                 )
                 self._apply_directory_visibility(doctor_profile, role_obj)
@@ -662,7 +688,11 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
                 business=hospital_obj,
                 defaults={
                     'role': role_obj,
-                    'position': 'RECEPTIONIST' if self._is_receptionist_role(role_obj) else 'Médecin',
+                    'position': (
+                        'COMPTABLE' if self._is_accountant_role(role_obj)
+                        else 'RECEPTIONIST' if self._is_receptionist_role(role_obj)
+                        else 'Médecin'
+                    ),
                 }
             )
             self._apply_directory_visibility(instance, role_obj)
@@ -709,6 +739,41 @@ class IsHospitalStaffWrite(permissions.BasePermission):
         return BusinessEmployee.objects.filter(user=request.user, is_active=True).exists()
 
 
+def notify_doctor_planning(doctor, title, message, actor=None):
+    """Préviens le médecin dès qu'un horaire ou une session lui est assigné."""
+    if doctor is None or not getattr(doctor, 'user_id', None):
+        return
+    if actor is not None and getattr(actor, 'id', None) == doctor.user_id:
+        return
+    Notification.objects.create(
+        user_id=doctor.user_id,
+        notification_type='GENERAL',
+        title=title,
+        message=message,
+    )
+
+
+def _own_doctor_queryset(user, queryset, hospital_id):
+    """Un médecin voit ses créneaux ; l'admin et l'accueil voient tout l'hôpital."""
+    if not getattr(user, 'is_authenticated', False):
+        return queryset
+    if getattr(user, 'role', None) in ('SUPER_ADMIN', 'BUSINESS_OWNER'):
+        return queryset
+    try:
+        profile = user.doctor_profile
+    except Exception:
+        profile = None
+    if profile is None:
+        return queryset
+    hospital = Business.objects.filter(id=hospital_id).first() if hospital_id else profile.hospital
+    if hospital and (
+        user_can_manage_hospital_appointments(user, hospital)
+        or user_is_receptionist(user, hospital)
+    ):
+        return queryset
+    return queryset.filter(doctor=profile)
+
+
 class AppointmentSlotViewSet(viewsets.ModelViewSet):
     """
     Créneaux créés par l'admin — publiés (is_active) pour être visibles côté client.
@@ -728,6 +793,10 @@ class AppointmentSlotViewSet(viewsets.ModelViewSet):
         hospital_id = self.request.query_params.get('hospital')
         doctor_id = self.request.query_params.get('doctor')
         status_param = self.request.query_params.get('status')
+        if hospital_id:
+            hospital = Business.objects.filter(id=hospital_id).first()
+            if hospital is not None:
+                roll_expired_slots(hospital)
         upcoming = self.request.query_params.get('upcoming')
         is_active_param = self.request.query_params.get('is_active')
         public_only = self.request.query_params.get('public')
@@ -741,31 +810,34 @@ class AppointmentSlotViewSet(viewsets.ModelViewSet):
         )
 
         if is_public_request:
+            from django.db.models import Exists, OuterRef
+            non_public_emp = BusinessEmployee.objects.filter(
+                user_id=OuterRef('doctor__user_id'),
+                business_id=OuterRef('hospital_id'),
+                is_active=True,
+            ).filter(
+                Q(role__system_access_level__in=DoctorProfileViewSet.NON_PUBLIC_ACCESS_LEVELS)
+                | Q(role__name__icontains='comptable')
+                | Q(role__name__icontains='comptab')
+                | Q(role__name__icontains='caissier')
+            )
             queryset = queryset.filter(
                 is_active=True,
                 status='OPEN',
                 slot_date__gte=timezone.now().date(),
+                doctor__is_public_directory=True,
+                doctor__is_active=True,
+            ).exclude(
+                doctor__staff_category__in=['NURSE', 'RECEPTIONIST', 'ACCOUNTANT'],
+            ).exclude(
+                Exists(non_public_emp),
             ).filter(_booked__lt=F('max_patients'))
         elif is_active_param is not None:
             is_active_bool = is_active_param.lower() in ['true', '1', 'yes']
             queryset = queryset.filter(is_active=is_active_bool)
 
         if user.is_authenticated and hasattr(user, 'doctor_profile') and user.role not in ('SUPER_ADMIN', 'BUSINESS_OWNER'):
-            # Médecin : uniquement ses créneaux (même avec ?hospital=),
-            # sauf admin établissement / réception.
-            hospital_for_perm = None
-            if hospital_id:
-                hospital_for_perm = Business.objects.filter(id=hospital_id).first()
-            if hospital_for_perm is None:
-                hospital_for_perm = getattr(user.doctor_profile, 'hospital', None)
-            can_see_all = False
-            if hospital_for_perm:
-                can_see_all = (
-                    user_can_manage_hospital_appointments(user, hospital_for_perm)
-                    or user_is_receptionist(user, hospital_for_perm)
-                )
-            if not can_see_all:
-                queryset = queryset.filter(doctor=user.doctor_profile)
+            queryset = _own_doctor_queryset(user, queryset, hospital_id)
 
         if hospital_id:
             queryset = queryset.filter(hospital_id=hospital_id)
@@ -788,10 +860,32 @@ class AppointmentSlotViewSet(viewsets.ModelViewSet):
             status='OPEN',
         )
         log_slot_action('APPOINTMENT_SLOT_CREATED', slot, self.request.user, self.request)
+        start = slot.start_time.strftime('%H:%M') if slot.start_time else ''
+        end = slot.end_time.strftime('%H:%M') if slot.end_time else ''
+        notify_doctor_planning(
+            slot.doctor,
+            'Nouvelle session',
+            (
+                f"L'administration a créé votre session « {slot.title} » "
+                f"le {slot.slot_date.strftime('%d/%m/%Y')} de {start} à {end}."
+            ),
+            actor=self.request.user,
+        )
 
     def perform_update(self, serializer):
         slot = serializer.save()
         log_slot_action('APPOINTMENT_SLOT_UPDATED', slot, self.request.user, self.request)
+        start = slot.start_time.strftime('%H:%M') if slot.start_time else ''
+        end = slot.end_time.strftime('%H:%M') if slot.end_time else ''
+        notify_doctor_planning(
+            slot.doctor,
+            'Session mise à jour',
+            (
+                f"L'administration a modifié votre session « {slot.title} » "
+                f"le {slot.slot_date.strftime('%d/%m/%Y')} de {start} à {end}."
+            ),
+            actor=self.request.user,
+        )
 
     @action(detail=True, methods=['post'])
     def publish(self, request, pk=None):
@@ -998,7 +1092,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         doctor_id = self.request.query_params.get('doctor')
 
         if appt_status:
-            queryset = queryset.filter(status=appt_status)
+            # Accepte un statut unique ou une liste séparée par des virgules
+            statuses = [s.strip().upper() for s in str(appt_status).split(',') if s.strip()]
+            if len(statuses) == 1:
+                queryset = queryset.filter(status=statuses[0])
+            elif len(statuses) > 1:
+                queryset = queryset.filter(status__in=statuses)
         if consultation_type:
             queryset = queryset.filter(consultation_type=consultation_type)
         if hospital_id:
@@ -1028,16 +1127,22 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             )
 
         return queryset.select_related(
-            'patient', 'doctor', 'doctor__user', 'slot', 'service', 'hospital',
+            'patient', 'doctor', 'doctor__user', 'slot', 'service', 'hospital', 'confirmed_by',
         )
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
         ordering = request.query_params.get('ordering')
-        if ordering in ('appointment_date', '-appointment_date', 'created_at', '-created_at', 'updated_at', '-updated_at'):
+        if ordering in (
+            'appointment_date', '-appointment_date',
+            'created_at', '-created_at',
+            'updated_at', '-updated_at',
+            'queue_number', '-queue_number',
+            'confirmed_at', '-confirmed_at',
+        ):
             queryset = queryset.order_by(ordering)
         else:
-            queryset = queryset.order_by('-appointment_date')
+            queryset = queryset.order_by('created_at', 'queue_number')
 
         limit_raw = request.query_params.get('limit')
         if limit_raw:
@@ -1156,6 +1261,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             raise ValidationError({'slot': 'Créneau obligatoire.'})
 
         appointment = serializer.save(**kwargs)
+        # Bureau du médecin → notes de lieu du RDV (si non déjà renseigné)
+        if appointment.doctor_id and not (appointment.location_notes or '').strip():
+            office = (getattr(appointment.doctor, 'office_address', None) or '').strip()
+            if office:
+                appointment.location_notes = office[:300]
+                appointment.save(update_fields=['location_notes', 'updated_at'])
         if not appointment.reference_code:
             appointment.reference_code = generate_appointment_reference(appointment.hospital)
             appointment.save(update_fields=['reference_code', 'updated_at'])
@@ -1222,7 +1333,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                     'error': (
                         'Le patient n\'a pas encore payé la consultation '
                         f'({appointment.consultation_fee_amount} {appointment.consultation_fee_currency}). '
-                        'Attendez le paiement Lumicash ou marquez comme payé / exonéré.'
+                        'Attendez le paiement BurundiPay ou marquez comme payé / exonéré.'
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1244,16 +1355,16 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='pay')
     def pay(self, request, pk=None):
         """
-        Patient : paie la consultation (tarif médecin) via Lumicash → marchand hôpital.
+        Patient : paie la consultation (tarif médecin) via BurundiPay → marchand hôpital.
         Body: { "payer_phone": "79xxxxxx" }
         """
         from .appointment_payment import initiate_appointment_payment
-        from businesses import lumicash as lumicash_client
+        from businesses import burundipay as burundipay_client
 
         appointment = self.get_object()
         payer_phone = (request.data.get('payer_phone') or request.data.get('phone') or '').strip()
         if not payer_phone:
-            return Response({'error': 'payer_phone (Lumicash) requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'payer_phone (BurundiPay) requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
         result = initiate_appointment_payment(appointment, payer_phone)
         appointment.refresh_from_db()
@@ -1262,7 +1373,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             'ok': result.get('ok'),
             'already_paid': result.get('already_paid', False),
             'message': result.get('message') or '',
-            'stub_mode': result.get('stub_mode', lumicash_client.is_stub_mode()),
+            'stub_mode': result.get('stub_mode', burundipay_client.is_stub_mode()),
             'amount_bif': result.get('amount_bif', appointment.consultation_fee_amount),
             'currency': result.get('currency', appointment.consultation_fee_currency),
             'merchant_account': result.get('merchant_account') or appointment.payment_merchant_account,
@@ -1272,7 +1383,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='confirm-payment')
     def confirm_payment(self, request, pk=None):
-        """Simulation : confirme le PIN Lumicash pour un RDV."""
+        """Simulation : confirme le PIN BurundiPay pour un RDV."""
         from .appointment_payment import confirm_appointment_payment_stub
 
         appointment = self.get_object()
@@ -1341,6 +1452,24 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         if not user_can_check_in_appointment(request.user, appointment):
             return Response({'error': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
         if appointment.status != 'CONFIRMED':
+            already = appointment.status in (
+                'PATIENT_ARRIVED', 'WAITING_ROOM', 'PRESENT', 'IN_PROGRESS', 'COMPLETED',
+            )
+            if already:
+                return Response(
+                    {
+                        'error': (
+                            'Ce rendez-vous a déjà été orienté à l\'accueil '
+                            f'(statut actuel : {appointment.get_status_display()}).'
+                        ),
+                        'already_oriented': True,
+                        'status': appointment.status,
+                        'status_display': appointment.get_status_display(),
+                        'checked_in_at': appointment.checked_in_at,
+                        'location_notes': appointment.location_notes or '',
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             return Response(
                 {'error': 'Seul un rendez-vous confirmé par l\'administration peut être enregistré à l\'arrivée.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1416,10 +1545,37 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
-        """Médecin : marque le patient présent pour le RDV (statut PRESENT)."""
+        """Médecin : démarre la consultation après orientation à l'accueil (→ PRESENT)."""
         appointment = self.get_object()
         if not user_can_start_consultation(request.user, appointment):
             return Response({'error': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Idempotent : déjà démarrée → succès (évite 400 au double-clic / UI périmée)
+        if appointment.status == 'PRESENT':
+            return Response(AppointmentSerializer(appointment).data)
+
+        if appointment.status == 'CONFIRMED':
+            return Response(
+                {
+                    'error': (
+                        'Ce rendez-vous n\'a pas encore été orienté à l\'accueil. '
+                        'Le médecin pourra démarrer la consultation après l\'orientation.'
+                    ),
+                    'awaiting_orientation': True,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if appointment.status not in ('PATIENT_ARRIVED', 'WAITING_ROOM', 'IN_PROGRESS'):
+            return Response(
+                {
+                    'error': (
+                        'La consultation ne peut être démarrée que pour un patient '
+                        'déjà orienté à l\'accueil.'
+                    ),
+                    'status': appointment.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         prev = appointment.status
         if not appointment.start_consultation():
             return Response({'error': 'Transition impossible.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -1984,7 +2140,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset().filter(
             hospital_id=hospital_id,
             status__in=['CONFIRMED', 'PATIENT_ARRIVED', 'WAITING_ROOM', 'PRESENT', 'IN_PROGRESS'],
-        ).order_by('queue_number', 'appointment_date')
+        ).order_by('created_at', 'queue_number')
         serializer = AppointmentListSerializer(
             qs, many=True, context=self.get_serializer_context()
         )
@@ -2203,11 +2359,58 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         doctor_id = self.request.query_params.get('doctor', None)
         hospital_id = self.request.query_params.get('hospital', None)
+        if hospital_id:
+            hospital = Business.objects.filter(id=hospital_id).first()
+            if hospital is not None:
+                roll_expired_slots(hospital)
         if doctor_id:
             queryset = queryset.filter(doctor_id=doctor_id)
         if hospital_id:
             queryset = queryset.filter(hospital_id=hospital_id)
-        return queryset
+        queryset = _own_doctor_queryset(self.request.user, queryset, hospital_id)
+        return queryset.select_related('doctor', 'doctor__user', 'hospital')
+
+    def perform_create(self, serializer):
+        schedule = serializer.save()
+        day = schedule.get_day_of_week_display()
+        start = schedule.start_time.strftime('%H:%M') if schedule.start_time else ''
+        end = schedule.end_time.strftime('%H:%M') if schedule.end_time else ''
+        when = schedule.schedule_date.strftime('%d/%m/%Y') if schedule.schedule_date else day
+        notify_doctor_planning(
+            schedule.doctor,
+            'Nouvel horaire',
+            f"L'administration a programmé votre créneau : {when}, {start}–{end}.",
+            actor=self.request.user,
+        )
+
+    def perform_update(self, serializer):
+        schedule = serializer.save()
+        day = schedule.get_day_of_week_display()
+        start = schedule.start_time.strftime('%H:%M') if schedule.start_time else ''
+        end = schedule.end_time.strftime('%H:%M') if schedule.end_time else ''
+        when = schedule.schedule_date.strftime('%d/%m/%Y') if schedule.schedule_date else day
+        notify_doctor_planning(
+            schedule.doctor,
+            'Horaire mis à jour',
+            f"L'administration a modifié votre créneau : {when}, {start}–{end}.",
+            actor=self.request.user,
+        )
+
+    @action(detail=False, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def planning_alerts(self, request):
+        """
+        Réinitialise les créneaux dont l'heure est dépassée et signale
+        l'absence de créneau programmé ou de rendez-vous.
+        """
+        hospital_id = request.query_params.get('hospital') or request.query_params.get('hospital_id')
+        hospital = None
+        if hospital_id:
+            hospital = Business.objects.filter(id=hospital_id).first()
+        if hospital is None:
+            hospital = get_user_tenant_business(request.user)
+        if hospital is None:
+            return Response({'error': 'Hôpital introuvable'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(planning_alert_payload(hospital))
 
     @action(detail=False, methods=['post'])
     def bulk_create(self, request):
@@ -2245,6 +2448,14 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
                 is_available=schedule_data.get('is_available', True)
             )
             created_schedules.append(schedule)
+
+        if created_schedules:
+            notify_doctor_planning(
+                doctor,
+                'Nouveaux horaires',
+                "L'administration a enregistré vos créneaux.",
+                actor=request.user,
+            )
 
         serializer = DoctorScheduleSerializer(created_schedules, many=True)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -2311,7 +2522,9 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             for doctor in doctors:
                 if replace:
-                    DoctorSchedule.objects.filter(doctor=doctor, hospital=hospital).delete()
+                    DoctorSchedule.objects.filter(
+                        doctor=doctor, hospital=hospital,
+                    ).exclude(day_of_week__in=seen_days).delete()
                 for item in normalized:
                     _, created = DoctorSchedule.objects.update_or_create(
                         doctor=doctor,
@@ -2326,6 +2539,12 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
                     if created:
                         created_count += 1
                 updated_doctors += 1
+                notify_doctor_planning(
+                    doctor,
+                    'Horaires mis à jour',
+                    "L'administration a enregistré vos créneaux de la semaine.",
+                    actor=request.user,
+                )
 
         log_audit_event(
             user=request.user,
@@ -2365,9 +2584,9 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 class LabResultViewSet(viewsets.ModelViewSet):
     """
     Laboratoire :
-    - Laborantin : crée le résultat et fait tout le workflow jusqu'à notification patient
-    - Admin hôpital / médecins : consultation seule
-    - Patient : résultats VALIDATED / COMMUNICATED uniquement
+    - Laborantin : workflow technique jusqu'à RESULT_AVAILABLE / COMMUNICATED
+    - Médecin / validateur : VALIDATED (+ facture examen)
+    - Patient : VALIDATED / COMMUNICATED uniquement
     """
     serializer_class = LabResultSerializer
     permission_classes = [permissions.IsAuthenticated, IsLabTechnician]
@@ -2383,27 +2602,53 @@ class LabResultViewSet(viewsets.ModelViewSet):
         'COMMUNICATED': set(),
     }
 
-    NEXT_STATUS_LABELS = {
-        'SAMPLE_COLLECTED': 'Enregistrer le prélèvement',
-        'IN_ANALYSIS': 'Démarrer l\'analyse',
-        'RESULT_AVAILABLE': 'Saisir le résultat disponible',
-        'VALIDATED': 'Valider le résultat',
-        'COMMUNICATED': 'Notifier le patient',
-    }
-
     def get_queryset(self):
         user = self.request.user
         if user.role == 'CUSTOMER':
-            return LabResult.objects.filter(patient=user, status__in=['VALIDATED', 'COMMUNICATED'])
+            # Visible patient uniquement après notification (COMMUNICATED)
+            return LabResult.objects.filter(
+                patient=user, status='COMMUNICATED'
+            ).select_related(
+                'hospital', 'hospital_exam', 'ordered_by', 'ordered_by__user', 'invoice',
+            ).prefetch_related('events')
         return filter_queryset_by_hospital_tenant(user, LabResult.objects.all()).select_related(
-            'patient', 'hospital', 'appointment',
-            'ordered_by', 'ordered_by__user', 'validated_by', 'validated_by__user', 'uploaded_by'
-        )
+            'patient', 'hospital', 'appointment', 'prescription', 'hospital_exam',
+            'ordered_by', 'ordered_by__user', 'validated_by', 'validated_by__user',
+            'validated_by_user', 'uploaded_by', 'invoice',
+        ).prefetch_related('events')
+
+    @action(detail=False, methods=['get'], url_path='pending-requests')
+    def pending_requests(self, request):
+        """P0 — file des demandes ouvertes (issues surtout des prescriptions)."""
+        hospital_id = request.query_params.get('hospital')
+        hospital = Business.objects.filter(id=hospital_id).first() if hospital_id else get_user_tenant_business(request.user)
+        if not hospital:
+            return Response({'error': 'hospital requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user_can_view_lab_results(request.user, hospital):
+            raise PermissionDenied("Accès refusé.")
+        qs = LabResult.objects.filter(
+            hospital=hospital,
+            status__in=('REQUESTED', 'SAMPLE_COLLECTED', 'IN_ANALYSIS', 'RESULT_AVAILABLE'),
+        ).select_related('patient', 'ordered_by', 'ordered_by__user', 'prescription', 'hospital_exam')
+        return Response(LabResultSerializer(qs[:200], many=True, context={'request': request}).data)
+
+    @action(detail=False, methods=['get'], url_path='stats')
+    def stats(self, request):
+        """P2 — KPIs labo."""
+        from .lab_workflow import lab_stats
+        hospital_id = request.query_params.get('hospital')
+        hospital = Business.objects.filter(id=hospital_id).first() if hospital_id else get_user_tenant_business(request.user)
+        if not hospital:
+            return Response({'error': 'hospital requis'}, status=status.HTTP_400_BAD_REQUEST)
+        if not user_can_view_lab_results(request.user, hospital):
+            raise PermissionDenied("Accès refusé.")
+        days = int(request.query_params.get('days') or 30)
+        return Response(lab_stats(hospital, days=min(max(days, 1), 365)))
 
     @action(detail=False, methods=['get'], url_path='eligible-appointments')
     def eligible_appointments(self, request):
         """
-        RDV éligibles pour créer un résultat labo :
+        RDV éligibles pour créer un résultat labo (création manuelle) :
         patient déjà Présent (après confirmation + arrivée), ou en consultation / terminé.
         """
         hospital_id = request.query_params.get('hospital')
@@ -2451,6 +2696,7 @@ class LabResultViewSet(viewsets.ModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
+        from .lab_workflow import log_lab_event
         hospital = serializer.validated_data.get('hospital')
         if not hospital:
             raise ValidationError({'hospital': 'Hôpital requis.'})
@@ -2459,7 +2705,8 @@ class LabResultViewSet(viewsets.ModelViewSet):
         result_value = (serializer.validated_data.get('result_value') or '').strip()
         if not result_value:
             serializer.validated_data['result_value'] = 'En attente'
-        serializer.save(uploaded_by=self.request.user, status='REQUESTED')
+        lab = serializer.save(uploaded_by=self.request.user, status='REQUESTED')
+        log_lab_event(lab, self.request.user, 'CREATED_MANUAL', to_status='REQUESTED')
 
     def update(self, request, *args, **kwargs):
         raise PermissionDenied("Modification libre interdite. Utilisez le workflow de statut.")
@@ -2473,18 +2720,27 @@ class LabResultViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
         """
-        Laborantin uniquement — avance le workflow jusqu'à notification patient.
-        Workflow: REQUESTED → SAMPLE_COLLECTED → IN_ANALYSIS → RESULT_AVAILABLE → VALIDATED → COMMUNICATED
+        Avance le workflow.
+        VALIDATED réservé aux validateurs (médecin / admin / lab.validate).
         """
         from django.utils import timezone
+        from .lab_workflow import ensure_exam_invoice, log_lab_event
 
         lab_result = self.get_object()
         new_status = request.data.get('status')
+        is_tech = user_is_lab_technician(request.user, lab_result.hospital)
+        is_validator = user_can_validate_lab_results(request.user, lab_result.hospital)
 
-        if not user_is_lab_technician(request.user, lab_result.hospital):
+        if new_status == 'VALIDATED':
+            if not is_validator:
+                return Response(
+                    {'error': "Seuls un médecin / validateur peuvent valider le résultat."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif not is_tech:
             return Response(
-                {'error': "Seul un laborantin peut faire avancer le workflow laboratoire."},
-                status=status.HTTP_403_FORBIDDEN
+                {'error': "Seul un laborantin peut faire avancer le workflow technique."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         valid_statuses = ['SAMPLE_COLLECTED', 'IN_ANALYSIS', 'RESULT_AVAILABLE', 'VALIDATED', 'COMMUNICATED']
@@ -2506,12 +2762,23 @@ class LabResultViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Avant validation / communication : un résultat doit être renseigné
+        previous = lab_result.status
+
         if new_status in ('RESULT_AVAILABLE', 'VALIDATED', 'COMMUNICATED'):
             result_value = (request.data.get('result_value') or lab_result.result_value or '').strip()
-            if not result_value:
+            params = request.data.get('parameters', None)
+            if params is not None:
+                if not isinstance(params, list):
+                    return Response({'error': 'parameters doit être une liste.'}, status=400)
+                lab_result.parameters = params
+                if not result_value or result_value == 'En attente':
+                    summary = '; '.join(
+                        f"{p.get('name')}: {p.get('value')}" for p in params if isinstance(p, dict)
+                    )[:500]
+                    result_value = summary or result_value
+            if not result_value or result_value == 'En attente':
                 return Response(
-                    {'error': 'Le résultat (valeur) est requis avant cette étape.'},
+                    {'error': 'Le résultat (valeur ou paramètres) est requis avant cette étape.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             lab_result.result_value = result_value
@@ -2528,9 +2795,12 @@ class LabResultViewSet(viewsets.ModelViewSet):
 
         if new_status == 'VALIDATED':
             lab_result.validation_date = timezone.now()
-            # Si le laborantin a aussi un profil médecin, on le trace ; sinon date seule.
+            lab_result.validated_by_user = request.user
             if hasattr(request.user, 'doctor_profile'):
                 lab_result.validated_by = request.user.doctor_profile
+            ensure_exam_invoice(lab_result, actor=request.user)
+            if lab_result.prescription_id:
+                Prescription.objects.filter(id=lab_result.prescription_id).update(is_completed=True)
 
         if new_status == 'COMMUNICATED':
             lab_result.communication_date = timezone.now()
@@ -2547,8 +2817,38 @@ class LabResultViewSet(viewsets.ModelViewSet):
             )
 
         lab_result.save()
+        log_lab_event(
+            lab_result, request.user, 'STATUS_CHANGE',
+            from_status=previous, to_status=new_status,
+            note=(request.data.get('note') or '')[:500],
+        )
         serializer = self.get_serializer(lab_result)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='upload-document')
+    def upload_document(self, request, pk=None):
+        """P1 — upload PDF/image du compte-rendu."""
+        from .lab_workflow import log_lab_event
+        lab_result = self.get_object()
+        if not user_is_lab_technician(request.user, lab_result.hospital) and not user_can_validate_lab_results(request.user, lab_result.hospital):
+            raise PermissionDenied("Accès refusé.")
+        uploaded = request.FILES.get('document') or request.FILES.get('file')
+        if not uploaded:
+            return Response({'error': 'Fichier document requis.'}, status=400)
+        if uploaded.size > 8 * 1024 * 1024:
+            return Response({'error': 'Fichier trop volumineux (max. 8 Mo).'}, status=400)
+        lab_result.document = uploaded
+        lab_result.document_url = lab_result.document.url
+        lab_result.save(update_fields=['document', 'document_url', 'updated_at'])
+        log_lab_event(lab_result, request.user, 'DOCUMENT_UPLOADED', note=uploaded.name)
+        return Response(self.get_serializer(lab_result).data)
+
+    @action(detail=True, methods=['get'], url_path='fhir')
+    def fhir(self, request, pk=None):
+        """P3 — Bundle FHIR ServiceRequest + DiagnosticReport + Observation."""
+        from .lab_workflow import to_fhir_bundle
+        lab_result = self.get_object()
+        return Response(to_fhir_bundle(lab_result))
 
 class NotificationViewSet(viewsets.ModelViewSet):
     """
@@ -2560,7 +2860,9 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return Notification.objects.filter(user=user)
+        return Notification.objects.filter(user=user).select_related(
+            'lab_result', 'appointment'
+        ).order_by('-created_at')
 
     @action(detail=True, methods=['post'])
     def mark_as_read(self, request, pk=None):
@@ -2623,6 +2925,7 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
         return qs.select_related('patient', 'doctor', 'doctor__user', 'hospital')
 
     def perform_create(self, serializer):
+        from .lab_workflow import create_lab_from_prescription
         user = self.request.user
         doctor = getattr(user, 'doctor_profile', None)
         if not doctor:
@@ -2632,22 +2935,142 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
         if hospital and doctor.hospital_id and doctor.hospital_id != hospital.id:
             raise ValidationError({'hospital': "Hôpital incohérent avec le profil médecin."})
 
-        # Le patient vient du payload (pas le médecin connecté).
-        serializer.save(doctor=doctor)
+        prescription = serializer.save(doctor=doctor)
+        if prescription.prescription_type == 'EXAM':
+            create_lab_from_prescription(
+                prescription,
+                hospital_exam=prescription.hospital_exam,
+                appointment=prescription.appointment,
+                actor=user,
+            )
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     """
-    Accès Caissier & Facturation:
-    Isolation stricte par établissement de santé / hôpital.
+    Comptabilité et caisse : factures, rapprochement, clôture du jour.
+    Isolation stricte par hôpital.
     """
     serializer_class = InvoiceSerializer
     permission_classes = [permissions.IsAuthenticated, IsCashier]
 
     def get_queryset(self):
         user = self.request.user
+        qs = Invoice.objects.select_related('patient', 'appointment', 'hospital')
         if user.role == 'CUSTOMER':
-            return Invoice.objects.filter(patient=user)
-        return filter_queryset_by_hospital_tenant(user, Invoice.objects.all())
+            return qs.filter(patient=user)
+        return filter_queryset_by_hospital_tenant(user, qs)
+
+    def _billing_hospital(self):
+        hospital = get_user_tenant_business(self.request.user)
+        if not hospital or not user_can_manage_billing(self.request.user, hospital):
+            raise PermissionDenied('Accès réservé à la comptabilité de l’hôpital.')
+        return hospital
+
+    def _guard_closed_day(self, hospital, when=None):
+        moment = when or hospital_now()
+        day = moment.astimezone(hospital_now().tzinfo).date() if hasattr(moment, 'astimezone') else moment
+        if day_is_closed(hospital, day):
+            raise ValidationError({'detail': 'Cette journée est déjà clôturée.'})
+
+    def perform_create(self, serializer):
+        hospital = serializer.validated_data.get('hospital') or get_user_tenant_business(self.request.user)
+        if not hospital or not user_can_manage_billing(self.request.user, hospital):
+            raise PermissionDenied('Accès réservé à la comptabilité de l’hôpital.')
+        status_value = serializer.validated_data.get('status') or 'PENDING'
+        if status_value == 'PAID':
+            self._guard_closed_day(hospital)
+        paid_at = hospital_now() if status_value == 'PAID' else None
+        method = serializer.validated_data.get('payment_method') or ('CASH' if paid_at else '')
+        serializer.save(
+            hospital=hospital,
+            invoice_number=allocate_invoice_number(hospital),
+            recorded_by=self.request.user,
+            paid_at=paid_at,
+            payment_method=method,
+            currency=serializer.validated_data.get('currency') or 'BIF',
+        )
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        hospital = instance.hospital
+        if not user_can_manage_billing(self.request.user, hospital):
+            raise PermissionDenied('Accès réservé à la comptabilité de l’hôpital.')
+        next_status = serializer.validated_data.get('status', instance.status)
+        if next_status == 'PAID' and instance.status != 'PAID':
+            self._guard_closed_day(hospital)
+        saved = serializer.save()
+        if saved.status == 'PAID':
+            if not saved.paid_at:
+                saved.paid_at = hospital_now()
+            if not saved.payment_method:
+                saved.payment_method = 'CASH'
+            saved.save(update_fields=['paid_at', 'payment_method'])
+        elif saved.paid_at and saved.status != 'PAID':
+            saved.paid_at = None
+            saved.payment_method = ''
+            saved.save(update_fields=['paid_at', 'payment_method'])
+
+    @action(detail=False, methods=['get'], url_path='desk')
+    def desk(self, request):
+        hospital = self._billing_hospital()
+        raw = (request.query_params.get('date') or '').strip()
+        if raw:
+            try:
+                day = datetime.fromisoformat(raw).date()
+            except ValueError:
+                return Response({'detail': 'Date invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            day = hospital_now().date()
+        return Response(build_desk(hospital, day))
+
+    @action(detail=False, methods=['post'], url_path='close-day')
+    def close_day_action(self, request):
+        hospital = self._billing_hospital()
+        raw = (request.data.get('date') or '').strip()
+        if raw:
+            try:
+                day = datetime.fromisoformat(raw).date()
+            except ValueError:
+                return Response({'detail': 'Date invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            day = hospital_now().date()
+        try:
+            closing = close_day(hospital, request.user, day, notes=request.data.get('notes') or '')
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(closing, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='from-appointment')
+    def from_appointment(self, request):
+        hospital = self._billing_hospital()
+        appointment_id = request.data.get('appointment')
+        appointment = Appointment.objects.filter(id=appointment_id, hospital=hospital).select_related(
+            'patient', 'service', 'hospital'
+        ).first()
+        if appointment is None:
+            return Response({'detail': 'Rendez-vous introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            invoice = create_invoice_for_appointment(
+                appointment, request.user, method=request.data.get('payment_method')
+            )
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(InvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='export')
+    def export_csv(self, request):
+        hospital = self._billing_hospital()
+        raw = (request.query_params.get('date') or '').strip()
+        if raw:
+            try:
+                day = datetime.fromisoformat(raw).date()
+            except ValueError:
+                return Response({'detail': 'Date invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            day = hospital_now().date()
+        scope = (request.query_params.get('scope') or 'day').lower()
+        if scope not in ('day', 'month'):
+            scope = 'day'
+        return export_invoices_csv(hospital, day, scope=scope)
 
 
 class ServiceAssignmentViewSet(viewsets.ModelViewSet):

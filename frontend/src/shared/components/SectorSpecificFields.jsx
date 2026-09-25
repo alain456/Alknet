@@ -7,8 +7,8 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
 
   // Find primary category object if ID passed
   let catObj = primaryCategory;
-  if (typeof primaryCategory === 'string') {
-    catObj = categories.find(c => c.id === primaryCategory) || { name: '', slug: '' };
+  if (typeof primaryCategory !== 'object' || primaryCategory === null) {
+    catObj = categories.find((c) => String(c.id) === String(primaryCategory)) || { name: '', slug: '' };
   }
 
   const categoryName = (catObj.name || '').toLowerCase();
@@ -220,7 +220,7 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
                 onChange={(e) => handleFieldChange('accepts_mobile_money', e.target.checked)}
                 className="rounded border-border text-green-700 focus:ring-green-700"
               />
-              <span>Paiement Mobile (Lumicash, Ecocash...)</span>
+              <span>Paiement Mobile (BurundiPay, Ecocash...)</span>
             </label>
 
             <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">

@@ -7,6 +7,14 @@ import { useSmartPolling, appointmentsFingerprint } from '../../shared/useSmartP
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
+/** Premier créé = premier arrivé. */
+const byCreation = (a, b) => {
+  const ta = new Date(a?.created_at || 0).getTime();
+  const tb = new Date(b?.created_at || 0).getTime();
+  if (ta !== tb) return ta - tb;
+  return (a?.queue_number || 0) - (b?.queue_number || 0);
+};
+
 const getAppointmentSlotId = (apt) => apt?.slot || apt?.slot_details?.id;
 
 /** Statuts où l'admin doit confirmer ou refuser la postulation */
@@ -187,8 +195,8 @@ export default function ManageAppointments() {
 
   const fetchAppointments = useCallback(async (hid) => {
     try {
-      const data = await hospitalService.getAppointments({ hospital: hid });
-      const list = normalizeList(data);
+      const data = await hospitalService.getAppointments({ hospital: hid, ordering: 'created_at' });
+      const list = normalizeList(data).slice().sort(byCreation);
       appointmentsFpRef.current = appointmentsFingerprint(list);
       setAppointments(list);
       if (list.some((a) => needsAdminReview(a))) {
@@ -362,11 +370,11 @@ export default function ManageAppointments() {
     if (!hospitalId) return;
     try {
       const [apptData, statsData, queueData] = await Promise.all([
-        hospitalService.getAppointments({ hospital: hospitalId }),
+        hospitalService.getAppointments({ hospital: hospitalId, ordering: 'created_at' }),
         hospitalService.getStats(hospitalId),
         hospitalService.getQueue(hospitalId),
       ]);
-      const list = normalizeList(apptData);
+      const list = normalizeList(apptData).slice().sort(byCreation);
       const fp = appointmentsFingerprint(list);
       if (fp !== appointmentsFpRef.current) {
         appointmentsFpRef.current = fp;
@@ -376,7 +384,7 @@ export default function ManageAppointments() {
         }
       }
       setStats(statsData);
-      setQueue(normalizeList(queueData));
+      setQueue(normalizeList(queueData).slice().sort(byCreation));
     } catch (err) {
       if (err?.status === 401) setPollingEnabled(false);
     }
@@ -474,7 +482,7 @@ export default function ManageAppointments() {
   const fetchQueue = useCallback(async (hid) => {
     try {
       const data = await hospitalService.getQueue(hid);
-      setQueue(normalizeList(data));
+      setQueue(normalizeList(data).slice().sort(byCreation));
     } catch {
       setQueue([]);
     }
@@ -584,7 +592,7 @@ export default function ManageAppointments() {
     const labels = {
       PAID: 'Payé',
       WAIVED: 'Exonéré',
-      AWAITING_PIN: 'PIN Lumicash',
+      AWAITING_PIN: 'PIN BurundiPay',
       FAILED: 'Paiement échoué',
       UNPAID: amount > 0 ? 'Non payé' : 'Gratuit',
       REFUNDED: 'Remboursé',
@@ -738,16 +746,16 @@ export default function ManageAppointments() {
       {!needsAdminReview(apt) && apt.status === 'PATIENT_ARRIVED' && (
         <button onClick={() => handleWaitingRoom(apt.id)} className="px-2 py-1 text-xs font-semibold bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100" title="Salle d'attente">Salle attente</button>
       )}
-      {!needsAdminReview(apt) && (apt.status === 'WAITING_ROOM' || apt.status === 'PATIENT_ARRIVED' || apt.status === 'CONFIRMED') && (
+      {!needsAdminReview(apt) && (apt.status === 'WAITING_ROOM' || apt.status === 'PATIENT_ARRIVED') && (
         <button onClick={() => handleStart(apt.id)} className="px-2 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100" title="Marquer présent / démarrer">Démarrer</button>
       )}
       {!needsAdminReview(apt) && (apt.status === 'PRESENT' || apt.status === 'IN_PROGRESS') && (
-        <button onClick={() => handleComplete(apt.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg" title="Terminer"><CheckCircle className="w-4 h-4" /></button>
+        <button onClick={() => handleComplete(apt.id)} className="icon-btn" title="Terminer"><CheckCircle className="w-4 h-4" /></button>
       )}
       {!needsAdminReview(apt) && ['CONFIRMED', 'PATIENT_ARRIVED', 'WAITING_ROOM'].includes(apt.status) && (
         <button onClick={() => handleMarkNoShow(apt.id)} className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200" title="Patient absent">Absent</button>
       )}
-      <button onClick={() => openDetail(apt)} className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg" title="Historique"><Eye className="w-4 h-4" /></button>
+      <button onClick={() => openDetail(apt)} className="icon-btn" title="Historique"><Eye className="w-4 h-4" /></button>
     </div>
   );
 
@@ -775,14 +783,14 @@ export default function ManageAppointments() {
                           apt.service_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           doctorSearchBlob(apt).includes(searchQuery.toLowerCase());
     return matchesStatus && matchesType && matchesService && matchesSearch;
-  });
+  }).slice().sort(byCreation);
 
   const pendingRequests = appointments
     .filter(needsAdminReview)
     .filter((apt) => filterService === 'ALL'
       || String(apt.service) === String(filterService)
       || String(apt.slot_details?.service) === String(filterService))
-    .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+    .sort(byCreation);
 
   const anticipationRequests = appointments
     .filter((apt) => apt.anticipation_status === 'PENDING')
@@ -933,7 +941,7 @@ export default function ManageAppointments() {
       {hospitalId && (
         <p className="text-xs text-gray-500">
           Paramètres RDV (références, emails) :{' '}
-          <Link to="/hospital/settings" className="text-teal-600 font-semibold hover:underline">Paramètres hôpital</Link>
+          <Link to="/business/settings" className="text-teal-600 font-semibold hover:underline">Paramètres hôpital</Link>
         </p>
       )}
 
@@ -1260,7 +1268,7 @@ export default function ManageAppointments() {
                               <p className="text-xs text-gray-500 italic">Aucun patient n'a encore postulé à ce créneau.</p>
                             ) : (
                               <div className="space-y-2">
-                                {postulants.sort((a,b) => (a.queue_number || 0) - (b.queue_number || 0)).map((apt) => (
+                                {postulants.slice().sort(byCreation).map((apt) => (
                                   <div key={apt.id} className="bg-white p-3 rounded-xl border border-gray-200 flex items-center justify-between text-xs">
                                     <div className="flex items-center gap-3">
                                       <span className="w-7 h-7 rounded-full bg-teal-600 text-white font-extrabold flex items-center justify-center text-xs shadow-sm">
@@ -1614,6 +1622,9 @@ export default function ManageAppointments() {
                   </option>
                   {doctors
                     .filter((doc) => {
+                      if (doc.staff_category === 'NURSE' || doc.staff_category === 'RECEPTIONIST' || doc.staff_category === 'ACCOUNTANT') {
+                        return false;
+                      }
                       if (!slotFormData.service) return false;
                       const svcIds = (doc.services || []).map((s) => String(s.id || s));
                       const assigned = svcIds.includes(String(slotFormData.service));
@@ -1968,6 +1979,9 @@ export default function ManageAppointments() {
                   </option>
                   {doctors
                     .filter((d) => {
+                      if (d.staff_category === 'NURSE' || d.staff_category === 'RECEPTIONIST' || d.staff_category === 'ACCOUNTANT') {
+                        return false;
+                      }
                       if (!generateForm.service) return false;
                       const svcIds = (d.services || []).map((s) => String(s.id || s));
                       const assigned = svcIds.includes(String(generateForm.service));

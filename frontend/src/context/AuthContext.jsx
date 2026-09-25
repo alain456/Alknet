@@ -32,8 +32,14 @@ migrateLegacyStorage();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem(storageKeys.user);
-    return savedUser ? JSON.parse(savedUser) : null;
+    try {
+      const savedUser = localStorage.getItem(storageKeys.user);
+      if (!savedUser) return null;
+      return JSON.parse(savedUser);
+    } catch {
+      localStorage.removeItem(storageKeys.user);
+      return null;
+    }
   });
   const [token, setToken] = useState(() => getToken());
   const [isLoading, setIsLoading] = useState(false);
@@ -134,12 +140,23 @@ export function AuthProvider({ children }) {
     return profile;
   };
 
+  const refreshProfile = async () => {
+    const profile = await api.get('accounts/profile/', { auth: true });
+    setUser(profile);
+    return profile;
+  };
+
   const getRedirectPath = (userOrRole) => {
     if (typeof userOrRole === 'object' && userOrRole !== null) {
       return getHomePathForUser(userOrRole);
     }
     switch (userOrRole) {
-      case 'SUPER_ADMIN': return '/admin';
+      case 'SUPER_ADMIN':
+      case 'PLATFORM_FINANCE':
+      case 'PLATFORM_MODERATION':
+      case 'PLATFORM_SUPPORT':
+      case 'PLATFORM_CONTENT':
+        return '/admin';
       case 'BUSINESS_OWNER': return '/hospital/admin';
       case 'PROFESSIONAL': return '/hospital/staff/doctor';
       case 'CUSTOMER': return '/dashboard';
@@ -219,6 +236,7 @@ export function AuthProvider({ children }) {
       logout,
       authFetch,
       refreshAccessToken,
+      refreshProfile,
       getRedirectPath,
       updateUser: (next) => setUser((prev) => ({ ...prev, ...next })),
     }}>
@@ -230,6 +248,25 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
+    // Évite un écran blanc si HMR / erreur parent démonte AuthProvider un instant
+    if (import.meta.env.DEV) {
+      console.warn('useAuth hors AuthProvider — rechargez la page (Ctrl+Shift+R).');
+      return {
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        isLoading: false,
+        login: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
+        loginWithTokens: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
+        register: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
+        logout: () => {},
+        authFetch: async () => new Response(null, { status: 401 }),
+        refreshAccessToken: async () => null,
+        refreshProfile: async () => null,
+        getRedirectPath: () => '/login',
+        updateUser: () => {},
+      };
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

@@ -129,10 +129,10 @@ class RetailOrder(models.Model):
         related_name='retail_orders_created',
     )
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='DRAFT')
-    # Paiement client → marchand pharmacie (Lumicash), comme les consultations hôpital
+    # Paiement client → marchand pharmacie (BurundiPay), comme les consultations hôpital
     PAYMENT_STATUS_CHOICES = (
         ('UNPAID', 'Non payée'),
-        ('AWAITING_PIN', 'En attente PIN Lumicash'),
+        ('AWAITING_PIN', 'En attente PIN BurundiPay'),
         ('PAID', 'Payée'),
         ('FAILED', 'Échec paiement'),
         ('REFUNDED', 'Remboursée'),
@@ -142,11 +142,11 @@ class RetailOrder(models.Model):
     )
     payment_method = models.CharField(
         max_length=40, blank=True,
-        help_text='Ex: LUMICASH, CASH, FREE',
+        help_text='Ex: BURUNDIPAY, CASH, FREE',
     )
     payer_phone = models.CharField(
         max_length=40, blank=True,
-        help_text='Numéro Lumicash du client (payeur)',
+        help_text='Numéro BurundiPay du client (payeur)',
     )
     payment_merchant_account = models.CharField(max_length=120, blank=True)
     payment_provider_reference = models.CharField(max_length=120, blank=True)
@@ -337,7 +337,17 @@ class Prescription(models.Model):
     )
     patient_name = models.CharField(max_length=255)
     patient_email = models.EmailField()
-    file_url = models.TextField()
+    file = models.FileField(
+        upload_to='retail/prescriptions/%Y/%m/',
+        blank=True,
+        null=True,
+        help_text='Fichier ordonnance (image ou PDF)',
+    )
+    file_url = models.TextField(
+        blank=True,
+        default='',
+        help_text='URL d’accès (média ou legacy data-URI / URL externe)',
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     review_comment = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(

@@ -253,7 +253,7 @@ export default function WholesaleCatalog({ clientMode = false }) {
                         setOpen(true);
                         setError('');
                       }}
-                      className="p-2 hover:bg-green-50 rounded-lg text-primary"
+                      className="icon-btn"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>

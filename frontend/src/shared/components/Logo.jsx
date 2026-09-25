@@ -1,12 +1,16 @@
 import React from 'react';
 import useSiteContent from '../useSiteContent';
 
+/** Palette logo : bleu ISOKO, vert HUB */
+const PRIMARY = '#1B4F9C';
+const ACCENT = '#1E8B4A';
+
 export default function Logo({ className = '', isDark = false, showText = true }) {
   const { settings } = useSiteContent();
   const brand = settings?.brand_name || 'Isoko Hub';
   const logo = settings?.platform_logo || '';
-  const strokeColor = isDark ? '#C98A2E' : '#1F4D3D';
-  const textColorClass = isDark ? 'text-white' : 'text-green-900';
+  const strokeColor = isDark ? ACCENT : PRIMARY;
+  const textColorClass = isDark ? 'text-surface' : 'text-primary';
 
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
@@ -23,7 +27,7 @@ export default function Logo({ className = '', isDark = false, showText = true }
             stroke={strokeColor}
             strokeWidth="2.2"
           />
-          <circle cx="20" cy="20" r="6" fill="#C98A2E" />
+          <circle cx="20" cy="20" r="6" fill={ACCENT} />
         </svg>
       )}
       {showText && (

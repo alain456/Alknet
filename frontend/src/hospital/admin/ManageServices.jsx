@@ -107,7 +107,14 @@ export default function ManageServices() {
       if (res.ok) {
         const data = await res.json();
         // Filtrer les utilisateurs inactifs ou supprimés
-        const activeDoctors = data.filter(d => d.is_active !== false && d.user_details?.is_active !== false);
+        const activeDoctors = data.filter(d =>
+          d.is_active !== false
+          && d.user_details?.is_active !== false
+          && d.staff_category !== 'NURSE'
+          && d.staff_category !== 'RECEPTIONIST'
+          && d.staff_category !== 'ACCOUNTANT'
+          && d.professional_title !== 'INFIRMIER'
+        );
         setDoctors(activeDoctors);
       }
     } catch (err) {
@@ -317,7 +324,7 @@ export default function ManageServices() {
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto">
       {/* En-tête de la page */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-teal-900 to-slate-900 p-6 rounded-2xl text-white shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-teal-900 to-slate-900 p-6 rounded-2xl text-white shadow-xl ih-frame-dark">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/20 text-teal-300 text-xs font-semibold mb-2">
             <Sparkles className="w-3.5 h-3.5" /> Module 01.2 — Référentiel des Prestations
@@ -355,7 +362,7 @@ export default function ManageServices() {
       )}
 
       {/* Barre de Recherche et Onglets de Catégorie Dynamiques */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-gray-900 p-4 rounded-2xl border-2 border-accent shadow-sm">
         <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
           <button
             onClick={() => setActiveTab('ALL')}
@@ -400,14 +407,16 @@ export default function ManageServices() {
         {loading ? (
           <div className="col-span-full text-center py-12 text-gray-500">Chargement des services...</div>
         ) : filteredServices.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-400 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800">
+          <div className="col-span-full text-center py-12 text-gray-400 bg-white dark:bg-gray-900 rounded-2xl border-2 border-alert">
             Aucun service trouvé dans cette catégorie.
           </div>
         ) : (
-          filteredServices.map(s => (
+          filteredServices.map((s, idx) => (
             <div 
               key={s.id} 
-              className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4"
+              className={`bg-white dark:bg-gray-900 rounded-2xl border-2 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4 ${
+                idx % 2 === 0 ? 'border-accent' : 'border-alert'
+              }`}
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
@@ -463,14 +472,14 @@ export default function ManageServices() {
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <button 
                   onClick={() => handleOpenModal(s)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl transition cursor-pointer"
+                  className="icon-btn"
                   title="Éditer le service"
                 >
                   <Edit3 className="w-4 h-4" />
                 </button>
                 <button 
                   onClick={() => handleDeleteService(s.id)}
-                  className="p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition cursor-pointer"
+                  className="icon-btn icon-btn--danger"
                   title="Supprimer"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -484,10 +493,10 @@ export default function ManageServices() {
       {/* --- MODAL 1 : CRUD CATÉGORIES DE PRESTATION --- */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-gray-800 flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-accent flex flex-col">
+            <div className="px-6 py-4 border-b-2 border-alert flex justify-between items-center bg-gray-50 dark:bg-gray-800/50">
               <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
-                <FolderPlus className="text-teal-600" />
+                <FolderPlus className="text-accent" />
                 Gestion des Catégories de Prestation Hospitalière
               </h3>
               <button onClick={() => { setIsCategoryModalOpen(false); setEditingCatId(null); setNewCatName(''); setNewCatDesc(''); }} className="text-gray-400 hover:text-gray-900 dark:hover:text-white text-xl font-bold">&times;</button>
@@ -495,7 +504,7 @@ export default function ManageServices() {
 
             <div className="p-6 space-y-6 overflow-y-auto max-h-[75vh]">
               {/* Formulaire d'ajout / modification de catégorie */}
-              <form onSubmit={handleSaveCategory} className="bg-teal-50/40 dark:bg-teal-950/30 p-4 rounded-2xl border border-teal-100 dark:border-teal-800/60 space-y-3">
+              <form onSubmit={handleSaveCategory} className="bg-accent-50 p-4 rounded-2xl border-2 border-accent space-y-3">
                 <h4 className="text-xs font-bold text-teal-900 dark:text-teal-200">
                   {editingCatId ? 'Modifier la Catégorie' : 'Créer une Nouvelle Catégorie de Prestation'}
                 </h4>
@@ -563,14 +572,14 @@ export default function ManageServices() {
                         <div className="flex items-center gap-2">
                           <button 
                             onClick={() => handleEditCategory(cat)}
-                            className="p-1 text-blue-600 hover:bg-blue-50 rounded cursor-pointer"
+                            className="icon-btn"
                             title="Éditer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
                           <button 
                             onClick={() => handleDeleteCategory(cat.id)}
-                            className="p-1 text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                            className="icon-btn icon-btn--danger"
                             title="Supprimer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

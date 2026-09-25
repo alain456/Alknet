@@ -45,25 +45,29 @@ def is_retail_pharmacy(business):
     )
 
 
-def _lumicash_payment_from_request(data):
-    from businesses.lumicash import normalize_phone
+def _burundipay_payment_from_request(data):
+    from businesses.burundipay import is_burundipay_method, normalize_phone
 
-    method = (data.get('payment_method') or 'LUMICASH').strip().upper() or 'LUMICASH'
+    method = (data.get('payment_method') or 'BURUNDIPAY').strip().upper() or 'BURUNDIPAY'
+    if method == 'LUMICASH':
+        method = 'BURUNDIPAY'
     raw_phone = (
         data.get('payer_phone')
+        or data.get('burundipay_phone')
+        or data.get('payer_burundipay')
         or data.get('lumicash_phone')
         or data.get('payer_lumicash')
         or ''
     ).strip()
-    if method != 'LUMICASH':
+    if not is_burundipay_method(method):
         return method, raw_phone[:40], None
     if not raw_phone:
-        return None, None, 'Indiquez votre numéro Lumicash pour le paiement.'
+        return None, None, 'Indiquez votre numéro BurundiPay (banque ou mobile money) pour le paiement.'
     phone = normalize_phone(raw_phone)
     digits = ''.join(c for c in phone if c.isdigit())
     if len(digits) < 8:
-        return None, None, 'Numéro Lumicash invalide.'
-    return 'LUMICASH', phone[:40], None
+        return None, None, 'Numéro BurundiPay invalide.'
+    return 'BURUNDIPAY', phone[:40], None
 
 
 class WholesaleProfileViewSet(viewsets.ModelViewSet):
@@ -94,7 +98,7 @@ class WholesaleProfileViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         b_fields = {}
-        for src in ('phone', 'email', 'address', 'description'):
+        for src in ('phone', 'email', 'address', 'description', 'website'):
             if src in request.data:
                 b_fields[src] = request.data[src]
         if b_fields:
@@ -222,17 +226,31 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
             ).prefetch_related('items')
 
         business = get_user_tenant_business(self.request.user)
+        user = self.request.user
         if not business:
-            return WholesaleOrder.objects.none()
-        qs = WholesaleOrder.objects.select_related(
-            'client_business', 'wholesale_business', 'created_by', 'proforma'
-        ).prefetch_related('items', 'events', 'notification_logs')
-        if is_wholesale_business(business):
-            qs = qs.filter(wholesale_business=business)
-        elif is_retail_pharmacy(business):
-            qs = qs.filter(client_business=business)
+            # Acheteur public / client sans tenant : historique de ses commandes
+            if user and user.is_authenticated:
+                from django.db.models import Q
+                qs = WholesaleOrder.objects.select_related(
+                    'client_business', 'wholesale_business', 'created_by', 'proforma'
+                ).prefetch_related('items', 'events', 'notification_logs')
+                email = (getattr(user, 'email', None) or '').strip()
+                q_own = Q(created_by=user)
+                if email:
+                    q_own |= Q(buyer_email__iexact=email) | Q(notification_email__iexact=email)
+                qs = qs.filter(q_own)
+            else:
+                return WholesaleOrder.objects.none()
         else:
-            return qs.none()
+            qs = WholesaleOrder.objects.select_related(
+                'client_business', 'wholesale_business', 'created_by', 'proforma'
+            ).prefetch_related('items', 'events', 'notification_logs')
+            if is_wholesale_business(business):
+                qs = qs.filter(wholesale_business=business)
+            elif is_retail_pharmacy(business):
+                qs = qs.filter(client_business=business)
+            else:
+                return qs.none()
 
         params = self.request.query_params
         status_filter = params.get('status')
@@ -241,6 +259,9 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
         client_id = params.get('client')
         if client_id:
             qs = qs.filter(client_business_id=client_id)
+        wholesale_id = params.get('wholesale') or params.get('business')
+        if wholesale_id:
+            qs = qs.filter(wholesale_business_id=wholesale_id)
         buyer_email = (params.get('buyer_email') or '').strip()
         if buyer_email:
             from django.db.models import Q
@@ -280,7 +301,7 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def pay(self, request, pk=None):
-        from businesses import lumicash as lumicash_client
+        from businesses import burundipay as burundipay_client
         from .order_payment import initiate_order_payment
 
         order = self.get_object()
@@ -291,7 +312,7 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
             or ''
         ).strip()
         if not payer_phone:
-            return Response({'error': 'payer_phone (Lumicash) requis.'}, status=400)
+            return Response({'error': 'payer_phone (BurundiPay) requis.'}, status=400)
         result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = self.get_serializer(order).data
@@ -299,7 +320,7 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
             'ok': result.get('ok'),
             'already_paid': result.get('already_paid', False),
             'message': result.get('message') or '',
-            'stub_mode': result.get('stub_mode', lumicash_client.is_stub_mode()),
+            'stub_mode': result.get('stub_mode', burundipay_client.is_stub_mode()),
             'amount_bif': result.get('amount_bif'),
             'currency': result.get('currency'),
             'merchant_account': result.get('merchant_account'),
@@ -527,7 +548,7 @@ class WholesaleCartViewSet(viewsets.ViewSet):
             return Response({
                 'error': 'Confirmation requise: cochez la verification des produits, quantites et montant.'
             }, status=400)
-        payment_method, payer_phone, pay_err = _lumicash_payment_from_request(request.data)
+        payment_method, payer_phone, pay_err = _burundipay_payment_from_request(request.data)
         if pay_err:
             return Response({'error': pay_err}, status=400)
         try:
@@ -568,7 +589,7 @@ class WholesaleCartViewSet(viewsets.ViewSet):
             buyer_email=notification_email,
             buyer_phone=client.phone or '',
             notification_email=notification_email,
-            payment_method=payment_method or 'LUMICASH',
+            payment_method=payment_method or 'BURUNDIPAY',
             payer_phone=payer_phone or '',
         )
         for item in cart.items.select_related('product'):
@@ -626,7 +647,7 @@ class WholesaleCartViewSet(viewsets.ViewSet):
 
         cart.items.all().delete()
         from .order_payment import initiate_order_payment
-        from businesses import lumicash as lumicash_client
+        from businesses import burundipay as burundipay_client
         pay_result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = WholesaleOrderSerializer(order).data
@@ -634,7 +655,7 @@ class WholesaleCartViewSet(viewsets.ViewSet):
             'ok': pay_result.get('ok'),
             'already_paid': pay_result.get('already_paid', False),
             'message': pay_result.get('message') or '',
-            'stub_mode': pay_result.get('stub_mode', lumicash_client.is_stub_mode()),
+            'stub_mode': pay_result.get('stub_mode', burundipay_client.is_stub_mode()),
             'amount_bif': pay_result.get('amount_bif'),
             'merchant_account': pay_result.get('merchant_account'),
             'provider_reference': pay_result.get('provider_reference'),
@@ -946,7 +967,7 @@ def guest_checkout(request):
     if not buyer_name or not buyer_email:
         return Response({'error': 'Nom de la pharmacie et email requis.'}, status=400)
 
-    payment_method, payer_phone, pay_err = _lumicash_payment_from_request(request.data)
+    payment_method, payer_phone, pay_err = _burundipay_payment_from_request(request.data)
     if pay_err:
         return Response({'error': pay_err}, status=400)
 
@@ -977,7 +998,7 @@ def guest_checkout(request):
         buyer_email=buyer_email,
         buyer_phone=buyer_phone,
         notification_email=buyer_email,
-        payment_method=payment_method or 'LUMICASH',
+        payment_method=payment_method or 'BURUNDIPAY',
         payer_phone=payer_phone or '',
     )
 
@@ -1018,7 +1039,7 @@ def guest_checkout(request):
         user,
     )
     from .order_payment import initiate_order_payment
-    from businesses import lumicash as lumicash_client
+    from businesses import burundipay as burundipay_client
     pay_result = initiate_order_payment(order, payer_phone)
     order.refresh_from_db()
     data = WholesaleOrderSerializer(order).data
@@ -1026,7 +1047,7 @@ def guest_checkout(request):
         'ok': pay_result.get('ok'),
         'already_paid': pay_result.get('already_paid', False),
         'message': pay_result.get('message') or '',
-        'stub_mode': pay_result.get('stub_mode', lumicash_client.is_stub_mode()),
+        'stub_mode': pay_result.get('stub_mode', burundipay_client.is_stub_mode()),
         'amount_bif': pay_result.get('amount_bif'),
         'merchant_account': pay_result.get('merchant_account'),
         'provider_reference': pay_result.get('provider_reference'),

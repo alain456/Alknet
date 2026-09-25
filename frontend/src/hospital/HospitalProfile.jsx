@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   HeartPulse, MapPin, Phone, Clock, Star, Users, CheckCircle, 
-  Navigation, Calendar, Video, Stethoscope, ChevronRight, AlertCircle, X, Shield, FlaskConical, History
+  Navigation, Calendar, Video, Stethoscope, ChevronRight, AlertCircle, X, Shield, FlaskConical, History, Globe
 } from 'lucide-react';
 import DoctorCard from './DoctorCard';
 import { useParams, Link } from 'react-router-dom';
 import api from '../shared/api';
 import hospitalService from './hospitalService';
 import { useAuth } from '../context/AuthContext';
+import { websiteHref } from '../shared/websiteUrl';
 export default function HospitalProfile() {
   const { id } = useParams();
   const { token, user } = useAuth();
@@ -35,7 +36,7 @@ export default function HospitalProfile() {
   const [doctorSlots, setDoctorSlots] = useState([]);
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [confirmedAppointment, setConfirmedAppointment] = useState(null);
-  const [payerLumicash, setPayerLumicash] = useState('');
+  const [payerBurundiPay, setPayerBurundiPay] = useState('');
   const [payMsg, setPayMsg] = useState('');
   const [paymentBusy, setPaymentBusy] = useState(false);
 
@@ -48,6 +49,7 @@ export default function HospitalProfile() {
   const publicDoctors = doctors.filter(
     (doc) => doc.staff_category !== 'NURSE'
       && doc.staff_category !== 'RECEPTIONIST'
+      && doc.staff_category !== 'ACCOUNTANT'
       && doc.professional_title !== 'INFIRMIER'
       && doc.is_public_directory !== false
   );
@@ -59,7 +61,7 @@ export default function HospitalProfile() {
     setDoctorSlots([]);
     setBookingStep(1);
     setConfirmedAppointment(null);
-    setPayerLumicash('');
+    setPayerBurundiPay('');
     setPayMsg('');
   };
 
@@ -67,7 +69,7 @@ export default function HospitalProfile() {
     setBookingStep(1);
     setSelectedSlot(null);
     setConfirmedAppointment(null);
-    setPayerLumicash('');
+    setPayerBurundiPay('');
     setPayMsg('');
     setBookingData({
       date: new Date().toISOString().split('T')[0],
@@ -204,8 +206,8 @@ export default function HospitalProfile() {
       ?? selectedDoctor?.fee
       ?? 0
     );
-    if (fee > 0 && !payerLumicash.trim()) {
-      alert('Indiquez votre numéro Lumicash pour payer les frais de consultation.');
+    if (fee > 0 && !payerBurundiPay.trim()) {
+      alert('Indiquez votre numéro BurundiPay pour payer les frais de consultation.');
       return;
     }
     setSubmittingBooking(true);
@@ -223,15 +225,15 @@ export default function HospitalProfile() {
       let finalAppt = data;
       const amount = Number(data?.consultation_fee_amount ?? fee);
       if (amount > 0 && data?.payment_status !== 'PAID') {
-        if (!payerLumicash.trim()) {
-          alert('Numéro Lumicash obligatoire pour payer la consultation.');
+        if (!payerBurundiPay.trim()) {
+          alert('Numéro BurundiPay obligatoire pour payer la consultation.');
           setConfirmedAppointment(data);
           setBookingStep(2);
           return;
         }
         const payRes = await hospitalService.payAppointment(
           data.id,
-          payerLumicash.trim(),
+          payerBurundiPay.trim(),
           !!token,
         );
         finalAppt = payRes.appointment || data;
@@ -266,15 +268,15 @@ export default function HospitalProfile() {
 
   const retryPay = async () => {
     if (!confirmedAppointment?.id) return;
-    if (!payerLumicash.trim()) {
-      alert('Indiquez votre numéro Lumicash.');
+    if (!payerBurundiPay.trim()) {
+      alert('Indiquez votre numéro BurundiPay.');
       return;
     }
     setPaymentBusy(true);
     try {
       const res = await hospitalService.payAppointment(
         confirmedAppointment.id,
-        payerLumicash.trim(),
+        payerBurundiPay.trim(),
         !!token,
       );
       setConfirmedAppointment(res.appointment || confirmedAppointment);
@@ -289,200 +291,206 @@ export default function HospitalProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-accent border-t-transparent" />
       </div>
     );
   }
 
-  if (!hospital) return <div className="text-center py-20">Hôpital introuvable</div>;
+  if (!hospital) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center text-ink font-semibold">
+        Hôpital introuvable
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 pb-12">
-      {/* Cover and Header */}
-      <div className="bg-gradient-to-r from-teal-800 to-emerald-900 h-48 w-full relative">
-        <div className="absolute inset-0 bg-black/20"></div>
+    <div className="min-h-screen bg-surface text-ink pb-16">
+      {/* Hero */}
+      <div className="bg-primary text-surface relative overflow-hidden">
+        <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(ellipse at 20% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)' }} />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-24 relative">
+          <p className="text-xs font-bold uppercase tracking-widest text-accent mb-2">Prise de rendez-vous médical</p>
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-surface max-w-2xl">{hospital.name}</h1>
+          <p className="text-surface/80 text-sm mt-2 max-w-xl">{hospital.category}</p>
+        </div>
       </div>
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="relative -mt-16 bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start">
-          <div className="w-24 h-24 sm:w-32 sm:h-32 bg-white dark:bg-gray-800 rounded-2xl p-2 shadow-md shrink-0 border border-gray-100 dark:border-gray-800 overflow-hidden">
-             <div className="w-full h-full bg-teal-50 dark:bg-teal-950/60 rounded-xl flex items-center justify-center overflow-hidden">
-               {hospital.logo ? (
-                 <img src={hospital.logo} alt={hospital.name} className="w-full h-full object-cover" />
-               ) : (
-                 <HeartPulse className="w-12 h-12 text-teal-600 dark:text-teal-400" />
-               )}
-             </div>
+        {/* Identity card */}
+        <div className="relative -mt-14 bg-surface text-ink rounded-2xl border-2 border-accent shadow-md p-5 sm:p-7 flex flex-col sm:flex-row gap-5 items-start">
+          <div className="w-24 h-24 sm:w-28 sm:h-28 bg-surface rounded-2xl shrink-0 border-2 border-alert/50 overflow-hidden flex items-center justify-center">
+            {hospital.logo ? (
+              <img src={hospital.logo} alt={hospital.name} className="w-full h-full object-cover" />
+            ) : (
+              <HeartPulse className="w-12 h-12 text-primary" />
+            )}
           </div>
-          
-          <div className="flex-1 w-full">
+
+          <div className="flex-1 w-full min-w-0">
             <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 bg-teal-50 dark:bg-teal-950 px-2 py-1 rounded border border-teal-100 dark:border-teal-800">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink bg-primary/10 px-2.5 py-1 rounded-lg border border-accent/40">
                     {hospital.category}
                   </span>
                   {hospital.hasEmergency && (
-                    <span className="text-xs font-bold uppercase tracking-wider text-red-600 bg-red-50 dark:bg-red-950/40 px-2 py-1 rounded border border-red-200 dark:border-red-800">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-surface bg-alert px-2.5 py-1 rounded-lg">
                       Urgences 24/7
                     </span>
                   )}
                 </div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">{hospital.name}</h1>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
+                <h2 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">{hospital.name}</h2>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink">
                   {hospital.beds != null && (
-                    <span className="flex items-center gap-1"><Users className="w-4 h-4 text-gray-400" /> {hospital.beds} lits</span>
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <Users className="w-4 h-4 text-accent" /> {hospital.beds} lits
+                    </span>
                   )}
-                  <span className="flex items-center gap-1"><MapPin className="w-4 h-4 text-gray-400" /> {hospital.address}</span>
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <MapPin className="w-4 h-4 text-accent" /> {hospital.address}
+                  </span>
                   {hospital.phone && (
-                    <span className="flex items-center gap-1"><Phone className="w-4 h-4 text-gray-400" /> {hospital.phone}</span>
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <Phone className="w-4 h-4 text-accent" /> {hospital.phone}
+                    </span>
+                  )}
+                  {hospital.website && (
+                    <a
+                      href={websiteHref(hospital.website)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
+                    >
+                      <Globe className="w-4 h-4 text-accent" /> Site web
+                    </a>
                   )}
                 </div>
               </div>
-              {hospital.phone && (
-                <div className="flex gap-2 w-full md:w-auto flex-wrap">
-                  <Link
-                    to={`/hospitals/${id}/historique`}
-                    className="flex-1 md:flex-none px-4 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 font-medium rounded-xl transition flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700"
-                  >
-                    <History className="w-4 h-4" /> Mon historique
-                  </Link>
-                  <a href={`tel:${hospital.phone}`} className="flex-1 md:flex-none px-4 py-2 bg-teal-50 dark:bg-teal-950 text-teal-700 dark:text-teal-300 hover:bg-teal-100 font-medium rounded-xl transition flex items-center justify-center gap-2 border border-teal-200 dark:border-teal-800">
-                    <Phone className="w-4 h-4" /> Appeler ({hospital.phone})
-                  </a>
-                </div>
-              )}
-              {!hospital.phone && (
+              <div className="flex gap-2 w-full md:w-auto flex-wrap">
                 <Link
                   to={`/hospitals/${id}/historique`}
-                  className="px-4 py-2 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 hover:bg-gray-50 font-medium rounded-xl transition inline-flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-700"
+                  className="flex-1 md:flex-none px-4 py-2.5 bg-surface text-ink font-semibold rounded-xl border-2 border-accent inline-flex items-center justify-center gap-2 text-sm"
                 >
                   <History className="w-4 h-4" /> Mon historique
                 </Link>
-              )}
+                {hospital.phone && (
+                  <a
+                    href={`tel:${hospital.phone}`}
+                    className="flex-1 md:flex-none px-4 py-2.5 bg-primary text-surface font-semibold rounded-xl border-2 border-alert inline-flex items-center justify-center gap-2 text-sm"
+                  >
+                    <Phone className="w-4 h-4" /> Appeler
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content: Doctors & Services */}
-          <div className="lg:col-span-2 space-y-8">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">À propos de l'établissement</h2>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{hospital.description}</p>
-              
-              <h3 className="font-semibold text-gray-900 dark:text-white mt-6 mb-3 flex items-center gap-2">
-                <HeartPulse className="w-5 h-5 text-teal-600" /> Services & Paquets de soins
-              </h3>
-              <p className="text-xs text-gray-500 mb-3">
-                Choisissez d’abord le service souhaité, puis un créneau disponible.
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* À propos + Services */}
+            <section className="bg-surface text-ink rounded-2xl border-2 border-accent p-5 sm:p-7 shadow-sm">
+              <h2 className="text-xl font-extrabold text-ink mb-3">À propos de l&apos;établissement</h2>
+              <p className="text-ink leading-relaxed text-sm sm:text-base">
+                {hospital.description || 'Aucune description fournie.'}
               </p>
-              {services.length === 0 ? (
-                <p className="text-sm text-gray-500">Aucun service publié pour le moment.</p>
-              ) : (
-                <div className="space-y-2">
-                  {services.map((srv) => {
-                    const hasSlots = servicesWithSlots.has(String(srv.id));
-                    const bookable = srv.online_booking_available !== false && hasSlots;
-                    return (
-                      <div
-                        key={srv.id}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-teal-100 dark:border-teal-900 bg-teal-50/50 dark:bg-teal-950/30"
-                      >
-                        <div className="min-w-0">
-                          <div className="font-semibold text-sm text-gray-900 dark:text-white">{srv.name}</div>
-                          {srv.description && (
-                            <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">{srv.description}</div>
-                          )}
-                          {srv.formatted_cost && (
-                            <div className="text-xs font-semibold text-teal-700 mt-1">{srv.formatted_cost}</div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          disabled={!bookable}
-                          onClick={() => handleOpenServiceBooking(srv)}
-                          className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition ${
-                            bookable
-                              ? 'bg-teal-700 hover:bg-teal-800 text-white cursor-pointer'
-                              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+
+              <div className="mt-6 pt-5 border-t-2 border-alert/30">
+                <h3 className="font-bold text-ink text-base mb-1 flex items-center gap-2">
+                  <HeartPulse className="w-5 h-5 text-accent" /> Services &amp; Paquets de soins
+                </h3>
+                <p className="text-xs text-ink-muted mb-4">
+                  Choisissez un service, puis un créneau publié pour réserver.
+                </p>
+                {services.length === 0 ? (
+                  <p className="text-sm text-ink-muted">Aucun service publié pour le moment.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {services.map((srv, idx) => {
+                      const hasSlots = servicesWithSlots.has(String(srv.id));
+                      const bookable = srv.online_booking_available !== false && hasSlots;
+                      return (
+                        <div
+                          key={srv.id}
+                          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border-2 bg-surface ${
+                            idx % 2 === 0 ? 'border-accent' : 'border-alert'
                           }`}
                         >
-                          <Calendar className="w-3.5 h-3.5" />
-                          {bookable ? 'Prendre RDV' : 'Pas de créneau'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Catalogue examens & tarifs */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sm:p-8">
-              <div className="mb-5">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <FlaskConical className="w-6 h-6 text-teal-600" />
-                  Examens & tarifs
-                </h2>
-                <p className="text-xs text-gray-500 mt-1">
-                  Examens proposés par cet établissement et leur tarif.
-                </p>
+                          <div className="min-w-0">
+                            <div className="font-bold text-ink">{srv.name}</div>
+                            {srv.description && (
+                              <div className="text-xs text-ink-muted mt-1 line-clamp-2">{srv.description}</div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!bookable}
+                            onClick={() => handleOpenServiceBooking(srv)}
+                            className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition border-2 ${
+                              bookable
+                                ? 'bg-primary text-surface border-accent cursor-pointer'
+                                : 'bg-accent/15 text-ink border-alert cursor-not-allowed'
+                            }`}
+                          >
+                            <Calendar className="w-3.5 h-3.5" />
+                            {bookable ? 'Prendre RDV' : 'Pas de créneau'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
+            </section>
+
+            {/* Examens */}
+            <section className="bg-surface text-ink rounded-2xl border-2 border-alert p-5 sm:p-7 shadow-sm">
+              <h2 className="text-xl font-extrabold text-ink flex items-center gap-2 mb-1">
+                <FlaskConical className="w-6 h-6 text-accent" />
+                Examens disponibles
+              </h2>
+              <p className="text-xs text-ink-muted mb-5">Examens proposés par l&apos;établissement.</p>
 
               {exams.length === 0 ? (
-                <div className="text-center py-10 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
-                  <FlaskConical className="w-10 h-10 text-gray-400 mx-auto mb-2 opacity-50" />
-                  <p className="text-gray-500 text-sm font-medium">Aucun examen publié pour le moment.</p>
+                <div className="text-center py-10 rounded-xl border-2 border-dashed border-accent/40 bg-primary/5">
+                  <FlaskConical className="w-10 h-10 text-ink-muted mx-auto mb-2" />
+                  <p className="text-ink-muted text-sm font-medium">Aucun examen publié pour le moment.</p>
                 </div>
               ) : (
-                <ul className="divide-y divide-gray-100 dark:divide-gray-800 rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <ul className="rounded-xl border-2 border-accent overflow-hidden divide-y divide-border">
                   {exams.map((ex) => (
                     <li
                       key={ex.id}
-                      className="flex items-start justify-between gap-4 px-4 py-3.5 bg-white dark:bg-gray-900 hover:bg-teal-50/40 dark:hover:bg-teal-950/20 transition"
+                      className="flex items-start justify-between gap-4 px-4 py-3.5 bg-surface hover:bg-primary/5 transition"
                     >
                       <div className="min-w-0">
-                        <div className="font-semibold text-gray-900 dark:text-white">{ex.name}</div>
+                        <div className="font-bold text-ink">{ex.name}</div>
                         {ex.description && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed">
-                            {ex.description}
-                          </div>
+                          <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">{ex.description}</div>
                         )}
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="font-bold text-teal-800 dark:text-teal-300 whitespace-nowrap text-sm">
-                          {ex.formatted_price
-                            || (Number(ex.price)
-                              ? `${Number(ex.price).toLocaleString('fr-BI')} ${ex.currency || 'BIF'}`
-                              : 'Sur demande')}
-                        </div>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
+            </section>
 
-            {/* Annuaire des Médecins Spécialistes */}
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6 sm:p-8">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Stethoscope className="w-6 h-6 text-teal-600 dark:text-teal-400" />
-                    Annuaire des Médecins Spécialistes
-                  </h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Praticiens enregistrés par l&apos;établissement.
-                  </p>
-                </div>
-              </div>
+            {/* Médecins */}
+            <section className="bg-surface text-ink rounded-2xl border-2 border-accent p-5 sm:p-7 shadow-sm">
+              <h2 className="text-xl font-extrabold text-ink flex items-center gap-2 mb-1">
+                <Stethoscope className="w-6 h-6 text-accent" />
+                Annuaire des Médecins Spécialistes
+              </h2>
+              <p className="text-xs text-ink-muted mb-6">
+                Praticiens enregistrés — réservez directement sur un créneau publié.
+              </p>
 
               {publicDoctors.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
-                  <Stethoscope className="w-10 h-10 text-gray-400 mx-auto mb-2 opacity-50" />
-                  <p className="text-gray-500 text-sm font-medium">Aucun médecin répertorié pour le moment dans cet établissement.</p>
+                <div className="text-center py-12 rounded-xl border-2 border-dashed border-alert/40 bg-primary/5">
+                  <Stethoscope className="w-10 h-10 text-ink-muted mx-auto mb-2" />
+                  <p className="text-ink-muted text-sm font-medium">Aucun médecin répertorié pour le moment.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -496,46 +504,61 @@ export default function HospitalProfile() {
                   ))}
                 </div>
               )}
-            </div>
+            </section>
           </div>
 
-          {/* Sidebar Info */}
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="font-bold text-gray-900 dark:text-white text-base mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-teal-600" /> Informations d'Accès
+          {/* Sidebar */}
+          <aside className="space-y-5">
+            <div className="bg-surface text-ink rounded-2xl border-2 border-accent p-5 shadow-sm sticky top-20">
+              <h3 className="font-extrabold text-ink text-base mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-accent" /> Informations d&apos;accès
               </h3>
-              <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                <p className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
-                  <span>Horaires :</span>
-                  <strong className="text-gray-900 dark:text-white">{hospital.hours}</strong>
-                </p>
-                <p className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
-                  <span>Téléphone :</span>
-                  <strong className="text-gray-900 dark:text-white">{hospital.phone}</strong>
-                </p>
-                <p className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2">
-                  <span>Email :</span>
-                  <strong className="text-gray-900 dark:text-white">{hospital.email}</strong>
-                </p>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-3 border-b border-border pb-2.5">
+                  <span className="text-ink-muted">Horaires</span>
+                  <strong className="text-ink text-right">{hospital.hours || '—'}</strong>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-b border-border pb-2.5">
+                  <span className="text-ink-muted">Téléphone</span>
+                  <strong className="text-ink text-right">{hospital.phone || '—'}</strong>
+                </div>
+                <div className="flex items-start justify-between gap-3 border-b border-border pb-2.5">
+                  <span className="text-ink-muted shrink-0">Site web</span>
+                  {hospital.website ? (
+                    <a
+                      href={websiteHref(hospital.website)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary font-semibold text-right break-all hover:underline"
+                    >
+                      {hospital.website}
+                    </a>
+                  ) : (
+                    <strong className="text-ink text-right">—</strong>
+                  )}
+                </div>
+                <div className="flex items-start justify-between gap-3 pb-1">
+                  <span className="text-ink-muted shrink-0">Email</span>
+                  <strong className="text-ink text-right break-all">{hospital.email || '—'}</strong>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-6">
-              <h3 className="font-bold text-gray-900 dark:text-white text-base mb-2 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-teal-600" /> Assurances &amp; mutuelles
+            <div className="bg-surface text-ink rounded-2xl border-2 border-alert p-5 shadow-sm">
+              <h3 className="font-extrabold text-ink text-base mb-2 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-accent" /> Assurances &amp; mutuelles
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                Assurances maladie et mutuelles acceptées par cet établissement.
+              <p className="text-xs text-ink-muted mb-4">
+                Assurances maladie et mutuelles acceptées.
               </p>
               {(hospital.insurances || []).length === 0 ? (
-                <p className="text-sm text-gray-500">Aucune assurance déclarée pour le moment.</p>
+                <p className="text-sm text-ink-muted">Aucune assurance déclarée pour le moment.</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {hospital.insurances.map((name) => (
                     <span
                       key={name}
-                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-200 border border-teal-100 dark:border-teal-900"
+                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-ink border border-accent/40"
                     >
                       {name}
                     </span>
@@ -543,64 +566,65 @@ export default function HospitalProfile() {
                 </div>
               )}
             </div>
-          </div>
+          </aside>
         </div>
       </div>
 
       {/* Modal : RDV par service (prioritaire) ou par médecin */}
       {(selectedService || selectedDoctor) && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-800">
-            <div className="px-6 py-4 bg-gradient-to-r from-teal-700 to-emerald-800 text-white flex justify-between items-center">
+        <div className="fixed inset-0 bg-primary/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface text-ink rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-accent max-h-[92vh] overflow-y-auto">
+            <div className="px-6 py-4 bg-primary text-surface flex justify-between items-center border-b-2 border-accent">
               <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                <h3 className="font-bold text-lg">Prise de Rendez-vous Médical</h3>
+                <Calendar className="w-5 h-5 text-accent" />
+                <h3 className="font-bold text-lg text-surface">Prise de rendez-vous médical</h3>
               </div>
-              <button type="button" onClick={closeBooking} className="text-white/80 hover:text-white text-2xl cursor-pointer">&times;</button>
+              <button type="button" onClick={closeBooking} className="text-surface/80 hover:text-surface text-2xl cursor-pointer leading-none">&times;</button>
             </div>
 
             {bookingStep === 1 ? (
               <form onSubmit={handleConfirmBooking} className="p-6 space-y-4">
-                <div className="p-3 bg-teal-50 dark:bg-teal-950/40 rounded-xl border border-teal-100 dark:border-teal-800 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                <div className="p-3 bg-primary/5 rounded-xl border-2 border-accent flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary text-surface flex items-center justify-center font-bold text-sm shrink-0">
                     {selectedService ? <HeartPulse className="w-5 h-5" /> : 'Dr'}
                   </div>
                   <div className="min-w-0">
                     {selectedService ? (
                       <>
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white">{selectedService.name}</h4>
-                        <p className="text-xs text-teal-700 dark:text-teal-300 font-semibold">
+                        <h4 className="font-bold text-sm text-ink">{selectedService.name}</h4>
+                        <p className="text-xs text-ink-muted font-semibold">
                           {hospital.name}
-                          {selectedService.formatted_cost ? ` • ${selectedService.formatted_cost}` : ''}
-                          {selectedSlot && ` • Consultation médecin : ${feeLabel}`}
                         </p>
                       </>
                     ) : (
                       <>
-                        <h4 className="font-bold text-sm text-gray-900 dark:text-white">
+                        <h4 className="font-bold text-sm text-ink">
                           {selectedDoctor.user_details?.first_name || selectedDoctor.full_name || selectedDoctor.name}{' '}
                           {selectedDoctor.user_details?.last_name || ''}
                         </h4>
-                        <p className="text-xs text-teal-700 dark:text-teal-300 font-semibold">
-                          {hospital.name} • Tarif: {Number(selectedDoctor.consultation_fee || selectedDoctor.fee || 0).toLocaleString()} BIF
+                        <p className="text-xs text-ink-muted font-semibold">
+                          {hospital.name}
+                          {(selectedDoctor.office_address || '').trim()
+                            ? ` • Bureau: ${selectedDoctor.office_address.trim()}`
+                            : ''}
                         </p>
                       </>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-teal-600" /> Session / Créneau de Consultation
+                <div className="space-y-3">
+                  <h3 className="font-bold text-ink text-sm flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-accent" /> Créneau de consultation
                   </h3>
                   {doctorSlots.length === 0 ? (
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+                    <div className="p-4 bg-accent/10 border-2 border-accent rounded-xl text-sm text-ink">
                       {selectedService
                         ? 'Aucun créneau publié pour ce service. Contactez l’hôpital ou choisissez un autre service.'
                         : 'Aucune session planifiée pour ce médecin. Contactez l’hôpital pour prendre rendez-vous.'}
                     </div>
                   ) : (
-                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
                       {doctorSlots.map((slot) => {
                         const isFull = (slot.remaining_slots ?? 0) <= 0;
                         const isSelected = selectedSlot?.id === slot.id;
@@ -613,51 +637,52 @@ export default function HospitalProfile() {
                           <div
                             key={slot.id}
                             onClick={() => !isFull && setSelectedSlot(slot)}
-                            className={`p-3 rounded-xl border ${isSelected ? 'border-teal-600 bg-teal-50 dark:bg-teal-900/30' : 'border-gray-200 dark:border-gray-700 hover:border-teal-300'} ${isFull ? 'opacity-50 cursor-not-allowed bg-gray-50 dark:bg-gray-800' : 'cursor-pointer'} transition`}
+                            className={`p-3 rounded-xl border-2 transition ${
+                              isSelected
+                                ? 'border-accent bg-accent/10'
+                                : 'border-border hover:border-accent'
+                            } ${isFull ? 'opacity-50 cursor-not-allowed bg-primary/5' : 'cursor-pointer bg-surface'}`}
                           >
                             <div className="flex justify-between items-start mb-1">
-                              <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                              <h4 className="font-bold text-sm text-ink flex items-center gap-2">
                                 {slot.title}
                                 {isFull && (
-                                  <span className="px-2 py-0.5 rounded text-[10px] bg-red-100 text-red-700 font-bold uppercase tracking-wide">
+                                  <span className="px-2 py-0.5 rounded text-[10px] bg-alert text-surface font-bold uppercase">
                                     Complet
                                   </span>
                                 )}
                               </h4>
                               {!isFull && (
-                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-teal-600' : 'border-gray-300'}`}>
-                                  {isSelected && <div className="w-2 h-2 rounded-full bg-teal-600" />}
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-accent' : 'border-border'}`}>
+                                  {isSelected && <div className="w-2 h-2 rounded-full bg-accent" />}
                                 </div>
                               )}
                             </div>
                             {(selectedService ? slot.doctor_name : slot.service_name) && (
-                              <p className="text-xs text-teal-700 dark:text-teal-400 font-medium mb-1">
+                              <p className="text-xs text-ink font-medium mb-1">
                                 {selectedService
                                   ? `Avec ${slot.doctor_name}${slot.doctor_title ? ` (${slot.doctor_title})` : ''}`
                                   : `Service : ${slot.service_name}`}
                               </p>
                             )}
-                            <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400 mt-2">
-                              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {displayDate}</span>
+                            <div className="flex items-center gap-3 text-xs text-ink-muted mt-2">
+                              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5 text-accent" /> {displayDate}</span>
                               <span className="flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5" /> {slot.start_time?.substring(0, 5)} - {slot.end_time?.substring(0, 5)}
+                                <Clock className="w-3.5 h-3.5 text-accent" /> {slot.start_time?.substring(0, 5)} - {slot.end_time?.substring(0, 5)}
                               </span>
                             </div>
-                            <div className="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700 flex flex-wrap justify-between items-center text-[11px] gap-2">
-                  <span className="font-medium text-teal-700 dark:text-teal-400 flex items-center gap-1">
+                            <div className="mt-2 pt-2 border-t border-border flex flex-wrap justify-between items-center text-[11px] gap-2 text-ink">
+                              <span className="font-medium flex items-center gap-1">
                                 {slot.consultation_type === 'TELEMEDICINE' ? <Video className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
                                 {slot.consultation_type === 'TELEMEDICINE' ? 'Téléconsultation' : 'Présentiel'}
                               </span>
-                              <span className="font-bold text-teal-800 dark:text-teal-300">
-                                {slot.formatted_consultation_fee
-                                  || (Number(slot.consultation_fee) > 0
-                                    ? `${Number(slot.consultation_fee).toLocaleString('fr-BI')} BIF`
-                                    : (selectedDoctor
-                                      ? `${Number(selectedDoctor.consultation_fee || 0).toLocaleString('fr-BI')} BIF`
-                                      : '—'))}
-                              </span>
-                              <span className={`font-bold ${isFull ? 'text-red-600' : 'text-emerald-600'}`}>
-                                Places restantes : {slot.remaining_slots} / {slot.max_patients}
+                              {(slot.doctor_office_address || selectedDoctor?.office_address) && (
+                                <span className="font-medium text-ink-muted">
+                                  Bureau: {slot.doctor_office_address || selectedDoctor.office_address}
+                                </span>
+                              )}
+                              <span className={`font-bold ${isFull ? 'text-alert' : 'text-primary'}`}>
+                                Places : {slot.remaining_slots} / {slot.max_patients}
                               </span>
                             </div>
                           </div>
@@ -668,111 +693,117 @@ export default function HospitalProfile() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Motif de consultation</label>
+                  <label className="block text-xs font-bold text-ink mb-1">Motif de consultation</label>
                   <textarea
                     required
                     rows={2}
                     placeholder="ex: Maux de tête fréquents, suivi annuel, bilan de santé..."
                     value={bookingData.reason}
                     onChange={(e) => setBookingData({ ...bookingData, reason: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-600"
+                    className="w-full px-3 py-2 bg-surface border-2 border-accent rounded-xl text-sm text-ink outline-none focus:border-alert"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nom complet du patient</label>
+                    <label className="block text-xs font-bold text-ink mb-1">Nom complet du patient</label>
                     <input
                       type="text"
                       required
                       placeholder="Votre nom..."
                       value={bookingData.patient_name}
                       onChange={(e) => setBookingData({ ...bookingData, patient_name: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-600"
+                      className="w-full px-3 py-2 bg-surface border-2 border-accent rounded-xl text-sm text-ink outline-none focus:border-alert"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Téléphone (WhatsApp/SMS)</label>
+                    <label className="block text-xs font-bold text-ink mb-1">Téléphone</label>
                     <input
                       type="tel"
                       required
                       placeholder="+257 79 00 00 00"
                       value={bookingData.patient_phone}
                       onChange={(e) => setBookingData({ ...bookingData, patient_phone: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-600"
+                      className="w-full px-3 py-2 bg-surface border-2 border-accent rounded-xl text-sm text-ink outline-none focus:border-alert"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                    <label className="block text-xs font-bold text-ink mb-1">Email</label>
                     <input
                       type="email"
                       required
                       placeholder="patient@email.com"
                       value={bookingData.patient_email}
                       onChange={(e) => setBookingData({ ...bookingData, patient_email: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-teal-600"
+                      className="w-full px-3 py-2 bg-surface border-2 border-accent rounded-xl text-sm text-ink outline-none focus:border-alert"
                     />
                   </div>
                 </div>
 
                 {(consultationFee > 0 || Number(selectedSlot?.consultation_fee || selectedDoctor?.consultation_fee || 0) > 0) && (
-                  <div className="rounded-xl border border-[#1a237e]/20 overflow-hidden bg-white dark:bg-gray-900">
-                    <div className="bg-[#FFD600] px-4 py-3 flex items-center justify-center">
+                  <div className="rounded-xl border-2 border-accent overflow-hidden bg-surface">
+                    <div className="bg-primary/5 px-4 py-3 flex flex-col items-center justify-center gap-1 border-b-2 border-accent/40">
                       <img
-                        src="/lumicash.png"
-                        alt="Lumicash"
-                        className="h-12 w-auto object-contain"
+                        src="/burundipay.png"
+                        alt="BurundiPay"
+                        className="h-14 w-auto object-contain"
                       />
+                      <p className="text-[10px] font-semibold text-accent tracking-wide text-center">
+                        Riha, Ronka, Rungika amafaranga mu kanya isase
+                      </p>
                     </div>
                     <div className="p-4 space-y-3">
-                      <p className="text-center text-base font-bold text-gray-900 dark:text-white">
-                        {feeLabel}
+                      <p className="text-xs text-ink-muted text-center font-medium">
+                        Paiement de la consultation via BurundiPay
+                      </p>
+                      <p className="text-xs text-ink-muted text-center font-medium">
+                        Numéro banque ou mobile money (BurundiPay)
                       </p>
                       <input
                         type="tel"
                         required
-                        aria-label="Numéro Lumicash"
+                        aria-label="Numéro BurundiPay"
                         placeholder="79xxxxxx"
-                        value={payerLumicash}
-                        onChange={(e) => setPayerLumicash(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#1a237e]"
+                        value={payerBurundiPay}
+                        onChange={(e) => setPayerBurundiPay(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-surface border-2 border-accent rounded-xl text-sm text-ink outline-none focus:border-alert"
                       />
                     </div>
                   </div>
                 )}
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-                  <button type="button" onClick={closeBooking} className="px-4 py-2 text-gray-600 dark:text-gray-300 text-sm font-medium cursor-pointer">
+                <div className="flex justify-end gap-3 pt-4 border-t-2 border-alert/20">
+                  <button type="button" onClick={closeBooking} className="px-4 py-2 text-ink text-sm font-semibold cursor-pointer">
                     Annuler
                   </button>
                   <button
                     type="submit"
                     disabled={submittingBooking || doctorSlots.length === 0}
-                    className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm rounded-xl shadow-md transition cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 bg-primary hover:opacity-95 text-surface font-semibold text-sm rounded-xl border-2 border-accent transition cursor-pointer disabled:opacity-50"
                   >
                     {submittingBooking
                       ? 'Traitement...'
                       : consultationFee > 0
-                        ? `Réserver et payer ${feeLabel}`
-                        : 'Confirmer le Rendez-vous'}
+                        ? 'Réserver et payer'
+                        : 'Confirmer le rendez-vous'}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="p-8 text-center space-y-4">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
+              <div className="p-8 text-center space-y-4 bg-surface text-ink">
+                <div className="w-16 h-16 bg-primary text-surface rounded-full flex items-center justify-center mx-auto border-2 border-accent">
                   <CheckCircle className="w-10 h-10" />
                 </div>
-                <h4 className="text-xl font-bold text-gray-900 dark:text-white">Demande enregistrée</h4>
+                <h4 className="text-xl font-bold text-ink">Demande enregistrée</h4>
 
                 {confirmedAppointment && (
-                  <div className="inline-block px-4 py-2 bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-200 rounded-2xl border border-teal-200 dark:border-teal-800">
-                    <p className="text-xs font-semibold uppercase tracking-wider">Numéro de suivi</p>
-                    <p className="text-3xl font-extrabold text-teal-600 dark:text-teal-400 font-mono">
+                  <div className="inline-block px-4 py-2 bg-primary/5 text-ink rounded-2xl border-2 border-accent">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">Numéro de suivi</p>
+                    <p className="text-3xl font-extrabold text-primary font-mono">
                       {confirmedAppointment.reference_code || `N° ${confirmedAppointment.queue_number || 1}`}
                     </p>
                     {confirmedAppointment.queue_number && (
-                      <p className="text-[11px] text-teal-600/80 mt-0.5">
+                      <p className="text-[11px] text-ink-muted mt-0.5 font-medium">
                         Ordre de passage provisoire : #{confirmedAppointment.queue_number}
                       </p>
                     )}
@@ -780,32 +811,33 @@ export default function HospitalProfile() {
                 )}
 
                 {confirmedAppointment && Number(confirmedAppointment.consultation_fee_amount || 0) > 0 && (
-                  <div className={`p-4 rounded-xl text-left text-sm border ${
+                  <div className={`p-4 rounded-xl text-left text-sm border-2 ${
                     ['PAID', 'WAIVED'].includes(confirmedAppointment.payment_status)
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                      ? 'bg-primary/5 border-accent text-ink'
+                      : 'bg-accent/10 border-alert text-ink'
                   }`}>
                     <p className="font-semibold">
                       Paiement consultation :{' '}
                       {confirmedAppointment.payment_status === 'PAID' && 'Payé'}
-                      {confirmedAppointment.payment_status === 'AWAITING_PIN' && 'En attente PIN Lumicash'}
+                      {confirmedAppointment.payment_status === 'AWAITING_PIN' && 'En attente PIN BurundiPay'}
                       {confirmedAppointment.payment_status === 'UNPAID' && 'Non payé'}
                       {confirmedAppointment.payment_status === 'FAILED' && 'Échoué'}
                       {confirmedAppointment.payment_status === 'WAIVED' && 'Exonéré'}
                     </p>
-                    <p className="text-xs mt-1">
-                      {Number(confirmedAppointment.consultation_fee_amount).toLocaleString('fr-BI')}{' '}
-                      {confirmedAppointment.consultation_fee_currency || 'BIF'}
-                    </p>
                     {payMsg && <p className="text-xs mt-2">{payMsg}</p>}
+                    {(confirmedAppointment.location_notes || '').trim() && (
+                      <p className="text-xs mt-2 font-medium">
+                        Bureau / lieu : {confirmedAppointment.location_notes}
+                      </p>
+                    )}
                     {!['PAID', 'WAIVED'].includes(confirmedAppointment.payment_status) && (
                       <div className="mt-3 space-y-2">
                         <input
                           type="tel"
-                          placeholder="Numéro Lumicash"
-                          value={payerLumicash}
-                          onChange={(e) => setPayerLumicash(e.target.value)}
-                          className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+                          placeholder="Numéro BurundiPay"
+                          value={payerBurundiPay}
+                          onChange={(e) => setPayerBurundiPay(e.target.value)}
+                          className="w-full px-3 py-2 border-2 border-accent rounded-lg text-sm bg-surface text-ink outline-none focus:border-alert"
                         />
                         <div className="flex flex-wrap gap-2">
                           {confirmedAppointment.payment_status === 'AWAITING_PIN' && (
@@ -813,7 +845,7 @@ export default function HospitalProfile() {
                               type="button"
                               disabled={paymentBusy}
                               onClick={confirmStubPayment}
-                              className="px-3 py-2 rounded-lg bg-teal-700 text-white text-xs font-semibold disabled:opacity-50"
+                              className="px-3 py-2 rounded-lg bg-primary text-surface text-xs font-semibold disabled:opacity-50 border border-accent"
                             >
                               Confirmer le PIN (simulation)
                             </button>
@@ -822,9 +854,9 @@ export default function HospitalProfile() {
                             type="button"
                             disabled={paymentBusy}
                             onClick={retryPay}
-                            className="px-3 py-2 rounded-lg bg-white border text-xs font-semibold disabled:opacity-50"
+                            className="px-3 py-2 rounded-lg bg-surface border-2 border-alert text-ink text-xs font-semibold disabled:opacity-50"
                           >
-                            Payer / Relancer Lumicash
+                            Payer / Relancer BurundiPay
                           </button>
                         </div>
                       </div>
@@ -833,12 +865,12 @@ export default function HospitalProfile() {
                 )}
 
                 {confirmedAppointment?.patient_acknowledgment_message && (
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl text-xs text-left text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed border border-emerald-100 dark:border-emerald-900">
+                  <div className="p-4 bg-primary/5 rounded-xl text-xs text-left text-ink whitespace-pre-wrap leading-relaxed border-2 border-accent">
                     {confirmedAppointment.patient_acknowledgment_message}
                   </div>
                 )}
 
-                <p className="text-sm text-gray-600 dark:text-gray-300">
+                <p className="text-sm text-ink">
                   {confirmedAppointment?.email_notifications?.patient_email_sent
                     ? `Un email de confirmation a été envoyé à ${bookingData.patient_email}.`
                     : selectedService
@@ -846,37 +878,10 @@ export default function HospitalProfile() {
                       : `Votre demande avec Dr. ${selectedDoctor?.user_details?.first_name || selectedDoctor?.full_name || selectedDoctor?.name || ''} est en attente de validation.`}
                 </p>
 
-                {confirmedAppointment?.slot_details ? (
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs text-gray-600 dark:text-gray-300 font-medium space-y-1">
-                    <p>Session : <strong>{confirmedAppointment.slot_details.title}</strong></p>
-                    {confirmedAppointment.slot_details.doctor_name && (
-                      <p>Médecin : <strong>{confirmedAppointment.slot_details.doctor_name}</strong></p>
-                    )}
-                    {confirmedAppointment.service_name && (
-                      <p>Service : <strong>{confirmedAppointment.service_name}</strong></p>
-                    )}
-                    <p>
-                      Capacité restante :{' '}
-                      <strong>
-                        {confirmedAppointment.slot_details.remaining_slots} /{' '}
-                        {confirmedAppointment.slot_details.max_patients} places
-                      </strong>
-                    </p>
-                    <p>
-                      Mode :{' '}
-                      <strong>
-                        {confirmedAppointment.slot_details.consultation_type === 'TELEMEDICINE'
-                          ? 'Téléconsultation'
-                          : 'Présentiel'}
-                      </strong>
-                    </p>
-                  </div>
-                ) : null}
-
                 <button
                   type="button"
                   onClick={closeBooking}
-                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold rounded-xl transition cursor-pointer text-sm"
+                  className="w-full py-2.5 bg-primary hover:opacity-95 text-surface font-semibold rounded-xl transition cursor-pointer text-sm border-2 border-accent"
                 >
                   Fermer
                 </button>

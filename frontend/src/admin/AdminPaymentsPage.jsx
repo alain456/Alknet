@@ -1,14 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Crown, Building2, AlertTriangle, CheckCircle2, Clock, Bell, History, Layers } from 'lucide-react';
+import { Crown, Building2, AlertTriangle, CheckCircle2, Clock, Bell, History, Layers, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
+import { userHasPlatformPerm } from '../auth/platformPermissions';
 
 /**
  * Super Admin — plans Free/Mensuel/Annuel + abonnements + paiements + notifications.
  */
 export default function AdminPaymentsPage() {
   const { token, user } = useAuth();
+  const canSettings = userHasPlatformPerm(user, 'platform.settings.view');
+  const canAlerts = userHasPlatformPerm(user, 'platform.alerts.view');
+  const canExport = userHasPlatformPerm(user, 'platform.billing.export');
+  const canSuspend = userHasPlatformPerm(user, 'platform.businesses.suspend');
+  const canReadBilling = userHasPlatformPerm(user, 'platform.billing.view')
+    || userHasPlatformPerm(user, 'platform.subscriptions.view');
   const [tab, setTab] = useState('plans');
   const [data, setData] = useState(null);
   const [payments, setPayments] = useState(null);
@@ -22,9 +29,10 @@ export default function AdminPaymentsPage() {
   const [payFilter, setPayFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [graceDays, setGraceDays] = useState('7');
+  const [graceNote, setGraceNote] = useState('');
+  const [savingGrace, setSavingGrace] = useState(false);
   const [busyId, setBusyId] = useState(null);
-
-  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const loadSubs = async () => {
     const qs = filter ? `?status=${encodeURIComponent(filter)}` : '';
@@ -65,34 +73,72 @@ export default function AdminPaymentsPage() {
     applyPlansPayload(res);
   };
 
-  const load = async () => {
-    if (!token || !isSuperAdmin) {
+  const loadGrace = async () => {
+    const res = await api.get('businesses/admin/subscription-settings/', { auth: true });
+    setGraceDays(String(res?.grace_period_days ?? 7));
+    setGraceNote(res?.note || '');
+  };
+
+  const load = async ({ soft = false } = {}) => {
+    if (!token || !canReadBilling) {
       setLoading(false);
-      if (token && !isSuperAdmin) {
-        setError('Accès réservé au Super Admin.');
+      if (token && !canReadBilling) {
+        setError('Accès réservé à la finance plateforme ou au super admin.');
       }
       return;
     }
-    setLoading(true);
+    if (!soft) setLoading(true);
     setError('');
     try {
-      await Promise.all([loadPlans(), loadSubs(), loadPayments(), loadNotifs()]);
+      const jobs = [loadSubs(), loadPayments()];
+      if (canSettings) jobs.push(loadPlans(), loadGrace());
+      if (canAlerts) jobs.push(loadNotifs());
+      await Promise.all(jobs);
     } catch (err) {
       setError(err.message || 'Impossible de charger les données');
     } finally {
-      setLoading(false);
+      if (!soft) setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (!canSettings && tab === 'plans') setTab('subscriptions');
+  }, [canSettings, tab]);
+
+  useEffect(() => {
     load();
-  }, [token, filter, payFilter, isSuperAdmin]);
+  }, [token, filter, payFilter, canReadBilling, canSettings, canAlerts]);
 
   const updateDraft = (code, field, value) => {
     setPlanDrafts((prev) => ({
       ...prev,
       [code]: { ...prev[code], [field]: value },
     }));
+  };
+
+  const saveGrace = async () => {
+    const days = parseInt(graceDays, 10);
+    if (Number.isNaN(days) || days < 0 || days > 365) {
+      setError('La période de grâce doit être entre 0 et 365 jours.');
+      return;
+    }
+    setSavingGrace(true);
+    setError('');
+    setPlanMsg('');
+    try {
+      const res = await api.patch(
+        'businesses/admin/subscription-settings/',
+        { grace_period_days: days },
+        { auth: true },
+      );
+      setGraceDays(String(res?.grace_period_days ?? days));
+      setPlanMsg('Période de grâce enregistrée pour toutes les entreprises.');
+      await loadSubs();
+    } catch (err) {
+      setError(err.message || 'Échec enregistrement de la période de grâce');
+    } finally {
+      setSavingGrace(false);
+    }
   };
 
   const savePlan = async (code) => {
@@ -185,14 +231,24 @@ export default function AdminPaymentsPage() {
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      <header className="space-y-2">
-        <div className="inline-flex items-center gap-2 text-xs font-semibold text-teal-700">
-          <Crown className="w-4 h-4" /> Revenus plateforme
+      <header className="space-y-2 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 text-xs font-semibold text-teal-700">
+            <Crown className="w-4 h-4" /> Revenus plateforme
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Abonnements SaaS</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
+            Plans Free / Mensuel / Annuel — durée Free et prix réglables. Les commandes restent privées.
+          </p>
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Abonnements SaaS</h1>
-        <p className="text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
-          Plans Free / Mensuel / Annuel — durée Free et prix réglables. Les commandes restent privées.
-        </p>
+        <button
+          type="button"
+          onClick={() => load({ soft: true })}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 shrink-0"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Actualiser
+        </button>
       </header>
 
       {unread > 0 && (
@@ -231,11 +287,11 @@ export default function AdminPaymentsPage() {
 
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
         {[
-          { id: 'plans', label: 'Plans' },
-          { id: 'notifications', label: `Notifications${unread ? ` (${unread})` : ''}` },
+          canSettings ? { id: 'plans', label: 'Plans' } : null,
+          canAlerts ? { id: 'notifications', label: `Notifications${unread ? ` (${unread})` : ''}` } : null,
           { id: 'payments', label: 'Historique paiements' },
           { id: 'subscriptions', label: 'Abonnements' },
-        ].map((t) => (
+        ].filter(Boolean).map((t) => (
           <button
             key={t.id}
             type="button"
@@ -247,9 +303,11 @@ export default function AdminPaymentsPage() {
             {t.label}
           </button>
         ))}
+        {canSettings && (
         <Link to="/admin/businesses" className="ml-auto text-sm font-semibold text-teal-700 hover:underline self-center">
           Entreprises →
         </Link>
+        )}
       </div>
 
       {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
@@ -258,8 +316,35 @@ export default function AdminPaymentsPage() {
       )}
       {loading && <div className="py-10 text-center text-sm text-gray-500">Chargement…</div>}
 
-      {!loading && tab === 'plans' && (
+      {!loading && tab === 'plans' && canSettings && (
         <div className="space-y-4">
+          <section className="rounded-2xl border border-amber-200 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-800 p-5 space-y-3">
+            <h2 className="font-bold text-gray-900 dark:text-white">Période de grâce — toutes les entreprises</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              {graceNote || 'Après l’échéance, l’accès reste ouvert pendant ce nombre de jours. Le décompte avance chaque jour. Une alerte part 5 jours avant l’expiration.'}
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="text-xs font-semibold text-gray-600">
+                Jours de grâce
+                <input
+                  type="number"
+                  min="0"
+                  max="365"
+                  value={graceDays}
+                  onChange={(e) => setGraceDays(e.target.value)}
+                  className="mt-1 block w-28 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-950"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={saveGrace}
+                disabled={savingGrace}
+                className="px-4 py-2 rounded-lg bg-teal-700 text-white text-sm font-semibold disabled:opacity-50"
+              >
+                {savingGrace ? 'Enregistrement…' : 'Enregistrer la grâce'}
+              </button>
+            </div>
+          </section>
           {plansNote && (
             <p className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
               <Layers className="w-4 h-4 mt-0.5 shrink-0 text-teal-700" />
@@ -381,7 +466,7 @@ export default function AdminPaymentsPage() {
                     ['Propriétaire', n.details.owner_email],
                     ['Plan', n.details.plan_name],
                     ['Montant', n.details.amount_bif != null ? `${Number(n.details.amount_bif).toLocaleString('fr-BI')} ${n.details.currency || 'BIF'}` : null],
-                    ['Lumicash', n.details.payer_phone],
+                    ['BurundiPay', n.details.payer_phone],
                     ['Référence', n.details.provider_reference],
                     ['Marchand', n.details.merchant_account],
                     ['Initié par', n.details.initiated_by_email],
@@ -402,6 +487,7 @@ export default function AdminPaymentsPage() {
 
       {!loading && tab === 'payments' && (
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
           <select
             value={payFilter}
             onChange={(e) => setPayFilter(e.target.value)}
@@ -413,6 +499,29 @@ export default function AdminPaymentsPage() {
             <option value="FAILED">Échoués</option>
             <option value="PENDING">En attente</option>
           </select>
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                const rows = paymentRows || [];
+                const header = ['entreprise', 'plan', 'montant', 'statut', 'telephone', 'paye_le'];
+                const lines = rows.map((p) => [
+                  p.business_name, p.plan_name, p.amount_bif, p.status, p.payer_phone, p.paid_at,
+                ].map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','));
+                const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'paiements-saas.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="px-3 py-2 rounded-lg bg-teal-700 text-white text-sm font-semibold"
+            >
+              Exporter CSV
+            </button>
+          )}
+          </div>
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 dark:bg-black/20 text-xs uppercase tracking-wide text-gray-500">
@@ -420,7 +529,7 @@ export default function AdminPaymentsPage() {
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Entreprise</th>
                   <th className="px-4 py-3">Plan / montant</th>
-                  <th className="px-4 py-3">Lumicash</th>
+                  <th className="px-4 py-3">BurundiPay</th>
                   <th className="px-4 py-3">Statut</th>
                   <th className="px-4 py-3">Réf.</th>
                 </tr>
@@ -514,10 +623,14 @@ export default function AdminPaymentsPage() {
                       <span className="inline-flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" />
                         {row.ends_at ? new Date(row.ends_at).toLocaleDateString('fr-FR') : '—'}
-                        {typeof row.days_remaining === 'number' ? ` (${row.days_remaining}j)` : ''}
+                        {row.in_grace
+                          ? ` · grâce jour ${row.grace_days_elapsed}/${row.grace_period_days}`
+                          : (typeof row.days_remaining === 'number' ? ` (${row.days_remaining}j)` : '')}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right space-x-2">
+                      {canSuspend && (
+                        <>
                       <button
                         type="button"
                         disabled={busyId === row.business_id}
@@ -534,6 +647,8 @@ export default function AdminPaymentsPage() {
                       >
                         Suspendre
                       </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

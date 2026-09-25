@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 import uuid
@@ -26,6 +27,64 @@ class SiteSettings(models.Model):
         blank=True,
         default="© Isoko Hub. All rights reserved.",
     )
+    # Footer « Tea Circle » style — dynamiques via CMS
+    footer_headline = models.CharField(
+        max_length=255,
+        blank=True,
+        default="Tout ce dont vous avez besoin — en une seule plateforme.",
+        help_text="Grand titre en haut du footer",
+    )
+    footer_newsletter_title = models.CharField(
+        max_length=120, blank=True, default="Restez informé !",
+    )
+    footer_newsletter_placeholder = models.CharField(
+        max_length=120, blank=True, default="Votre email",
+    )
+    footer_newsletter_button = models.CharField(
+        max_length=80, blank=True, default="S'abonner",
+    )
+    footer_show_newsletter = models.BooleanField(default=True)
+    footer_contact_email = models.EmailField(blank=True, default="support@isokohub.com")
+    footer_contact_phone = models.CharField(max_length=50, blank=True, default="")
+    footer_contact_title = models.CharField(
+        max_length=80, blank=True, default="Contact information",
+    )
+    footer_follow_title = models.CharField(
+        max_length=80, blank=True, default="Follow us",
+    )
+    # [{"network":"facebook","url":"https://..."}, ...]
+    footer_social_links = models.JSONField(default=list, blank=True)
+
+    # Page Contact Us (design type Kassapay)
+    contact_hero_subtitle = models.CharField(
+        max_length=255,
+        blank=True,
+        default='Isoko Hub est prêt à vous accompagner selon vos besoins.',
+    )
+    contact_hero_image = models.TextField(
+        blank=True,
+        default='',
+        help_text='URL ou image base64 du hero Contact Us.',
+    )
+    contact_intro = models.TextField(
+        blank=True,
+        default=(
+            'Une question sur la plateforme, un partenariat ou un besoin support ? '
+            'Écrivez-nous — l’équipe Super Admin vous répondra.'
+        ),
+    )
+    contact_office_address = models.CharField(
+        max_length=255,
+        blank=True,
+        default='Bujumbura, Burundi',
+    )
+    contact_google_maps_url = models.TextField(
+        blank=True,
+        default='',
+        help_text='Lien Google Maps (partage ou embed) pour la carte Contact Us.',
+    )
+    contact_map_lat = models.CharField(max_length=20, blank=True, default='-3.3731')
+    contact_map_lng = models.CharField(max_length=20, blank=True, default='29.9189')
 
     hero_title = models.TextField(default="Everything you need,\nin one platform.")
     hero_subtitle = models.TextField(
@@ -185,7 +244,7 @@ class ContentPage(models.Model):
 
 
 class ContactMessage(models.Model):
-    """Message public « Contact Us » destiné au Super Admin."""
+    """Message public « Contact Us » — Support / Super Admin."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=150)
@@ -195,6 +254,15 @@ class ContactMessage(models.Model):
     message = models.TextField()
     is_read = models.BooleanField(default=False)
     admin_notes = models.TextField(blank=True)
+    reply_body = models.TextField(blank=True, help_text='Dernière réponse envoyée au client')
+    replied_at = models.DateTimeField(null=True, blank=True)
+    replied_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='contact_replies',
+    )
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)

@@ -9,7 +9,7 @@ from products.models import Product, ProductVariant
 class Order(models.Model):
     """
     Commande Commerce (retrait uniquement) + legacy bookings métier générique.
-    Paiement Lumicash avant acceptation par le commerçant.
+    Paiement BurundiPay avant acceptation par le commerçant.
     """
     STATUS_CHOICES = (
         ('PENDING', 'En attente'),
@@ -22,7 +22,7 @@ class Order(models.Model):
 
     PAYMENT_STATUS_CHOICES = (
         ('UNPAID', 'Non payée'),
-        ('AWAITING_PIN', 'En attente PIN Lumicash'),
+        ('AWAITING_PIN', 'En attente PIN BurundiPay'),
         ('PAID', 'Payée'),
         ('FAILED', 'Échec paiement'),
         ('REFUNDED', 'Remboursée'),
@@ -56,7 +56,7 @@ class Order(models.Model):
     notes = models.TextField(blank=True, null=True)
     reference_code = models.CharField(max_length=40, blank=True, default='', db_index=True)
 
-    # Paiement Lumicash
+    # Paiement BurundiPay
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='UNPAID')
     payment_method = models.CharField(max_length=40, blank=True, default='')
     payer_phone = models.CharField(max_length=30, blank=True, default='')

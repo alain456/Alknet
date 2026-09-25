@@ -13,6 +13,55 @@ class IsSuperAdmin(permissions.BasePermission):
         return user.role == 'SUPER_ADMIN' or bool(getattr(user, 'is_superuser', False))
 
 
+class PlatformMethodPermission(permissions.BasePermission):
+    """
+    Droit CRUD plateforme.
+    La vue déclare platform_method_permissions = {'GET': 'platform.users.view', ...}
+    Une valeur tuple autorise n'importe quelle clé de la liste.
+    """
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        mapping = getattr(view, 'platform_method_permissions', None) or {}
+        method = request.method
+        if method in ('HEAD', 'OPTIONS') and method not in mapping:
+            method = 'GET'
+        needed = mapping.get(method)
+        if not needed:
+            return False
+        from accounts.platform_access import user_has_any_platform_perm, user_has_platform_perm
+        if isinstance(needed, (list, tuple)):
+            return user_has_any_platform_perm(user, needed)
+        return user_has_platform_perm(user, needed)
+
+
+class PlatformResourcePermission(permissions.BasePermission):
+    """CRUD automatique : platform.{platform_resource}.{view|create|update|delete}."""
+
+    METHOD_ACTION = {
+        'GET': 'view',
+        'HEAD': 'view',
+        'OPTIONS': 'view',
+        'POST': 'create',
+        'PUT': 'update',
+        'PATCH': 'update',
+        'DELETE': 'delete',
+    }
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        resource = getattr(view, 'platform_resource', None)
+        action = self.METHOD_ACTION.get(request.method)
+        if not resource or not action:
+            return False
+        from accounts.platform_access import user_has_platform_perm
+        return user_has_platform_perm(user, f'platform.{resource}.{action}')
+
+
 class IsBusinessOwner(permissions.BasePermission):
     """Propriétaire d'entreprise uniquement (pas Super Admin)."""
 

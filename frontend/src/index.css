@@ -1,46 +1,354 @@
+/* Polices : stacks système (pas de CDN Google — évite ERR_NAME_NOT_RESOLVED hors ligne) */
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* Dark uniquement avec classe .dark — pas via préférence système (évite pages « noires ») */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Isoko Hub — palette logo (4 couleurs uniquement)
+  #1B4F9C  Primary  (ISOKO / chariot — identité)
+  #1E8B4A  Accent   (HUB — actions / succès)
+  #E1302A  Alert    (auvent / chaussure — danger)
+  #F5F5F3  Surface  (fond off-white)
+  Nuances = color-mix avec Surface (aucun autre hex).
+*/
 
 @theme {
-  /* Typography */
-  --font-display: "Fraunces", serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+  /* Typography — fallbacks système si les packages fontsource manquent */
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+  --font-body: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
 
-  /* Colors - Isoko Hub Design System */
-  --color-primary: #1F4D3D;
-  --color-secondary: #14231C;
-  --color-accent: #C98A2E;
-  --color-clay: #A64B2A;
-  --color-paper: #F4F5F0;
-  --color-surface: #F5F7FA;
-  --color-ink: #1C2620;
-  --color-ink-muted: #5C6660;
-  --color-ink-faint: #8A928C;
-  --color-border: #DDE1D8;
-  --color-success: #2F7A4F;
-  --color-error: #B23A2E;
+  /* ——— Brand (seules sources) ——— */
+  --color-primary: #1B4F9C;
+  --color-accent: #1E8B4A;
+  --color-alert: #E1302A;
+  --color-surface: #F5F5F3;
+  --color-action: #1E8B4A;
 
-  /* Additional green shades for gradients */
-  --color-green-900: #14231C;
-  --color-green-700: #1F4D3D;
-  --color-green-500: #2F6B54;
-  --color-green-100: #DCE8E1;
-  --color-green-50: #EEF3EF;
+  /* Compat anciens tokens sémantiques → palette */
+  --color-secondary: #1B4F9C;
+  --color-clay: #E1302A;
+  --color-paper: #F5F5F3;
+  --color-ink: #1B4F9C;
+  --color-ink-muted: color-mix(in srgb, #1B4F9C 82%, #F5F5F3);
+  --color-ink-faint: color-mix(in srgb, #1B4F9C 68%, #F5F5F3);
+  --color-border: color-mix(in srgb, #1B4F9C 32%, #F5F5F3);
+  --color-border-strong: color-mix(in srgb, #1B4F9C 48%, #F5F5F3);
+  --color-success: #1E8B4A;
+  --color-error: #E1302A;
+  --color-warning: #E1302A;
+  --color-on-primary: #F5F5F3;
+  --color-on-accent: #F5F5F3;
+  --color-on-alert: #F5F5F3;
 
-  /* Additional gold shades */
-  --color-gold-600: #C98A2E;
-  --color-gold-100: #F5E6CB;
-  --color-gold-50: #FBF3E3;
+  /* Primary scale */
+  --color-primary-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-primary-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-primary-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-primary-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-primary-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-primary-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-primary-600: #1B4F9C;
+  --color-primary-700: #1B4F9C;
+  --color-primary-800: #1B4F9C;
+  --color-primary-900: #1B4F9C;
+  --color-primary-950: #1B4F9C;
 
-  /* Additional clay shades */
-  --color-clay-600: #A64B2A;
-  --color-clay-100: #F2DED4;
+  /* Accent scale */
+  --color-accent-50: color-mix(in srgb, #1E8B4A 8%, #F5F5F3);
+  --color-accent-100: color-mix(in srgb, #1E8B4A 16%, #F5F5F3);
+  --color-accent-200: color-mix(in srgb, #1E8B4A 28%, #F5F5F3);
+  --color-accent-300: color-mix(in srgb, #1E8B4A 42%, #F5F5F3);
+  --color-accent-400: color-mix(in srgb, #1E8B4A 65%, #F5F5F3);
+  --color-accent-500: #1E8B4A;
+  --color-accent-600: #1E8B4A;
+  --color-accent-700: #1E8B4A;
+  --color-accent-800: #1E8B4A;
+  --color-accent-900: #1E8B4A;
 
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(20, 35, 28, 0.06), 0 1px 1px rgba(20, 35, 28, 0.04);
-  --shadow-md: 0 4px 14px rgba(20, 35, 28, 0.08), 0 2px 4px rgba(20, 35, 28, 0.05);
-  --shadow-lg: 0 16px 40px rgba(20, 35, 28, 0.14), 0 4px 12px rgba(20, 35, 28, 0.06);
+  /* Alert scale */
+  --color-alert-50: color-mix(in srgb, #E1302A 8%, #F5F5F3);
+  --color-alert-100: color-mix(in srgb, #E1302A 16%, #F5F5F3);
+  --color-alert-200: color-mix(in srgb, #E1302A 28%, #F5F5F3);
+  --color-alert-300: color-mix(in srgb, #E1302A 42%, #F5F5F3);
+  --color-alert-400: color-mix(in srgb, #E1302A 65%, #F5F5F3);
+  --color-alert-500: #E1302A;
+  --color-alert-600: #E1302A;
+  --color-alert-700: #E1302A;
+  --color-alert-800: #E1302A;
+  --color-alert-900: #E1302A;
+
+  /* Legacy brand aliases */
+  --color-green-50: color-mix(in srgb, #1E8B4A 6%, #F5F5F3);
+  --color-green-100: color-mix(in srgb, #1E8B4A 12%, #F5F5F3);
+  --color-green-500: color-mix(in srgb, #1E8B4A 78%, #F5F5F3);
+  --color-green-700: #1E8B4A;
+  --color-green-900: #1E8B4A;
+  --color-gold-50: color-mix(in srgb, #1E8B4A 8%, #F5F5F3);
+  --color-gold-100: color-mix(in srgb, #1E8B4A 16%, #F5F5F3);
+  --color-gold-500: #1E8B4A;
+  --color-gold-600: #1E8B4A;
+  --color-clay-100: color-mix(in srgb, #E1302A 16%, #F5F5F3);
+  --color-clay-600: #E1302A;
+
+  /* Blanc réel pour text-white / bg-white (contraste boutons & heroes) */
+  --color-white: #FFFFFF;
+  --color-black: #1B4F9C;
+
+  /* ——— Remap Tailwind defaults → 4 couleurs ——— */
+  /* Neutrals → surface + primary */
+  --color-gray-50: #F5F5F3;
+  --color-gray-100: color-mix(in srgb, #1B4F9C 8%, #F5F5F3);
+  --color-gray-200: color-mix(in srgb, #1B4F9C 28%, #F5F5F3);
+  --color-gray-300: color-mix(in srgb, #1B4F9C 38%, #F5F5F3);
+  --color-gray-400: color-mix(in srgb, #1B4F9C 68%, #F5F5F3);
+  --color-gray-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-gray-600: color-mix(in srgb, #1B4F9C 88%, #F5F5F3);
+  --color-gray-700: #1B4F9C;
+  --color-gray-800: #1B4F9C;
+  --color-gray-900: #1B4F9C;
+  --color-gray-950: #1B4F9C;
+
+  --color-slate-50: #F5F5F3;
+  --color-slate-100: color-mix(in srgb, #1B4F9C 8%, #F5F5F3);
+  --color-slate-200: color-mix(in srgb, #1B4F9C 28%, #F5F5F3);
+  --color-slate-300: color-mix(in srgb, #1B4F9C 38%, #F5F5F3);
+  --color-slate-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-slate-500: color-mix(in srgb, #1B4F9C 65%, #F5F5F3);
+  --color-slate-600: color-mix(in srgb, #1B4F9C 75%, #F5F5F3);
+  --color-slate-700: #1B4F9C;
+  --color-slate-800: #1B4F9C;
+  --color-slate-900: #1B4F9C;
+  --color-slate-950: #1B4F9C;
+
+  --color-zinc-50: #F5F5F3;
+  --color-zinc-100: color-mix(in srgb, #1B4F9C 8%, #F5F5F3);
+  --color-zinc-200: color-mix(in srgb, #1B4F9C 28%, #F5F5F3);
+  --color-zinc-300: color-mix(in srgb, #1B4F9C 38%, #F5F5F3);
+  --color-zinc-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-zinc-500: color-mix(in srgb, #1B4F9C 65%, #F5F5F3);
+  --color-zinc-600: color-mix(in srgb, #1B4F9C 75%, #F5F5F3);
+  --color-zinc-700: #1B4F9C;
+  --color-zinc-800: #1B4F9C;
+  --color-zinc-900: #1B4F9C;
+  --color-zinc-950: #1B4F9C;
+
+  --color-neutral-50: #F5F5F3;
+  --color-neutral-100: color-mix(in srgb, #1B4F9C 8%, #F5F5F3);
+  --color-neutral-200: color-mix(in srgb, #1B4F9C 28%, #F5F5F3);
+  --color-neutral-300: color-mix(in srgb, #1B4F9C 38%, #F5F5F3);
+  --color-neutral-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-neutral-500: color-mix(in srgb, #1B4F9C 65%, #F5F5F3);
+  --color-neutral-600: color-mix(in srgb, #1B4F9C 75%, #F5F5F3);
+  --color-neutral-700: #1B4F9C;
+  --color-neutral-800: #1B4F9C;
+  --color-neutral-900: #1B4F9C;
+  --color-neutral-950: #1B4F9C;
+
+  --color-stone-50: #F5F5F3;
+  --color-stone-100: color-mix(in srgb, #1B4F9C 8%, #F5F5F3);
+  --color-stone-200: color-mix(in srgb, #1B4F9C 28%, #F5F5F3);
+  --color-stone-300: color-mix(in srgb, #1B4F9C 38%, #F5F5F3);
+  --color-stone-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-stone-500: color-mix(in srgb, #1B4F9C 65%, #F5F5F3);
+  --color-stone-600: color-mix(in srgb, #1B4F9C 75%, #F5F5F3);
+  --color-stone-700: #1B4F9C;
+  --color-stone-800: #1B4F9C;
+  --color-stone-900: #1B4F9C;
+  --color-stone-950: #1B4F9C;
+
+  /* Greens / teals / emerald → primary */
+  --color-teal-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-teal-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-teal-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-teal-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-teal-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-teal-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-teal-600: #1B4F9C;
+  --color-teal-700: #1B4F9C;
+  --color-teal-800: #1B4F9C;
+  --color-teal-900: #1B4F9C;
+  --color-teal-950: #1B4F9C;
+
+  --color-emerald-50: color-mix(in srgb, #1E8B4A 6%, #F5F5F3);
+  --color-emerald-100: color-mix(in srgb, #1E8B4A 12%, #F5F5F3);
+  --color-emerald-200: color-mix(in srgb, #1E8B4A 22%, #F5F5F3);
+  --color-emerald-300: color-mix(in srgb, #1E8B4A 35%, #F5F5F3);
+  --color-emerald-400: color-mix(in srgb, #1E8B4A 55%, #F5F5F3);
+  --color-emerald-500: color-mix(in srgb, #1E8B4A 78%, #F5F5F3);
+  --color-emerald-600: #1E8B4A;
+  --color-emerald-700: #1E8B4A;
+  --color-emerald-800: #1E8B4A;
+  --color-emerald-900: #1E8B4A;
+  --color-emerald-950: #1E8B4A;
+
+  --color-green-200: color-mix(in srgb, #1E8B4A 22%, #F5F5F3);
+  --color-green-300: color-mix(in srgb, #1E8B4A 35%, #F5F5F3);
+  --color-green-400: color-mix(in srgb, #1E8B4A 55%, #F5F5F3);
+  --color-green-600: #1E8B4A;
+  --color-green-800: #1E8B4A;
+  --color-green-950: #1E8B4A;
+
+  --color-lime-50: color-mix(in srgb, #1E8B4A 6%, #F5F5F3);
+  --color-lime-100: color-mix(in srgb, #1E8B4A 12%, #F5F5F3);
+  --color-lime-200: color-mix(in srgb, #1E8B4A 22%, #F5F5F3);
+  --color-lime-300: color-mix(in srgb, #1E8B4A 35%, #F5F5F3);
+  --color-lime-400: color-mix(in srgb, #1E8B4A 55%, #F5F5F3);
+  --color-lime-500: color-mix(in srgb, #1E8B4A 78%, #F5F5F3);
+  --color-lime-600: #1E8B4A;
+  --color-lime-700: #1E8B4A;
+  --color-lime-800: #1E8B4A;
+  --color-lime-900: #1E8B4A;
+
+  /* Blues / indigo / cyan / sky / violet → primary (identité) */
+  --color-blue-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-blue-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-blue-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-blue-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-blue-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-blue-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-blue-600: #1B4F9C;
+  --color-blue-700: #1B4F9C;
+  --color-blue-800: #1B4F9C;
+  --color-blue-900: #1B4F9C;
+  --color-blue-950: #1B4F9C;
+
+  --color-indigo-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-indigo-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-indigo-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-indigo-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-indigo-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-indigo-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-indigo-600: #1B4F9C;
+  --color-indigo-700: #1B4F9C;
+  --color-indigo-800: #1B4F9C;
+  --color-indigo-900: #1B4F9C;
+  --color-indigo-950: #1B4F9C;
+
+  --color-sky-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-sky-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-sky-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-sky-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-sky-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-sky-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-sky-600: #1B4F9C;
+  --color-sky-700: #1B4F9C;
+  --color-sky-800: #1B4F9C;
+  --color-sky-900: #1B4F9C;
+
+  --color-cyan-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-cyan-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-cyan-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-cyan-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-cyan-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-cyan-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-cyan-600: #1B4F9C;
+  --color-cyan-700: #1B4F9C;
+  --color-cyan-800: #1B4F9C;
+  --color-cyan-900: #1B4F9C;
+
+  --color-violet-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-violet-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-violet-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-violet-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-violet-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-violet-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-violet-600: #1B4F9C;
+  --color-violet-700: #1B4F9C;
+  --color-violet-800: #1B4F9C;
+  --color-violet-900: #1B4F9C;
+
+  --color-purple-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-purple-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-purple-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-purple-300: color-mix(in srgb, #1B4F9C 35%, #F5F5F3);
+  --color-purple-400: color-mix(in srgb, #1B4F9C 55%, #F5F5F3);
+  --color-purple-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-purple-600: #1B4F9C;
+  --color-purple-700: #1B4F9C;
+  --color-purple-800: #1B4F9C;
+  --color-purple-900: #1B4F9C;
+
+  --color-fuchsia-50: color-mix(in srgb, #1B4F9C 6%, #F5F5F3);
+  --color-fuchsia-100: color-mix(in srgb, #1B4F9C 12%, #F5F5F3);
+  --color-fuchsia-200: color-mix(in srgb, #1B4F9C 22%, #F5F5F3);
+  --color-fuchsia-500: color-mix(in srgb, #1B4F9C 78%, #F5F5F3);
+  --color-fuchsia-600: #1B4F9C;
+  --color-fuchsia-700: #1B4F9C;
+
+  /* Amber / yellow / orange → accent */
+  --color-amber-50: color-mix(in srgb, #1E8B4A 8%, #F5F5F3);
+  --color-amber-100: color-mix(in srgb, #1E8B4A 16%, #F5F5F3);
+  --color-amber-200: color-mix(in srgb, #1E8B4A 28%, #F5F5F3);
+  --color-amber-300: color-mix(in srgb, #1E8B4A 42%, #F5F5F3);
+  --color-amber-400: color-mix(in srgb, #1E8B4A 65%, #F5F5F3);
+  --color-amber-500: #1E8B4A;
+  --color-amber-600: #1E8B4A;
+  --color-amber-700: #1E8B4A;
+  --color-amber-800: #1E8B4A;
+  --color-amber-900: #1E8B4A;
+
+  --color-yellow-50: color-mix(in srgb, #1E8B4A 8%, #F5F5F3);
+  --color-yellow-100: color-mix(in srgb, #1E8B4A 16%, #F5F5F3);
+  --color-yellow-200: color-mix(in srgb, #1E8B4A 28%, #F5F5F3);
+  --color-yellow-300: color-mix(in srgb, #1E8B4A 42%, #F5F5F3);
+  --color-yellow-400: color-mix(in srgb, #1E8B4A 65%, #F5F5F3);
+  --color-yellow-500: #1E8B4A;
+  --color-yellow-600: #1E8B4A;
+  --color-yellow-700: #1E8B4A;
+  --color-yellow-800: #1E8B4A;
+  --color-yellow-900: #1E8B4A;
+
+  --color-orange-50: color-mix(in srgb, #1E8B4A 8%, #F5F5F3);
+  --color-orange-100: color-mix(in srgb, #1E8B4A 16%, #F5F5F3);
+  --color-orange-200: color-mix(in srgb, #1E8B4A 28%, #F5F5F3);
+  --color-orange-300: color-mix(in srgb, #1E8B4A 42%, #F5F5F3);
+  --color-orange-400: color-mix(in srgb, #1E8B4A 65%, #F5F5F3);
+  --color-orange-500: #1E8B4A;
+  --color-orange-600: #1E8B4A;
+  --color-orange-700: #1E8B4A;
+  --color-orange-800: #1E8B4A;
+  --color-orange-900: #1E8B4A;
+
+  /* Red / rose / pink → alert */
+  --color-red-50: color-mix(in srgb, #E1302A 8%, #F5F5F3);
+  --color-red-100: color-mix(in srgb, #E1302A 16%, #F5F5F3);
+  --color-red-200: color-mix(in srgb, #E1302A 28%, #F5F5F3);
+  --color-red-300: color-mix(in srgb, #E1302A 42%, #F5F5F3);
+  --color-red-400: color-mix(in srgb, #E1302A 65%, #F5F5F3);
+  --color-red-500: #E1302A;
+  --color-red-600: #E1302A;
+  --color-red-700: #E1302A;
+  --color-red-800: #E1302A;
+  --color-red-900: #E1302A;
+  --color-red-950: #E1302A;
+
+  --color-rose-50: color-mix(in srgb, #E1302A 8%, #F5F5F3);
+  --color-rose-100: color-mix(in srgb, #E1302A 16%, #F5F5F3);
+  --color-rose-200: color-mix(in srgb, #E1302A 28%, #F5F5F3);
+  --color-rose-300: color-mix(in srgb, #E1302A 42%, #F5F5F3);
+  --color-rose-400: color-mix(in srgb, #E1302A 65%, #F5F5F3);
+  --color-rose-500: #E1302A;
+  --color-rose-600: #E1302A;
+  --color-rose-700: #E1302A;
+  --color-rose-800: #E1302A;
+  --color-rose-900: #E1302A;
+
+  --color-pink-50: color-mix(in srgb, #E1302A 8%, #F5F5F3);
+  --color-pink-100: color-mix(in srgb, #E1302A 16%, #F5F5F3);
+  --color-pink-200: color-mix(in srgb, #E1302A 28%, #F5F5F3);
+  --color-pink-300: color-mix(in srgb, #E1302A 42%, #F5F5F3);
+  --color-pink-400: color-mix(in srgb, #E1302A 65%, #F5F5F3);
+  --color-pink-500: #E1302A;
+  --color-pink-600: #E1302A;
+  --color-pink-700: #E1302A;
+  --color-pink-800: #E1302A;
+  --color-pink-900: #E1302A;
+
+  /* Shadows (primary only) */
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #1B4F9C 8%, transparent), 0 1px 1px color-mix(in srgb, #1B4F9C 5%, transparent);
+  --shadow-md: 0 4px 14px color-mix(in srgb, #1B4F9C 10%, transparent), 0 2px 4px color-mix(in srgb, #1B4F9C 6%, transparent);
+  --shadow-lg: 0 16px 40px color-mix(in srgb, #1B4F9C 14%, transparent), 0 4px 12px color-mix(in srgb, #1B4F9C 7%, transparent);
 
   /* Radius */
   --radius-sm: 6px;
@@ -48,20 +356,264 @@
   --radius-lg: 18px;
 }
 
+/* ——— Mode sombre (même palette logo, surfaces inversées) ——— */
+html.dark {
+  color-scheme: dark;
+
+  --color-surface: #101c30;
+  --color-paper: #0c1524;
+  --color-ink: #F5F5F3;
+  --color-ink-muted: color-mix(in srgb, #F5F5F3 72%, #1B4F9C);
+  --color-ink-faint: color-mix(in srgb, #F5F5F3 52%, #1B4F9C);
+  --color-border: color-mix(in srgb, #F5F5F3 16%, #1B4F9C);
+  --color-border-strong: color-mix(in srgb, #F5F5F3 28%, #1B4F9C);
+  --color-secondary: #3D6BB5;
+  --color-on-primary: #F5F5F3;
+  --color-on-accent: #F5F5F3;
+  --color-on-alert: #F5F5F3;
+
+  /* Primary légèrement relevé pour contraste sur fond sombre */
+  --color-primary: #3D6BB5;
+  --color-primary-50: color-mix(in srgb, #3D6BB5 14%, #0c1524);
+  --color-primary-100: color-mix(in srgb, #3D6BB5 22%, #0c1524);
+  --color-primary-200: color-mix(in srgb, #3D6BB5 32%, #0c1524);
+  --color-primary-300: color-mix(in srgb, #3D6BB5 45%, #0c1524);
+  --color-primary-400: color-mix(in srgb, #3D6BB5 62%, #0c1524);
+  --color-primary-500: #3D6BB5;
+  --color-primary-600: #3D6BB5;
+  --color-primary-700: #1B4F9C;
+  --color-primary-800: #153A75;
+  --color-primary-900: #0D2347;
+  --color-primary-950: #0a1628;
+
+  --color-accent: #2AA55C;
+  --color-action: #2AA55C;
+  --color-success: #2AA55C;
+  --color-accent-50: color-mix(in srgb, #2AA55C 14%, #0c1524);
+  --color-accent-100: color-mix(in srgb, #2AA55C 22%, #0c1524);
+  --color-accent-200: color-mix(in srgb, #2AA55C 32%, #0c1524);
+  --color-accent-500: #2AA55C;
+  --color-accent-600: #2AA55C;
+  --color-accent-700: #1E8B4A;
+
+  --color-alert: #F0453F;
+  --color-error: #F0453F;
+  --color-warning: #F0453F;
+  --color-clay: #F0453F;
+  --color-alert-50: color-mix(in srgb, #F0453F 14%, #0c1524);
+  --color-alert-100: color-mix(in srgb, #F0453F 22%, #0c1524);
+  --color-alert-500: #F0453F;
+  --color-alert-600: #F0453F;
+
+  /* Neutrals → navy brand */
+  --color-gray-50: #162339;
+  --color-gray-100: #1a2a42;
+  --color-gray-200: color-mix(in srgb, #F5F5F3 14%, #101c30);
+  --color-gray-300: color-mix(in srgb, #F5F5F3 22%, #101c30);
+  --color-gray-400: color-mix(in srgb, #F5F5F3 42%, #101c30);
+  --color-gray-500: color-mix(in srgb, #F5F5F3 55%, #101c30);
+  --color-gray-600: color-mix(in srgb, #F5F5F3 68%, #101c30);
+  --color-gray-700: #F5F5F3;
+  --color-gray-800: #162339;
+  --color-gray-900: #101c30;
+  --color-gray-950: #0c1524;
+
+  --color-slate-50: #162339;
+  --color-slate-100: #1a2a42;
+  --color-slate-200: color-mix(in srgb, #F5F5F3 14%, #101c30);
+  --color-slate-700: #F5F5F3;
+  --color-slate-800: #162339;
+  --color-slate-900: #101c30;
+  --color-slate-950: #0c1524;
+
+  --color-zinc-50: #162339;
+  --color-zinc-100: #1a2a42;
+  --color-zinc-800: #162339;
+  --color-zinc-900: #101c30;
+  --color-zinc-950: #0c1524;
+
+  --color-neutral-50: #162339;
+  --color-neutral-100: #1a2a42;
+  --color-neutral-800: #162339;
+  --color-neutral-900: #101c30;
+  --color-neutral-950: #0c1524;
+
+  --color-stone-50: #162339;
+  --color-stone-100: #1a2a42;
+  --color-stone-800: #162339;
+  --color-stone-900: #101c30;
+  --color-stone-950: #0c1524;
+
+  --color-teal-50: color-mix(in srgb, #3D6BB5 14%, #0c1524);
+  --color-teal-100: color-mix(in srgb, #3D6BB5 22%, #0c1524);
+  --color-teal-600: #3D6BB5;
+  --color-teal-700: #1B4F9C;
+  --color-teal-800: #153A75;
+  --color-teal-900: #0D2347;
+
+  --color-green-50: color-mix(in srgb, #2AA55C 14%, #0c1524);
+  --color-green-100: color-mix(in srgb, #2AA55C 22%, #0c1524);
+  --color-green-600: #2AA55C;
+  --color-green-700: #1E8B4A;
+  --color-green-800: #176B39;
+  --color-green-900: #0c1524;
+
+  --color-emerald-50: color-mix(in srgb, #2AA55C 14%, #0c1524);
+  --color-emerald-100: color-mix(in srgb, #2AA55C 22%, #0c1524);
+  --color-emerald-600: #2AA55C;
+  --color-emerald-700: #1E8B4A;
+  --color-emerald-800: #176B39;
+  --color-emerald-900: #0c1524;
+
+  --color-blue-50: color-mix(in srgb, #3D6BB5 14%, #0c1524);
+  --color-blue-600: #3D6BB5;
+  --color-blue-700: #1B4F9C;
+  --color-blue-900: #0D2347;
+
+  --color-black: #0a1220;
+
+  --shadow-sm: 0 1px 2px color-mix(in srgb, #000 35%, transparent);
+  --shadow-md: 0 4px 14px color-mix(in srgb, #000 40%, transparent);
+  --shadow-lg: 0 16px 40px color-mix(in srgb, #000 45%, transparent);
+
+  --ih-border: color-mix(in srgb, #F5F5F3 16%, #1B4F9C);
+  --ih-border-strong: color-mix(in srgb, #F5F5F3 28%, #1B4F9C);
+}
+
 @layer base {
-  body {
-    @apply bg-paper text-ink font-body;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  :root {
+    color-scheme: light;
+    --ih-border: color-mix(in srgb, #1B4F9C 32%, #F5F5F3);
+    --ih-border-strong: color-mix(in srgb, #1B4F9C 48%, #F5F5F3);
   }
 
-  /* Map the dark mode to Green 900 instead of black */
+  body {
+    @apply bg-surface text-ink font-body;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+      radial-gradient(ellipse 120% 80% at 0% -20%, color-mix(in srgb, #1B4F9C 7%, transparent), transparent 55%),
+      radial-gradient(ellipse 90% 60% at 100% 0%, color-mix(in srgb, #1E8B4A 5%, transparent), transparent 50%);
+    background-attachment: fixed;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  html.dark body {
+    background-image:
+      radial-gradient(ellipse 120% 80% at 0% -20%, color-mix(in srgb, #3D6BB5 18%, transparent), transparent 55%),
+      radial-gradient(ellipse 90% 60% at 100% 0%, color-mix(in srgb, #2AA55C 10%, transparent), transparent 50%);
+  }
+
   .dark body {
-    @apply bg-green-900 text-white;
+    @apply bg-paper text-ink;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 35%, var(--color-surface));
+    color: var(--color-ink);
+  }
+
+  /* Formulaires : bordure Accent, texte toujours lisible */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):not([type='hidden']):not([type='submit']):not([type='button']):not([type='image']):not([type='reset']):not([class*='border-none']):not([class*='border-0']):not([class*='border-transparent']),
+  select:not([class*='border-none']):not([class*='border-0']),
+  textarea:not([class*='border-none']):not([class*='border-0']) {
+    border-width: 1.5px;
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-border));
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([class*='border-none']):focus,
+  select:not([class*='border-none']):focus,
+  textarea:not([class*='border-none']):focus {
+    border-color: var(--color-primary);
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    outline: 2px solid color-mix(in srgb, var(--color-primary) 28%, transparent);
+    outline-offset: 0;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-ink-faint);
+    opacity: 1;
+  }
+
+  label {
+    color: var(--color-ink);
+  }
+
+  select option {
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    border: 1.5px solid var(--ih-border-strong);
+    accent-color: var(--color-primary);
+  }
+
+  /* Champs sur fond primary : texte surface lisible */
+  .bg-primary input:not([type='checkbox']):not([type='radio']),
+  .bg-primary select,
+  .bg-primary textarea,
+  [class*='from-primary'] input:not([type='checkbox']):not([type='radio']),
+  [class*='from-teal-900'] input:not([type='checkbox']):not([type='radio']) {
+    color: #F5F5F3 !important;
+    background-color: color-mix(in srgb, #F5F5F3 14%, transparent);
+  }
+
+  .bg-primary input::placeholder,
+  .bg-primary textarea::placeholder {
+    color: color-mix(in srgb, #F5F5F3 70%, transparent) !important;
+  }
+
+  .bg-primary label,
+  [class*='from-teal-900'] label {
+    color: #F5F5F3 !important;
+  }
+
+  /* Formulaires clairs : forcer lisibilité même si text-white héritée */
+  form input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']),
+  form select,
+  form textarea {
+    color: var(--color-ink);
+  }
+
+  form label {
+    color: var(--color-ink);
+  }
+
+  .bg-primary form input:not([type='checkbox']):not([type='radio']):not([type='submit']):not([type='button']),
+  .bg-primary form select,
+  .bg-primary form textarea,
+  .bg-primary form label {
+    color: #F5F5F3 !important;
+  }
+
+  /* ——— Tableaux ——— */
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  thead th {
+    border-bottom: 1.5px solid var(--ih-border-strong);
+  }
+
+  tbody td {
+    border-bottom: 1px solid var(--ih-border);
+  }
+
+  hr {
+    border: 0;
+    border-top: 1px solid var(--ih-border);
   }
 }
 
-/* Custom Scrollbar for the dark theme based on Green 900 */
+/* Scrollbar — primary / surface uniquement */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -69,5 +621,491 @@
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-green-100 dark:bg-green-700 rounded-full;
+  @apply bg-primary-100 dark:bg-primary-400 rounded-full;
+  border: 1px solid color-mix(in srgb, #1B4F9C 20%, #F5F5F3);
+}
+
+/*
+  Visibilité : bordures Accent / Alert (sans background-image —
+  les dégradés cassaient le contraste du texte).
+*/
+@layer components {
+  .ih-frame,
+  .ih-card,
+  .ih-panel {
+    border: 2px solid var(--color-accent);
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+
+  .ih-frame-dark {
+    border: 2px solid var(--color-accent);
+    box-shadow: 0 0 0 2px var(--color-alert);
+    color: var(--color-surface);
+  }
+
+  .ih-frame-accent,
+  .border-diff-accent {
+    border: 2px solid var(--color-accent) !important;
+  }
+
+  .ih-frame-alert,
+  .border-diff-alert {
+    border: 2px solid var(--color-alert) !important;
+  }
+
+  .ih-frame-rail {
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-accent);
+    border-top: 3px solid var(--color-alert);
+  }
+
+  /* Cartes : bordure uniquement — NE PAS forcer color (casse les boutons primary) */
+  main div[class*='rounded-2xl'][class*='border'],
+  main div[class*='rounded-xl'][class*='border'],
+  main section[class*='rounded-2xl'],
+  main section[class*='rounded-xl'],
+  main article[class*='rounded-2xl'],
+  main article[class*='rounded-xl'] {
+    border-width: 2px !important;
+    border-style: solid !important;
+  }
+
+  main .grid > div[class*='rounded-2xl']:nth-child(odd),
+  main .grid > div[class*='rounded-xl']:nth-child(odd),
+  main .space-y-4 > div[class*='rounded-2xl']:nth-child(odd) {
+    border-color: var(--color-accent) !important;
+  }
+
+  main .grid > div[class*='rounded-2xl']:nth-child(even),
+  main .grid > div[class*='rounded-xl']:nth-child(even),
+  main .space-y-4 > div[class*='rounded-2xl']:nth-child(even) {
+    border-color: var(--color-alert) !important;
+  }
+
+  /* Fonds clairs sans border */
+  main div[class*='rounded-xl'][class*='bg-white']:not([class*='border']):not([class*='rounded-full']),
+  main div[class*='rounded-2xl'][class*='bg-white']:not([class*='border']):not([class*='rounded-full']),
+  main div[class*='rounded-xl'][class*='bg-surface']:not([class*='border']):not([class*='rounded-full']),
+  main div[class*='rounded-2xl'][class*='bg-surface']:not([class*='border']):not([class*='rounded-full']) {
+    border: 2px solid var(--color-accent);
+    color: var(--color-ink);
+  }
+
+  /* Boutons secondaires (texte) */
+  main button[class*='bg-white']:not([class*='border']):not([class*='bg-primary']):not([class*='bg-accent']):not([class*='bg-alert']):not(:has(> svg:only-child)),
+  main button[class*='bg-surface']:not([class*='border']):not([class*='bg-primary']):not(:has(> svg:only-child)),
+  main button[class*='bg-gray-50']:not([class*='border']):not(:has(> svg:only-child)),
+  main button[class*='bg-gray-100']:not([class*='border']):not(:has(> svg:only-child)) {
+    border: 1.5px solid var(--color-accent);
+    color: var(--color-ink);
+  }
+
+  /*
+   * Boutons icône d'action — bordure Accent squircle partout
+   * (Crown / Eye / Power / Edit / Trash, etc.)
+   */
+  .icon-btn,
+  main button.icon-btn,
+  main button:has(> svg:only-child):not([class*='w-full']):not([class*='px-3']):not([class*='px-4']):not([class*='px-5']):not([class*='px-6']):not([class*='gap-']):not([class*='rounded-full']) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 0.375rem;
+    border-radius: 0.5rem;
+    border: 1.5px solid var(--color-accent) !important;
+    color: var(--color-ink);
+    background-color: transparent;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  }
+
+  .icon-btn:hover,
+  main button.icon-btn:hover,
+  main button:has(> svg:only-child):hover:not([class*='w-full']):not([class*='px-3']):not([class*='px-4']):not([class*='px-5']):not([class*='px-6']):not([class*='gap-']):not([class*='rounded-full']) {
+    background-color: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
+
+  .icon-btn:disabled,
+  main button.icon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .icon-btn--danger,
+  .icon-btn.icon-btn--danger {
+    color: var(--color-alert);
+  }
+
+  .icon-btn--danger:hover,
+  .icon-btn.icon-btn--danger:hover {
+    background-color: color-mix(in srgb, var(--color-alert) 10%, transparent);
+    color: var(--color-alert);
+  }
+
+  .icon-btn--muted {
+    color: var(--color-ink-faint);
+  }
+
+  /* Menus : aucune bordure décorative */
+  aside a,
+  aside button,
+  nav a,
+  nav button,
+  header nav a,
+  header nav button {
+    border: none !important;
+    border-width: 0 !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  aside[class*='border-r'] {
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+    border-left-width: 0 !important;
+    background-image: none !important;
+    box-shadow: none !important;
+  }
+
+  [role='dialog'] {
+    color: var(--color-ink);
+    border: 2px solid var(--color-accent);
+  }
+
+  div[class*='from-teal-900'][class*='rounded-2xl'],
+  div[class*='from-primary'][class*='rounded-2xl'],
+  div[class*='bg-gradient-to-r'][class*='text-white'][class*='rounded-2xl'] {
+    box-shadow:
+      0 0 0 2px var(--color-accent),
+      0 0 0 4px var(--color-alert),
+      0 12px 28px color-mix(in srgb, #1B4F9C 18%, transparent);
+    color: #F5F5F3;
+  }
+}
+
+/* ——— Lisibilité globale : texte foncé sur fond clair ——— */
+@layer base {
+  .bg-white,
+  .bg-surface,
+  .bg-paper,
+  .bg-gray-50,
+  .bg-gray-100,
+  .bg-slate-50,
+  .bg-zinc-50,
+  .bg-neutral-50,
+  .bg-stone-50,
+  .bg-teal-50,
+  .bg-emerald-50,
+  .bg-green-50,
+  .bg-lime-50,
+  .bg-cyan-50,
+  .bg-sky-50,
+  .bg-blue-50,
+  .bg-indigo-50,
+  .bg-violet-50,
+  .bg-purple-50,
+  .bg-amber-50,
+  .bg-yellow-50,
+  .bg-orange-50,
+  .bg-red-50,
+  .bg-rose-50,
+  .bg-pink-50 {
+    color: var(--color-ink);
+  }
+
+  /*
+    text-white sur fond clair → ink (sinon blanc≈surface = invisible).
+    Ne jamais appliquer si l’élément OU un ancêtre est un fond sombre.
+  */
+  :where(.bg-white, .bg-surface, .bg-paper, .bg-gray-50, .bg-gray-100,
+         .bg-teal-50, .bg-emerald-50, .bg-green-50, .bg-amber-50)
+  .text-white:not(.bg-primary):not(.bg-secondary):not(.bg-accent):not(.bg-alert):not(.bg-teal-600):not(.bg-teal-700):not(.bg-teal-800):not(.bg-green-600):not(.bg-green-700):not(.bg-green-800):not(.bg-green-900):not(.bg-emerald-600):not(.bg-emerald-700):not(.bg-violet-600):not(.bg-violet-700):not(.bg-purple-600):not(.bg-indigo-600):not(.bg-red-600):not(.bg-red-700):not(.bg-gray-900):not(.bg-blue-600) {
+    color: var(--color-ink);
+  }
+
+  /* Annule le rewrite ci-dessus dès qu’on est dans un fond sombre */
+  :is(.bg-primary, .bg-secondary, .bg-accent, .bg-alert,
+      .bg-teal-600, .bg-teal-700, .bg-teal-800, .bg-teal-900,
+      .bg-green-600, .bg-green-700, .bg-green-800, .bg-green-900,
+      .bg-emerald-600, .bg-emerald-700, .bg-violet-600, .bg-gray-900)
+  .text-white,
+  :is(.bg-primary, .bg-secondary, .bg-accent, .bg-alert) .text-surface,
+  :is([class*='from-primary'], [class*='from-teal-9']) .text-white,
+  :is([class*='from-primary'], [class*='from-teal-9']) .text-surface {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+  }
+
+  /* Nom plateforme toujours lisible dans le header public */
+  header .ih-brand-name,
+  header a .ih-brand-name,
+  .bg-primary .ih-brand-name {
+    color: #F5F5F3 !important;
+    -webkit-text-fill-color: #F5F5F3 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  button.bg-primary,
+  a.bg-primary,
+  button.bg-secondary,
+  a.bg-secondary,
+  button.bg-teal-600,
+  a.bg-teal-600,
+  button.bg-teal-700,
+  a.bg-teal-700,
+  button.bg-teal-800,
+  a.bg-teal-800,
+  button.bg-green-600,
+  a.bg-green-600,
+  button.bg-green-700,
+  a.bg-green-700,
+  button.bg-green-800,
+  a.bg-green-800,
+  button.bg-green-900,
+  a.bg-green-900,
+  button.bg-emerald-600,
+  a.bg-emerald-600,
+  button.bg-emerald-700,
+  a.bg-emerald-700,
+  button.bg-violet-600,
+  a.bg-violet-600,
+  button.bg-violet-700,
+  a.bg-violet-700,
+  button.bg-purple-600,
+  a.bg-purple-600,
+  button.bg-indigo-600,
+  a.bg-indigo-600,
+  button.bg-red-600,
+  a.bg-red-600,
+  button.bg-red-700,
+  a.bg-red-700,
+  button.bg-gray-900,
+  a.bg-gray-900,
+  button.bg-blue-600,
+  a.bg-blue-600,
+  button.bg-indigo-600,
+  a.bg-indigo-600,
+  button.bg-accent,
+  a.bg-accent,
+  button.bg-alert,
+  a.bg-alert,
+  .bg-primary.text-white,
+  .bg-primary.text-surface,
+  .bg-secondary.text-white,
+  .bg-green-600.text-white,
+  .bg-green-700.text-white,
+  .bg-green-800.text-white,
+  .bg-green-900.text-white,
+  .bg-violet-600.text-white,
+  .bg-violet-700.text-white,
+  .bg-purple-600.text-white,
+  .bg-indigo-600.text-white,
+  .bg-red-600.text-white,
+  .bg-red-700.text-white,
+  .bg-teal-700.text-white,
+  .bg-gray-900.text-white,
+  .bg-blue-600.text-white,
+  .bg-accent.text-white,
+  .bg-accent.text-surface,
+  .bg-alert.text-white,
+  .bg-alert.text-surface {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+  }
+
+  /* Pills / badges clairs : texte primary (sans forcer les descendants — casse les boutons) */
+  .bg-teal-50,
+  .bg-emerald-50,
+  .bg-green-50,
+  .bg-gray-100,
+  .bg-accent-50,
+  .bg-amber-50 {
+    color: var(--color-ink);
+  }
+
+  /* Fonds sombres : texte surface */
+  .bg-primary,
+  .bg-secondary,
+  .bg-teal-600,
+  .bg-teal-700,
+  .bg-teal-800,
+  .bg-teal-900,
+  .bg-emerald-600,
+  .bg-emerald-700,
+  .bg-emerald-800,
+  .bg-emerald-900,
+  .bg-green-600,
+  .bg-green-700,
+  .bg-green-800,
+  .bg-green-900,
+  .bg-violet-600,
+  .bg-violet-700,
+  .bg-purple-600,
+  .bg-indigo-600,
+  .bg-accent,
+  .bg-accent-500,
+  .bg-accent-600,
+  .bg-alert,
+  .bg-alert-500,
+  .bg-alert-600,
+  .bg-red-600,
+  .bg-red-700 {
+    color: #F5F5F3;
+  }
+
+  .bg-primary .text-white,
+  .bg-primary .text-surface,
+  .bg-secondary .text-white,
+  .bg-teal-600 .text-white,
+  .bg-teal-700 .text-white,
+  .bg-teal-800 .text-white,
+  .bg-teal-900 .text-white,
+  .bg-green-600 .text-white,
+  .bg-green-700 .text-white,
+  .bg-green-800 .text-white,
+  .bg-green-900 .text-white,
+  .bg-violet-600 .text-white,
+  .bg-emerald-600 .text-white,
+  .bg-emerald-700 .text-white,
+  .bg-gray-900 .text-white,
+  .bg-blue-600 .text-white,
+  .bg-accent .text-white,
+  .bg-alert .text-white,
+  [class*='from-primary'] .text-white,
+  [class*='from-primary'] .text-surface,
+  [class*='from-teal-9'] .text-white,
+  .bg-primary [class*='text-teal-'],
+  .bg-primary [class*='text-emerald-'],
+  .bg-primary [class*='text-green-1'],
+  .bg-teal-600 [class*='text-teal-'],
+  [class*='from-primary'] [class*='text-teal-'],
+  [class*='from-primary'] button:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']),
+  .bg-primary button:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']),
+  .bg-primary a:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']) {
+    color: #F5F5F3 !important;
+  }
+
+  /* Titres / corps : toujours ink sauf sur fond sombre */
+  h1, h2, h3, h4, h5, h6, p, li, td, th, label, strong, span {
+    color: inherit;
+  }
+
+  main h1, main h2, main h3, main h4, main h5, main h6 {
+    color: var(--color-ink);
+  }
+
+  main .bg-primary h1, main .bg-primary h2, main .bg-primary h3,
+  main .bg-primary h4, main .bg-primary p, main .bg-primary span,
+  main .bg-primary a:not([class*='text-primary']),
+  main .bg-teal-600 h1, main .bg-teal-700 h2,
+  main [class*='from-teal-9'] h1, main [class*='from-teal-9'] h2,
+  main [class*='from-teal-9'] h3, main [class*='from-teal-9'] p,
+  main [class*='from-primary'] h1, main [class*='from-primary'] h2,
+  main [class*='from-primary'] h3, main [class*='from-primary'] p {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+  }
+}
+
+/* Helpers sémantiques (boutons / états / bordures) */
+@layer utilities {
+  /* Contraste garanti sur boutons / liens sombres (pas sur tout .bg-primary) */
+  button.bg-primary,
+  a.bg-primary,
+  button.bg-secondary,
+  a.bg-secondary,
+  button.bg-accent,
+  a.bg-accent,
+  button.bg-alert,
+  a.bg-alert,
+  .bg-primary.text-white,
+  .bg-primary.text-surface,
+  .bg-secondary.text-white,
+  .bg-accent.text-white,
+  .bg-alert.text-white {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+  }
+
+  button.bg-primary *,
+  a.bg-primary *,
+  button.bg-secondary *,
+  a.bg-secondary *,
+  button.bg-accent *,
+  a.bg-accent *,
+  button.bg-alert *,
+  a.bg-alert * {
+    color: inherit !important;
+    -webkit-text-fill-color: inherit !important;
+  }
+
+  /* Hero / bandeaux primary : titres et sous-titres lisibles */
+  .bg-primary > .text-white,
+  .bg-primary .text-white,
+  .bg-primary .text-surface,
+  .bg-primary [class*='text-teal-'],
+  .bg-primary [class*='text-emerald-'],
+  .bg-primary [class*='text-green-1'],
+  [class*='from-primary'] .text-white,
+  [class*='from-primary'] .text-surface {
+    color: #FFFFFF !important;
+    -webkit-text-fill-color: #FFFFFF !important;
+  }
+
+  .bg-brand {
+    background-color: var(--color-ink);
+  }
+  .text-brand {
+    color: var(--color-ink);
+  }
+  .bg-brand-soft {
+    background-color: color-mix(in srgb, #1B4F9C 10%, #F5F5F3);
+  }
+  .bg-accent-soft {
+    background-color: color-mix(in srgb, #1E8B4A 12%, #F5F5F3);
+  }
+  .bg-alert-soft {
+    background-color: color-mix(in srgb, #E1302A 12%, #F5F5F3);
+  }
+
+  .border-strong {
+    border-color: color-mix(in srgb, #1B4F9C 48%, #F5F5F3);
+  }
+
+  .ring-brand {
+    --tw-ring-color: color-mix(in srgb, #1B4F9C 35%, transparent);
+  }
+
+  /* Différenciation Accent / Alert */
+  .border-accent-diff {
+    border-width: 2px;
+    border-color: var(--color-accent);
+  }
+
+  .border-alert-diff {
+    border-width: 2px;
+    border-color: var(--color-alert);
+  }
+
+  .border-duo {
+    border: 2px solid var(--color-accent);
+    box-shadow: inset 0 0 0 1px #E1302A;
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* Cartes bg-white en dark → surface élevée */
+html.dark .bg-white {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
 }

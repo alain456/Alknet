@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from rest_framework import serializers
 from .models import (
     Specialty, DoctorProfile, Appointment, AppointmentSlot, MedicalService,
@@ -181,6 +183,7 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
             'gender', 'medical_license_number',
             'languages_spoken', 'qualifications', 'experience_years',
             'bio', 'photo_url', 'public_photo_url',
+            'office_address',
             # Modes de consultation
             'is_physical_consultation', 'is_available_for_telemedicine',
             'is_available_for_tele_expertise', 'consultation_modes',
@@ -313,7 +316,7 @@ class DoctorProfileListSerializer(serializers.ModelSerializer):
             'professional_title', 'professional_title_display',
             'specialties', 'sub_specialty', 'services',
             'languages_spoken', 'qualifications', 'experience_years', 'bio',
-            'medical_license_number',
+            'medical_license_number', 'office_address',
             'is_physical_consultation', 'is_available_for_telemedicine',
             'is_accepting_new_patients', 'is_active', 'is_public_directory',
             'consultation_fee', 'formatted_fee', 'consultation_fee_currency',
@@ -372,21 +375,54 @@ class DoctorScheduleSerializer(serializers.ModelSerializer):
     doctor_name = serializers.SerializerMethodField()
     hospital_name = serializers.CharField(source='hospital.name', read_only=True)
     day_name = serializers.CharField(source='get_day_of_week_display', read_only=True)
+    ends_at = serializers.SerializerMethodField()
+    ends_next_day = serializers.SerializerMethodField()
 
     class Meta:
         model = DoctorSchedule
         fields = [
             'id', 'doctor', 'doctor_name', 'hospital', 'hospital_name',
-            'day_of_week', 'day_name', 'start_time', 'end_time', 'is_available'
+            'schedule_date', 'day_of_week', 'day_name', 'start_time', 'end_time',
+            'ends_at', 'ends_next_day', 'is_available',
         ]
 
     def get_doctor_name(self, obj):
         return f"{obj.doctor.user.first_name} {obj.doctor.user.last_name}"
 
+    def get_ends_next_day(self, obj):
+        if not obj.start_time or not obj.end_time:
+            return False
+        return obj.end_time <= obj.start_time
+
+    def get_ends_at(self, obj):
+        if not obj.schedule_date or not obj.end_time:
+            return None
+        end_date = obj.schedule_date
+        if self.get_ends_next_day(obj):
+            end_date = obj.schedule_date + timedelta(days=1)
+        return f"{end_date.isoformat()}T{obj.end_time.strftime('%H:%M')}"
+
+    def validate(self, attrs):
+        schedule_date = attrs.get('schedule_date', getattr(self.instance, 'schedule_date', None))
+        if self.instance is None and not schedule_date:
+            raise serializers.ValidationError({
+                'schedule_date': "La date du créneau est requise pour déterminer l'heure de fin.",
+            })
+        start = attrs.get('start_time', getattr(self.instance, 'start_time', None))
+        end = attrs.get('end_time', getattr(self.instance, 'end_time', None))
+        if start and end and start == end:
+            raise serializers.ValidationError({
+                'end_time': "L'heure de fin doit être différente de l'heure de début.",
+            })
+        if schedule_date:
+            attrs['day_of_week'] = schedule_date.weekday()
+        return attrs
+
 
 class AppointmentSlotSerializer(serializers.ModelSerializer):
     doctor_name = serializers.SerializerMethodField()
     doctor_title = serializers.SerializerMethodField()
+    doctor_office_address = serializers.CharField(source='doctor.office_address', read_only=True, allow_null=True)
     consultation_fee = serializers.SerializerMethodField()
     consultation_fee_currency = serializers.SerializerMethodField()
     formatted_consultation_fee = serializers.SerializerMethodField()
@@ -400,6 +436,7 @@ class AppointmentSlotSerializer(serializers.ModelSerializer):
         model = AppointmentSlot
         fields = [
             'id', 'hospital', 'hospital_name', 'doctor', 'doctor_name', 'doctor_title',
+            'doctor_office_address',
             'consultation_fee', 'consultation_fee_currency', 'formatted_consultation_fee',
             'service', 'service_name', 'title', 'slot_date', 'start_time', 'end_time',
             'consultation_type', 'max_patients', 'booked_count', 'remaining_slots',
@@ -495,6 +532,7 @@ class AppointmentListSerializer(serializers.ModelSerializer):
         source='get_consultation_type_display', read_only=True
     )
     service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
+    confirmed_by_name = serializers.SerializerMethodField()
     valid_transitions = serializers.SerializerMethodField()
 
     class Meta:
@@ -509,6 +547,7 @@ class AppointmentListSerializer(serializers.ModelSerializer):
             'consultation_type', 'consultation_type_display',
             'reason', 'notes', 'location_notes',
             'telemedicine_link', 'telemedicine_room_id',
+            'confirmed_by', 'confirmed_by_name',
             'confirmed_at', 'checked_in_at', 'started_at', 'completed_at',
             'consultation_fee_amount', 'consultation_fee_currency',
             'payment_status', 'payment_method', 'payer_phone',
@@ -528,6 +567,13 @@ class AppointmentListSerializer(serializers.ModelSerializer):
             name = user.get_full_name()
             return name.strip() if name and name.strip() else user.email
         return str(obj.doctor_id)
+
+    def get_confirmed_by_name(self, obj):
+        user = getattr(obj, 'confirmed_by', None)
+        if not user:
+            return None
+        full = user.get_full_name()
+        return (full or '').strip() or user.email or str(user)
 
     def get_doctor_details(self, obj):
         """Minimal — pas de photo_url / avatar base64."""
@@ -603,6 +649,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         source='get_consultation_type_display', read_only=True
     )
     service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
+    confirmed_by_name = serializers.SerializerMethodField()
     events = AppointmentEventSerializer(many=True, read_only=True)
     valid_transitions = serializers.SerializerMethodField()
 
@@ -620,7 +667,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'doctor', 'doctor_details',
             'slot', 'slot_details', 'queue_number', 'reference_code',
             'service', 'service_name', 'source', 'appointment_category', 'duration_minutes',
-            'created_by', 'confirmed_by',
+            'created_by', 'confirmed_by', 'confirmed_by_name',
             'hospital', 'hospital_name', 'hospital_latitude', 'hospital_longitude',
             'appointment_date', 'status', 'status_display',
             'consultation_type', 'consultation_type_display',
@@ -649,7 +696,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
             'patient', 'status', 'queue_number', 'reference_code',
             'confirmed_at', 'checked_in_at', 'started_at', 'completed_at',
             'cancelled_at', 'reminder_24h_sent', 'reminder_1h_sent',
-            'created_by', 'confirmed_by', 'events',
+            'created_by', 'confirmed_by', 'confirmed_by_name', 'events',
             'consultation_fee_amount', 'consultation_fee_currency',
             'payment_status', 'payment_method', 'payer_phone',
             'payment_provider_reference', 'payment_merchant_account',
@@ -669,6 +716,13 @@ class AppointmentSerializer(serializers.ModelSerializer):
             attrs['doctor'] = slot.doctor
             attrs['hospital'] = slot.hospital
         return attrs
+
+    def get_confirmed_by_name(self, obj):
+        user = getattr(obj, 'confirmed_by', None)
+        if not user:
+            return None
+        full = user.get_full_name()
+        return (full or '').strip() or user.email or str(user)
 
     def get_patient_name(self, obj):
         if obj.patient_contact_name and obj.patient_contact_name.strip():
@@ -757,15 +811,42 @@ class MedicalServiceSerializer(serializers.ModelSerializer):
             attrs['head_doctor'] = None
         return attrs
 
+    def _is_public_reader(self):
+        request = self.context.get('request')
+        if request is None:
+            return False
+        public_only = getattr(request, 'query_params', {}).get('public')
+        if public_only and str(public_only).lower() in ('true', '1'):
+            return True
+        user = getattr(request, 'user', None)
+        if user is None or not getattr(user, 'is_authenticated', False):
+            return True
+        return getattr(user, 'role', None) == 'CUSTOMER'
+
     def get_head_doctor_name(self, obj):
-        if obj.head_doctor:
-            return f"{obj.head_doctor.user.first_name} {obj.head_doctor.user.last_name}"
-        return None
+        doctor = obj.head_doctor
+        if not doctor:
+            return None
+        if self._is_public_reader() and (
+            not doctor.is_public_directory
+            or doctor.staff_category in ('NURSE', 'RECEPTIONIST', 'ACCOUNTANT')
+            or doctor.professional_title == 'INFIRMIER'
+        ):
+            return None
+        return f"{doctor.user.first_name} {doctor.user.last_name}"
 
     def get_formatted_cost(self, obj):
         return obj.formatted_cost
 
     def get_assigned_doctors_details(self, obj):
+        doctors = obj.assigned_doctors.all()
+        if self._is_public_reader():
+            doctors = doctors.filter(
+                is_public_directory=True,
+                is_active=True,
+            ).exclude(
+                staff_category__in=['NURSE', 'RECEPTIONIST', 'ACCOUNTANT'],
+            ).exclude(professional_title='INFIRMIER')
         return [
             {
                 "id": str(doc.id),
@@ -774,7 +855,7 @@ class MedicalServiceSerializer(serializers.ModelSerializer):
                 "staff_category": doc.staff_category,
                 "staff_category_display": doc.get_staff_category_display(),
             }
-            for doc in obj.assigned_doctors.all()
+            for doc in doctors
         ]
 
 
@@ -789,7 +870,7 @@ class HospitalExamSerializer(serializers.ModelSerializer):
             'id', 'hospital', 'hospital_name',
             'name', 'category', 'category_display', 'description',
             'price', 'currency', 'price_notes', 'formatted_price',
-            'preparation', 'is_active', 'is_public', 'display_order',
+            'preparation', 'loinc_code', 'is_active', 'is_public', 'display_order',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -845,8 +926,12 @@ class LabResultSerializer(serializers.ModelSerializer):
     appointment_status = serializers.CharField(
         source='appointment.status', read_only=True, allow_null=True
     )
+    hospital_exam_name = serializers.CharField(source='hospital_exam.name', read_only=True, allow_null=True)
+    document_display_url = serializers.SerializerMethodField()
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True, allow_null=True)
+    events = serializers.SerializerMethodField()
 
-    # RDV doit être au moins « Présent » (après confirmation + arrivée)
+    # RDV éligible si création manuelle (sans prescription)
     LAB_ELIGIBLE_APPOINTMENT_STATUSES = ('PRESENT', 'IN_PROGRESS', 'COMPLETED')
 
     class Meta:
@@ -855,17 +940,24 @@ class LabResultSerializer(serializers.ModelSerializer):
             'id', 'patient', 'patient_name', 'patient_email',
             'hospital', 'hospital_name',
             'appointment', 'appointment_reference', 'appointment_status',
+            'prescription',
+            'hospital_exam', 'hospital_exam_name',
             'ordered_by', 'ordered_by_name',
-            'uploaded_by', 'validated_by', 'validated_by_name',
+            'uploaded_by', 'validated_by', 'validated_by_user', 'validated_by_name',
+            'invoice', 'invoice_number',
             'test_name', 'test_date', 'result_value', 'unit', 'reference_values',
-            'result_notes', 'document_url',
+            'result_notes', 'parameters',
+            'document', 'document_url', 'document_display_url',
             'status', 'status_display',
             'validation_date', 'communication_date',
+            'fhir_resource_type', 'fhir_service_request_id', 'fhir_diagnostic_report_id',
+            'events',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'uploaded_by', 'validated_by', 'validation_date',
-            'communication_date', 'created_at', 'updated_at',
+            'uploaded_by', 'validated_by', 'validated_by_user', 'validation_date',
+            'communication_date', 'invoice', 'created_at', 'updated_at',
+            'document_display_url', 'events',
         ]
 
     def get_patient_name(self, obj):
@@ -882,13 +974,42 @@ class LabResultSerializer(serializers.ModelSerializer):
     def get_validated_by_name(self, obj):
         if obj.validated_by:
             return f"{obj.validated_by.user.first_name} {obj.validated_by.user.last_name}"
+        if obj.validated_by_user_id:
+            u = obj.validated_by_user
+            return (u.get_full_name() or u.email) if u else None
         return None
+
+    def get_document_display_url(self, obj):
+        url = obj.document_display_url
+        if not url:
+            return ''
+        request = self.context.get('request')
+        if request and url.startswith('/'):
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_events(self, obj):
+        events = getattr(obj, '_prefetched_objects_cache', {}).get('events')
+        qs = events if events is not None else obj.events.all()[:20]
+        return [
+            {
+                'id': str(e.id),
+                'action': e.action,
+                'from_status': e.from_status,
+                'to_status': e.to_status,
+                'note': e.note,
+                'actor_email': e.actor.email if e.actor_id else None,
+                'created_at': e.created_at,
+            }
+            for e in qs
+        ]
 
     def validate(self, attrs):
         hospital = attrs.get('hospital') or getattr(self.instance, 'hospital', None)
         patient = attrs.get('patient') or getattr(self.instance, 'patient', None)
         ordered_by = attrs.get('ordered_by') or getattr(self.instance, 'ordered_by', None)
         appointment = attrs.get('appointment')
+        prescription = attrs.get('prescription') or getattr(self.instance, 'prescription', None)
         status_value = attrs.get('status')
 
         if hospital and ordered_by and ordered_by.hospital_id != hospital.id:
@@ -901,17 +1022,23 @@ class LabResultSerializer(serializers.ModelSerializer):
                 'status': "À la création, le statut doit être REQUESTED."
             })
 
-        # Création : RDV obligatoire et patient présent (pas en attente de confirmation)
         if not self.instance:
             if not patient or not hospital:
                 raise serializers.ValidationError({
                     'patient': "Patient et hôpital sont requis."
                 })
+            # Création depuis prescription : RDV optionnel
+            if prescription:
+                if prescription.hospital_id != hospital.id:
+                    raise serializers.ValidationError({'prescription': 'Prescription d’un autre hôpital.'})
+                if prescription.patient_id != patient.id:
+                    raise serializers.ValidationError({'prescription': 'Patient incohérent avec la prescription.'})
+                return attrs
+
             if not appointment:
                 raise serializers.ValidationError({
                     'appointment': (
-                        "Sélectionnez un rendez-vous. Un résultat labo ne peut être créé "
-                        "que pour un patient déjà Présent (RDV confirmé → arrivé → présent)."
+                        "Sélectionnez un rendez-vous, ou créez la demande via une prescription d’examen."
                     )
                 })
             if appointment.hospital_id != hospital.id:
@@ -925,15 +1052,14 @@ class LabResultSerializer(serializers.ModelSerializer):
             if appointment.status in ('PENDING', 'REQUEST_SENT'):
                 raise serializers.ValidationError({
                     'appointment': (
-                        "Impossible : le rendez-vous est encore en attente de confirmation. "
-                        "L'administration doit d'abord confirmer le RDV."
+                        "Impossible : le rendez-vous est encore en attente de confirmation."
                     )
                 })
             if appointment.status not in self.LAB_ELIGIBLE_APPOINTMENT_STATUSES:
                 raise serializers.ValidationError({
                     'appointment': (
                         f"Impossible de créer un résultat pour un RDV « {appointment.get_status_display()} ». "
-                        "Le patient doit d'abord être confirmé, arrivé, puis marqué Présent."
+                        "Le patient doit d'abord être marqué Présent."
                     )
                 })
 
@@ -942,13 +1068,36 @@ class LabResultSerializer(serializers.ModelSerializer):
 
 class InvoiceSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
+    appointment_reference = serializers.SerializerMethodField()
+    act_type_display = serializers.CharField(source='get_act_type_display', read_only=True)
+    payment_method_display = serializers.CharField(source='get_payment_method_display', read_only=True)
 
     class Meta:
         model = Invoice
-        fields = '__all__'
+        fields = [
+            'id', 'invoice_number', 'patient', 'patient_name', 'hospital',
+            'appointment', 'appointment_reference',
+            'amount', 'currency', 'description', 'act_type', 'act_type_display', 'act_label',
+            'status', 'payment_method', 'payment_method_display',
+            'issued_at', 'paid_at',
+        ]
+        read_only_fields = ['invoice_number', 'issued_at', 'paid_at']
 
     def get_patient_name(self, obj):
-        return f"{obj.patient.first_name} {obj.patient.last_name}" if obj.patient else "Inconnu"
+        appointment = getattr(obj, 'appointment', None)
+        if appointment is not None:
+            contact = (appointment.patient_contact_name or '').strip()
+            if contact:
+                return contact
+        if obj.patient:
+            full = (obj.patient.get_full_name() or '').strip()
+            return full or obj.patient.email or 'Patient'
+        return 'Patient'
+
+    def get_appointment_reference(self, obj):
+        if obj.appointment_id and obj.appointment:
+            return obj.appointment.reference_code or ''
+        return ''
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -988,6 +1137,7 @@ class PrescriptionSerializer(serializers.ModelSerializer):
     prescription_type_display = serializers.CharField(
         source='get_prescription_type_display', read_only=True
     )
+    lab_result_id = serializers.SerializerMethodField()
 
     class Meta:
         model = Prescription
@@ -996,18 +1146,30 @@ class PrescriptionSerializer(serializers.ModelSerializer):
             'doctor', 'doctor_name', 'hospital',
             'prescription_type', 'prescription_type_display',
             'medication_name', 'dosage', 'frequency', 'duration', 'instructions',
-            'exam_name', 'exam_reason',
+            'exam_name', 'exam_reason', 'hospital_exam', 'appointment',
             'is_active', 'is_dispensed', 'is_completed',
-            'prescribed_at', 'valid_until',
+            'prescribed_at', 'valid_until', 'lab_result_id',
         ]
-        read_only_fields = ['prescribed_at', 'doctor']
+        read_only_fields = ['prescribed_at', 'doctor', 'lab_result_id']
+
+    def get_lab_result_id(self, obj):
+        lab = obj.lab_results.order_by('-created_at').first()
+        return str(lab.id) if lab else None
 
     def validate(self, attrs):
         ptype = attrs.get('prescription_type') or getattr(self.instance, 'prescription_type', None)
         if ptype == 'MEDICATION' and not (attrs.get('medication_name') or getattr(self.instance, 'medication_name', '')):
             raise serializers.ValidationError({'medication_name': 'Nom du médicament requis.'})
-        if ptype == 'EXAM' and not (attrs.get('exam_name') or getattr(self.instance, 'exam_name', '')):
-            raise serializers.ValidationError({'exam_name': "Nom de l'examen requis."})
+        exam = attrs.get('hospital_exam')
+        if ptype == 'EXAM':
+            exam_name = attrs.get('exam_name') or getattr(self.instance, 'exam_name', '')
+            if exam and not exam_name:
+                attrs['exam_name'] = exam.name
+            elif not exam_name and not exam:
+                raise serializers.ValidationError({'exam_name': "Nom de l'examen requis."})
+            hospital = attrs.get('hospital') or getattr(self.instance, 'hospital', None)
+            if exam and hospital and exam.hospital_id != hospital.id:
+                raise serializers.ValidationError({'hospital_exam': 'Examen d’un autre hôpital.'})
         return attrs
 
     def get_patient_email(self, obj):

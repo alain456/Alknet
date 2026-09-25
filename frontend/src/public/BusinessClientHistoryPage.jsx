@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Calendar, History, Package, Search, Stethoscope, Building2, Clock, X,
+  ArrowLeft, Calendar, History, Package, Search, Stethoscope, Building2, Clock, X, BedDouble, MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
@@ -10,45 +10,113 @@ import retailService, { ORDER_STATUS_LABELS as RETAIL_ORDER_LABELS } from '../re
 import wholesaleService, {
   ORDER_STATUS_LABELS as WHOLESALE_ORDER_LABELS,
 } from '../wholesale/wholesaleService';
+import hotelService from '../hotel/hotelService';
 
-function isWholesalePharmacy(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  return name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'));
+const HOTEL_STATUS_LABELS = {
+  DRAFT: 'Brouillon',
+  PENDING: 'En attente',
+  CONFIRMED: 'Confirmée',
+  EXPECTED: 'Arrivée prévue',
+  CHECKED_IN: 'En séjour',
+  CHECKED_OUT: 'Terminée',
+  CANCELLED: 'Annulée',
+  NO_SHOW: 'No-show',
+  EXPIRED: 'Expirée',
+};
+
+function normalizeList(data) {
+  if (Array.isArray(data)) return data;
+  if (data?.results && Array.isArray(data.results)) return data.results;
+  return [];
 }
 
-function isRetailPharmacy(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  return !isWholesalePharmacy(business) && (
-    name.includes('pharmacie de détail')
-    || name.includes('pharmacie de detail')
-    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
-    || name.trim() === 'pharmacie'
+function categoryName(business) {
+  return (
+    business?.primary_category_name
+    || business?.category_name
+    || business?.category?.name
+    || business?.primary_category_detail?.name
+    || ''
   );
 }
 
+function categorySlug(business) {
+  return (
+    business?.primary_category_slug
+    || business?.category_slug
+    || business?.primary_category_detail?.slug
+    || business?.category?.slug
+    || ''
+  ).toLowerCase();
+}
+
+function isWholesalePharmacy(business) {
+  const name = categoryName(business).toLowerCase();
+  const slug = categorySlug(business);
+  return name.includes('pharmacie de gros')
+    || (name.includes('pharmac') && name.includes('gros'))
+    || slug.includes('gros')
+    || slug.includes('wholesale');
+}
+
+function isRetailPharmacy(business) {
+  const name = categoryName(business).toLowerCase();
+  const slug = categorySlug(business);
+  if (isWholesalePharmacy(business)) return false;
+  return name.includes('pharmacie de détail')
+    || name.includes('pharmacie de detail')
+    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
+    || name.trim() === 'pharmacie'
+    || slug.includes('detail')
+    || slug.includes('retail')
+    || slug.includes('officine');
+}
+
 function isHospitalBusiness(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  const terms = ['hôpital', 'hopital', 'clinique', 'santé', 'sante', 'health', 'médical', 'medical'];
-  return terms.some((t) => name.includes(t));
+  const name = categoryName(business).toLowerCase();
+  const slug = categorySlug(business);
+  if (isWholesalePharmacy(business)) return false;
+  const terms = ['sant', 'hôpital', 'hopital', 'hospital', 'clinique', 'cabinet', 'médical', 'medical', 'health'];
+  return terms.some((t) => name.includes(t) || slug.includes(t));
 }
 
 function isCommerceBusiness(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
+  const name = categoryName(business).toLowerCase();
+  const slug = categorySlug(business);
   const keywords = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
   return keywords.some((k) => name.includes(k) || slug.includes(k));
 }
 
-function detectSector(business) {
+function isHotelBusiness(business) {
+  const name = categoryName(business).toLowerCase();
+  const slug = categorySlug(business);
+  return name.includes('hôtel')
+    || name.includes('hotel')
+    || name.includes('hôtellerie')
+    || name.includes('hotellerie')
+    || slug.includes('hotel')
+    || slug.includes('hotellerie');
+}
+
+/** Priorité : chemin URL (fiable) puis catégorie métier. */
+function detectSector(business, pathname = '') {
+  const path = String(pathname || '');
+  if (path.includes('/hospitals/')) return 'hospital';
+  if (path.includes('/hotels/')) return 'hotel';
+  if (path.includes('/pharmacy')) return 'retail';
+  if (path.includes('/catalog')) return 'wholesale';
+  if (path.includes('/shop')) return 'commerce';
   if (isWholesalePharmacy(business)) return 'wholesale';
   if (isRetailPharmacy(business)) return 'retail';
   if (isHospitalBusiness(business)) return 'hospital';
+  if (isHotelBusiness(business)) return 'hotel';
   if (isCommerceBusiness(business)) return 'commerce';
   return 'generic';
 }
 
 function profileBackPath(businessId, sector) {
   if (sector === 'hospital') return `/hospitals/${businessId}`;
+  if (sector === 'hotel') return `/hotels/${businessId}`;
   if (sector === 'retail') return `/businesses/${businessId}/pharmacy`;
   if (sector === 'wholesale') return `/businesses/${businessId}/catalog`;
   if (sector === 'commerce') return `/businesses/${businessId}/shop`;
@@ -57,9 +125,9 @@ function profileBackPath(businessId, sector) {
 
 function statusStyle(status) {
   const s = String(status || '').toUpperCase();
-  if (['COMPLETED', 'ACCEPTED', 'CONFIRMED', 'PAID'].includes(s)) return 'bg-emerald-100 text-emerald-800';
-  if (['CANCELLED', 'REJECTED', 'FAILED', 'NO_SHOW'].includes(s)) return 'bg-red-100 text-red-800';
-  if (['PENDING', 'REQUEST_SENT', 'SUBMITTED', 'PROCESSING', 'AWAITING_PIN', 'UNPAID', 'DRAFT'].includes(s)) {
+  if (['COMPLETED', 'ACCEPTED', 'CONFIRMED', 'PAID', 'CHECKED_IN', 'EXPECTED'].includes(s)) return 'bg-emerald-100 text-emerald-800';
+  if (['CANCELLED', 'REJECTED', 'FAILED', 'NO_SHOW', 'EXPIRED'].includes(s)) return 'bg-red-100 text-red-800';
+  if (['PENDING', 'REQUEST_SENT', 'SUBMITTED', 'PROCESSING', 'AWAITING_PIN', 'UNPAID', 'DRAFT', 'CHECKED_OUT'].includes(s)) {
     return 'bg-amber-100 text-amber-800';
   }
   return 'bg-gray-100 text-gray-700';
@@ -123,23 +191,62 @@ export default function BusinessClientHistoryPage() {
   const [anticipateBusy, setAnticipateBusy] = useState(false);
   const [anticipateError, setAnticipateError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [messageTarget, setMessageTarget] = useState(null);
+  const [messageText, setMessageText] = useState('');
+  const [messageBusy, setMessageBusy] = useState(false);
+  const [messageError, setMessageError] = useState('');
+  const [rescheduleTarget, setRescheduleTarget] = useState(null);
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [rescheduleIn, setRescheduleIn] = useState('');
+  const [rescheduleOut, setRescheduleOut] = useState('');
+  const [rescheduleBusy, setRescheduleBusy] = useState(false);
+  const [rescheduleError, setRescheduleError] = useState('');
   const anticipateDateRef = useRef(null);
 
-  const sector = useMemo(() => detectSector(business), [business]);
+  const sector = useMemo(
+    () => detectSector(business, location.pathname),
+    [business, location.pathname],
+  );
   const backPath = profileBackPath(id, sector);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        const isHotelPath = String(location.pathname || '').includes('/hotels/');
+        if (isHotelPath) {
+          const h = await hotelService.publicHotel(id);
+          if (!cancelled) {
+            setBusiness({
+              id: h.id,
+              name: h.trade_name || h.name,
+              logo: h.logo,
+              primary_category_name: 'Hôtel',
+              primary_category_slug: 'hotel',
+              phone: h.phone,
+              email: h.email,
+              address: h.address,
+              commune: h.city,
+              province: h.province,
+              description: h.description,
+            });
+          }
+          return;
+        }
         const b = await api.get(`businesses/${id}/`);
         if (!cancelled) setBusiness(b);
       } catch (err) {
-        if (!cancelled) setError(err.message || 'Entreprise introuvable');
+        if (!cancelled) {
+          setError(
+            err?.status === 429
+              ? 'Trop de requêtes. Patientez quelques secondes puis rechargez.'
+              : (err.message || 'Entreprise introuvable'),
+          );
+        }
       }
     })();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, location.pathname]);
 
   useEffect(() => {
     if (authLoading || !business || !isAuthenticated) {
@@ -152,15 +259,16 @@ export default function BusinessClientHistoryPage() {
       setLoading(true);
       setError('');
       try {
-        const sectorKey = detectSector(business);
+        const sectorKey = detectSector(business, location.pathname);
         const rows = [];
 
+        // Hôpital + entreprises génériques : RDV + réservations services
         if (sectorKey === 'hospital' || sectorKey === 'generic') {
-          const [appts, bookings] = await Promise.all([
+          const [apptsRaw, bookingsRaw] = await Promise.all([
             hospitalService.getAppointments({ hospital: id }).catch(() => []),
             api.get(`bookings/?business=${id}`, { auth: true }).catch(() => []),
           ]);
-          (Array.isArray(appts) ? appts : []).forEach((a) => {
+          normalizeList(apptsRaw).forEach((a) => {
             const doctorUser = a.doctor_details?.user_details;
             const doctorName = doctorUser
               ? `${doctorUser.first_name || ''} ${doctorUser.last_name || ''}`.trim()
@@ -188,7 +296,7 @@ export default function BusinessClientHistoryPage() {
                 && new Date(a.appointment_date || 0) > new Date(),
             });
           });
-          (Array.isArray(bookings) ? bookings : []).forEach((b) => {
+          normalizeList(bookingsRaw).forEach((b) => {
             rows.push({
               id: `bk-${b.id}`,
               kind: 'booking',
@@ -203,14 +311,17 @@ export default function BusinessClientHistoryPage() {
         }
 
         if (sectorKey === 'retail') {
-          const orders = await retailService.getOrders().catch(() => []);
-          (Array.isArray(orders) ? orders : []).
-            filter((o) => String(o.retail_business || o.pharmacy || '') === String(id))
+          const ordersRaw = await retailService.getOrders({ business: id }).catch(() => []);
+          normalizeList(ordersRaw)
+            .filter((o) => {
+              const bizId = o.retail_business?.id || o.retail_business || o.pharmacy;
+              return String(bizId) === String(id);
+            })
             .forEach((o) => {
               rows.push({
                 id: `ro-${o.id}`,
                 kind: 'retail_order',
-                kindLabel: 'Commande',
+                kindLabel: 'Commande pharmacie',
                 title: o.reference || `Commande #${String(o.id).slice(0, 8)}`,
                 subtitle: o.patient_name || o.patient_email || '',
                 date: o.created_at || o.submitted_at,
@@ -224,8 +335,8 @@ export default function BusinessClientHistoryPage() {
         }
 
         if (sectorKey === 'wholesale') {
-          const orders = await wholesaleService.getOrders().catch(() => []);
-          (Array.isArray(orders) ? orders : [])
+          const ordersRaw = await wholesaleService.getOrders({ business: id }).catch(() => []);
+          normalizeList(ordersRaw)
             .filter((o) => String(o.wholesale_business || '') === String(id))
             .forEach((o) => {
               rows.push({
@@ -244,9 +355,66 @@ export default function BusinessClientHistoryPage() {
             });
         }
 
+        if (sectorKey === 'hotel') {
+          let hotelsRaw = [];
+          try {
+            hotelsRaw = await hotelService.myReservations({ hotel: id });
+          } catch (hotelErr) {
+            if (!cancelled) {
+              setError(
+                hotelErr?.message
+                || 'Impossible de charger vos réservations hôtel. Réessayez dans un instant.',
+              );
+            }
+          }
+          normalizeList(hotelsRaw)
+            .filter((r) => !r.hotel_id || String(r.hotel_id) === String(id))
+            .forEach((r) => {
+              const nights = r.nights ? `${r.nights} nuit(s)` : '';
+              const dates = [r.check_in_date, r.check_out_date].filter(Boolean).join(' → ');
+              rows.push({
+                id: `ht-${r.id}`,
+                rawId: r.id,
+                kind: 'hotel_reservation',
+                kindLabel: 'Réservation hôtel',
+                title: `${r.room_type_name || 'Chambre'}${r.room_number ? ` · Ch. ${r.room_number}` : ''}`,
+                subtitle: [r.reference, dates, nights].filter(Boolean).join(' · '),
+                date: r.check_in_date || r.created_at,
+                checkIn: r.check_in_date,
+                checkOut: r.check_out_date,
+                status: r.status,
+                statusLabel: HOTEL_STATUS_LABELS[r.status] || r.status,
+                amount: r.total_amount,
+                currency: r.currency || 'BIF',
+                paymentStatus: r.payment_status,
+                notes: r.special_requests || '',
+                decisionNote: r.decision_note || '',
+                decisionAt: r.decision_at || '',
+                rescheduleStatus: r.reschedule_status || 'NONE',
+                reschedulePreferredIn: r.reschedule_preferred_check_in || '',
+                reschedulePreferredOut: r.reschedule_preferred_check_out || '',
+                rescheduleReason: r.reschedule_reason || '',
+                rescheduleAdminNote: r.reschedule_admin_note || '',
+                departureTomorrow: Boolean(r.departure_tomorrow),
+                departureReminderNote: r.departure_reminder_note || '',
+                departureReminderAt: r.departure_reminder_sent_at || '',
+                canMessage: !['CANCELLED', 'CHECKED_OUT', 'EXPIRED', 'NO_SHOW'].includes(r.status),
+                canReschedule:
+                  ['PENDING', 'CONFIRMED', 'EXPECTED'].includes(r.status)
+                  && r.reschedule_status !== 'PENDING',
+              });
+            });
+        }
+
+        // Boutique commerce + autres entreprises : commandes catalogue
         if (sectorKey === 'generic' || sectorKey === 'commerce') {
-          const orders = await api.get(`orders/?business=${id}`, { auth: true }).catch(() => []);
-          (Array.isArray(orders) ? orders : orders?.results || []).forEach((o) => {
+          const [ordersRaw, bookingsRaw] = await Promise.all([
+            api.get(`orders/?business=${id}`, { auth: true }).catch(() => []),
+            sectorKey === 'commerce'
+              ? api.get(`bookings/?business=${id}`, { auth: true }).catch(() => [])
+              : Promise.resolve([]),
+          ]);
+          normalizeList(ordersRaw).forEach((o) => {
             rows.push({
               id: `ord-${o.id}`,
               kind: 'order',
@@ -259,6 +427,18 @@ export default function BusinessClientHistoryPage() {
               amount: o.total_amount ?? o.total,
               currency: o.currency || 'BIF',
               paymentStatus: o.payment_status,
+            });
+          });
+          normalizeList(bookingsRaw).forEach((b) => {
+            rows.push({
+              id: `bk-${b.id}`,
+              kind: 'booking',
+              kindLabel: 'Réservation',
+              title: b.service_title || 'Service',
+              subtitle: b.notes || '',
+              date: b.scheduled_date || b.created_at,
+              status: b.status,
+              statusLabel: b.status_display || b.status,
             });
           });
         }
@@ -274,7 +454,7 @@ export default function BusinessClientHistoryPage() {
 
     load();
     return () => { cancelled = true; };
-  }, [authLoading, isAuthenticated, business, id, reloadKey]);
+  }, [authLoading, isAuthenticated, business, id, reloadKey, location.pathname]);
 
   const openAnticipate = (item) => {
     setAnticipateTarget(item);
@@ -370,6 +550,67 @@ export default function BusinessClientHistoryPage() {
     }
   };
 
+  const submitHotelMessage = async (e) => {
+    e.preventDefault();
+    if (!messageTarget?.rawId) return;
+    const text = messageText.trim();
+    if (!text) {
+      setMessageError('Écrivez votre message.');
+      return;
+    }
+    setMessageBusy(true);
+    setMessageError('');
+    try {
+      const res = await hotelService.sendReservationMessage(messageTarget.rawId, text);
+      setMessageTarget(null);
+      setMessageText('');
+      setActionMessage(res.message || 'Message envoyé à l’hôtel.');
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setMessageError(err.message || 'Impossible d’envoyer le message');
+    } finally {
+      setMessageBusy(false);
+    }
+  };
+
+  const openHotelReschedule = (item) => {
+    setRescheduleTarget(item);
+    setRescheduleReason('');
+    setRescheduleIn(item.checkIn || '');
+    setRescheduleOut(item.checkOut || '');
+    setRescheduleError('');
+  };
+
+  const submitHotelReschedule = async (e) => {
+    e.preventDefault();
+    if (!rescheduleTarget?.rawId) return;
+    const reason = rescheduleReason.trim();
+    if (!reason) {
+      setRescheduleError('Indiquez le motif (anticiper ou reporter).');
+      return;
+    }
+    if (!rescheduleIn || !rescheduleOut) {
+      setRescheduleError('Choisissez les nouvelles dates d’arrivée et de départ.');
+      return;
+    }
+    setRescheduleBusy(true);
+    setRescheduleError('');
+    try {
+      const res = await hotelService.requestReschedule(rescheduleTarget.rawId, {
+        reason,
+        preferred_check_in: rescheduleIn,
+        preferred_check_out: rescheduleOut,
+      });
+      setRescheduleTarget(null);
+      setActionMessage(res.message || 'Demande envoyée à l’hôtel.');
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setRescheduleError(err.message || 'Impossible d’envoyer la demande');
+    } finally {
+      setRescheduleBusy(false);
+    }
+  };
+
   const filtered = items.filter((item) => {
     if (tab !== 'all' && item.kind !== tab) return false;
     if (!search.trim()) return true;
@@ -387,6 +628,7 @@ export default function BusinessClientHistoryPage() {
     const labels = {
       appointment: 'Rendez-vous',
       booking: 'Réservations',
+      hotel_reservation: 'Séjours',
       retail_order: 'Commandes',
       wholesale_order: 'Commandes',
       order: 'Commandes',
@@ -458,7 +700,7 @@ export default function BusinessClientHistoryPage() {
               Connexion requise
             </h2>
             <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
-              Connectez-vous pour consulter vos rendez-vous et commandes avec {business?.name || 'cet établissement'}.
+              Connectez-vous pour consulter vos rendez-vous, réservations et commandes avec {business?.name || 'cet établissement'}.
             </p>
             <button
               type="button"
@@ -510,7 +752,9 @@ export default function BusinessClientHistoryPage() {
                 <Package className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-600 dark:text-gray-300 font-medium">Aucun historique pour le moment</p>
                 <p className="text-sm text-gray-400 mt-1">
-                  Les rendez-vous et commandes passés avec cet établissement apparaîtront ici.
+                  {sector === 'hotel'
+                    ? 'Vos demandes de séjour et échanges avec cet hôtel apparaîtront ici.'
+                    : 'Les rendez-vous et commandes passés avec cet établissement apparaîtront ici.'}
                 </p>
                 <Link
                   to={backPath}
@@ -525,11 +769,13 @@ export default function BusinessClientHistoryPage() {
                   <li key={item.id} className="p-4 sm:p-5 hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition">
                     <div className="flex gap-3 sm:gap-4">
                       <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0">
-                        {item.kind === 'appointment' || item.kind === 'booking'
-                          ? <Stethoscope className="w-5 h-5" />
-                          : item.kind.includes('order')
-                            ? <Package className="w-5 h-5" />
-                            : <Calendar className="w-5 h-5" />}
+                        {item.kind === 'hotel_reservation'
+                          ? <BedDouble className="w-5 h-5" />
+                          : item.kind === 'appointment' || item.kind === 'booking'
+                            ? <Stethoscope className="w-5 h-5" />
+                            : item.kind.includes('order')
+                              ? <Package className="w-5 h-5" />
+                              : <Calendar className="w-5 h-5" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -554,7 +800,9 @@ export default function BusinessClientHistoryPage() {
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
                           <span className="inline-flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
-                            {formatDate(item.date)}
+                            {item.kind === 'hotel_reservation' && item.checkIn && item.checkOut
+                              ? `${item.checkIn} → ${item.checkOut}`
+                              : formatDate(item.date)}
                           </span>
                           {money(item.amount, item.currency) && (
                             <span className="font-semibold text-teal-700 dark:text-teal-300">
@@ -583,6 +831,52 @@ export default function BusinessClientHistoryPage() {
                             {item.anticipationAdminNote ? ` — ${item.anticipationAdminNote}` : ''}
                           </p>
                         )}
+                        {item.notes ? (
+                          <p className="mt-2 text-xs text-gray-600 dark:text-gray-300 whitespace-pre-wrap bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 rounded-lg px-2.5 py-2">
+                            {item.kind === 'hotel_reservation' ? (
+                              <span className="font-semibold text-gray-800 dark:text-gray-100">Échanges avec l&apos;hôtel — </span>
+                            ) : null}
+                            {item.notes}
+                          </p>
+                        ) : null}
+                        {item.kind === 'hotel_reservation' && item.decisionNote && (
+                          <p className={`mt-2 text-xs font-medium rounded-lg px-2.5 py-1.5 border ${
+                            item.status === 'CANCELLED'
+                              ? 'text-red-800 bg-red-50 border-red-100'
+                              : 'text-emerald-800 bg-emerald-50 border-emerald-100'
+                          }`}
+                          >
+                            {item.status === 'CANCELLED' ? 'Refus hôtel : ' : 'Confirmation hôtel : '}
+                            {item.decisionNote}
+                          </p>
+                        )}
+                        {item.kind === 'hotel_reservation' && (item.departureTomorrow || item.departureReminderNote) && (
+                          <p className="mt-2 text-xs font-medium text-orange-900 bg-orange-50 border border-orange-200 rounded-lg px-2.5 py-1.5 inline-flex items-start gap-1.5">
+                            <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span>
+                              {item.departureReminderNote
+                                || `Rappel : votre séjour se termine demain (check-out le ${item.checkOut}).`}
+                            </span>
+                          </p>
+                        )}
+                        {item.kind === 'hotel_reservation' && item.rescheduleStatus === 'PENDING' && (
+                          <p className="mt-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5 inline-flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Demande de dates ({item.reschedulePreferredIn} → {item.reschedulePreferredOut}) — en attente de l&apos;hôtel
+                          </p>
+                        )}
+                        {item.kind === 'hotel_reservation' && item.rescheduleStatus === 'ACCEPTED' && (
+                          <p className="mt-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-2.5 py-1.5">
+                            Modification de dates acceptée
+                            {item.rescheduleAdminNote ? ` — ${item.rescheduleAdminNote}` : ''}
+                          </p>
+                        )}
+                        {item.kind === 'hotel_reservation' && item.rescheduleStatus === 'REFUSED' && (
+                          <p className="mt-2 text-xs font-medium text-red-700 bg-red-50 border border-red-100 rounded-lg px-2.5 py-1.5">
+                            Modification de dates refusée
+                            {item.rescheduleAdminNote ? ` — ${item.rescheduleAdminNote}` : ''}
+                          </p>
+                        )}
                         {item.canAnticipate && (
                           <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
                             <p className="text-xs text-amber-900/80 mb-2">
@@ -595,6 +889,37 @@ export default function BusinessClientHistoryPage() {
                             >
                               <Clock className="w-4 h-4" />
                               Anticiper ou reporter
+                            </button>
+                          </div>
+                        )}
+                        {item.canReschedule && (
+                          <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                            <p className="text-xs text-amber-900/80 mb-2">
+                              Besoin d&apos;arriver plus tôt ou plus tard ? Proposez de nouvelles dates à l&apos;hôtel.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => openHotelReschedule(item)}
+                              className="w-full sm:w-auto px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white inline-flex items-center justify-center gap-2 shadow-sm"
+                            >
+                              <Clock className="w-4 h-4" />
+                              Anticiper ou reporter
+                            </button>
+                          </div>
+                        )}
+                        {item.canMessage && (
+                          <div className="mt-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMessageTarget(item);
+                                setMessageText('');
+                                setMessageError('');
+                              }}
+                              className="w-full sm:w-auto px-4 py-2.5 text-sm font-bold rounded-xl bg-teal-700 hover:bg-teal-800 text-white inline-flex items-center justify-center gap-2"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                              Envoyer un message à l&apos;hôtel
                             </button>
                           </div>
                         )}
@@ -626,7 +951,7 @@ export default function BusinessClientHistoryPage() {
                 type="button"
                 disabled={anticipateBusy}
                 onClick={() => setAnticipateTarget(null)}
-                className="p-1.5 rounded-lg hover:bg-white/15 text-white"
+                className="icon-btn"
                 aria-label="Fermer"
               >
                 <X className="w-5 h-5" />
@@ -779,6 +1104,168 @@ export default function BusinessClientHistoryPage() {
                 >
                   <Clock className="w-4 h-4" />
                   {anticipateBusy ? 'Envoi…' : 'Envoyer à l\'hôpital'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {messageTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <form
+            onSubmit={submitHotelMessage}
+            className="bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-2xl max-w-lg w-full shadow-2xl border border-teal-100 dark:border-gray-800 overflow-hidden"
+          >
+            <div className="bg-gradient-to-r from-teal-700 to-slate-800 text-white px-5 py-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-teal-100 font-semibold">Message client</p>
+                <h3 className="text-xl font-bold flex items-center gap-2 mt-0.5">
+                  <MessageSquare className="w-5 h-5" />
+                  Contacter l&apos;hôtel
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={messageBusy}
+                onClick={() => setMessageTarget(null)}
+                className="icon-btn"
+                aria-label="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="rounded-xl p-3 bg-teal-50 border border-teal-100 text-sm">
+                <p className="font-bold text-gray-900">{messageTarget.title}</p>
+                <p className="text-xs text-gray-500 mt-1">{messageTarget.subtitle}</p>
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-200">Votre message *</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  placeholder="Ex. : arrivée tardive, demande de lit bébé, question sur le paiement…"
+                  className="mt-2 w-full px-4 py-3 border-2 border-gray-200 focus:border-teal-500 rounded-xl text-sm dark:bg-gray-950 dark:border-gray-700 outline-none"
+                />
+              </div>
+              {messageError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {messageError}
+                </p>
+              )}
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={messageBusy}
+                  onClick={() => setMessageTarget(null)}
+                  className="px-4 py-3 text-sm font-semibold rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={messageBusy || !messageText.trim()}
+                  className="px-5 py-3 bg-teal-700 hover:bg-teal-800 text-white rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  {messageBusy ? 'Envoi…' : 'Envoyer'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {rescheduleTarget && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <form
+            onSubmit={submitHotelReschedule}
+            className="bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-2xl max-w-lg w-full shadow-2xl border border-amber-100 dark:border-gray-800 overflow-hidden max-h-[95vh] overflow-y-auto"
+          >
+            <div className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-5 py-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-amber-100 font-semibold">Demande client</p>
+                <h3 className="text-xl font-bold flex items-center gap-2 mt-0.5">
+                  <Clock className="w-5 h-5" />
+                  Anticiper ou reporter
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={rescheduleBusy}
+                onClick={() => setRescheduleTarget(null)}
+                className="icon-btn"
+                aria-label="Fermer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 sm:p-6 space-y-4">
+              <div className="rounded-xl p-3 bg-amber-50 border border-amber-100 text-sm">
+                <p className="font-bold text-gray-900">{rescheduleTarget.title}</p>
+                <p className="text-xs text-amber-900 mt-1">
+                  Séjour actuel : <strong>{rescheduleTarget.checkIn} → {rescheduleTarget.checkOut}</strong>
+                </p>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Nouvelle arrivée *</label>
+                  <input
+                    type="date"
+                    required
+                    min={toLocalYmd(new Date())}
+                    value={rescheduleIn}
+                    onChange={(e) => setRescheduleIn(e.target.value)}
+                    className="mt-1 w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-gray-700">Nouveau départ *</label>
+                  <input
+                    type="date"
+                    required
+                    min={rescheduleIn || toLocalYmd(new Date())}
+                    value={rescheduleOut}
+                    onChange={(e) => setRescheduleOut(e.target.value)}
+                    className="mt-1 w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700">Motif *</label>
+                <textarea
+                  required
+                  rows={3}
+                  value={rescheduleReason}
+                  onChange={(e) => setRescheduleReason(e.target.value)}
+                  placeholder="Ex. : vol reporté, arrivée anticipée pour un événement…"
+                  className="mt-1 w-full px-3 py-2.5 border-2 border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+              {rescheduleError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                  {rescheduleError}
+                </p>
+              )}
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={rescheduleBusy}
+                  onClick={() => setRescheduleTarget(null)}
+                  className="px-4 py-3 text-sm font-semibold rounded-xl border border-gray-200"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={rescheduleBusy || !rescheduleReason.trim()}
+                  className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                >
+                  <Clock className="w-4 h-4" />
+                  {rescheduleBusy ? 'Envoi…' : 'Envoyer à l’hôtel'}
                 </button>
               </div>
             </div>

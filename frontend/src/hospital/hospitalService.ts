@@ -1,4 +1,4 @@
-import api, { toLocalDateTimeISO } from '../shared/api';
+import api, { invalidateApiCache, toLocalDateTimeISO } from '../shared/api';
 
 export interface AppointmentPayload {
   hospital?: string;
@@ -84,20 +84,35 @@ export const hospitalService = {
 
   getSchedules: (filters: Record<string, string> = {}) => {
     const qs = new URLSearchParams(filters).toString();
-    return api.get(`hospital/schedules/${qs ? `?${qs}` : ''}`, { auth: true });
+    return api.get(`hospital/schedules/${qs ? `?${qs}` : ''}`, { auth: true, noCache: true });
   },
 
-  createSchedule: (data: Record<string, unknown>) =>
-    api.post('hospital/schedules/', data, { auth: true }),
+  createSchedule: async (data: Record<string, unknown>) => {
+    const result = await api.post('hospital/schedules/', data, { auth: true });
+    invalidateApiCache('hospital/schedules');
+    return result;
+  },
 
-  updateSchedule: (id: string, data: Record<string, unknown>) =>
-    api.put(`hospital/schedules/${id}/`, data, { auth: true }),
+  updateSchedule: async (id: string, data: Record<string, unknown>) => {
+    const result = await api.put(`hospital/schedules/${id}/`, data, { auth: true });
+    invalidateApiCache('hospital/schedules');
+    return result;
+  },
 
-  deleteSchedule: (id: string) =>
-    api.delete(`hospital/schedules/${id}/`, { auth: true }),
+  deleteSchedule: async (id: string) => {
+    const result = await api.delete(`hospital/schedules/${id}/`, { auth: true });
+    invalidateApiCache('hospital/schedules');
+    return result;
+  },
 
-  applyScheduleTemplate: (data: Record<string, unknown>) =>
-    api.post('hospital/schedules/apply_template/', data, { auth: true }),
+  applyScheduleTemplate: async (data: Record<string, unknown>) => {
+    const result = await api.post('hospital/schedules/apply_template/', data, { auth: true });
+    invalidateApiCache('hospital/schedules');
+    return result;
+  },
+
+  getPlanningAlerts: (hospitalId: string) =>
+    api.get(`hospital/schedules/planning_alerts/?hospital=${hospitalId}`, { auth: true }),
 
   generateMonthlySlots: (data: Record<string, unknown>) =>
     api.post('hospital/appointment-slots/generate_monthly/', data, { auth: true }),
@@ -141,7 +156,10 @@ export const hospitalService = {
 
   searchConfirmedAppointments: (hospitalId: string, patientSearch: string) =>
     api.get(
-      `hospital/appointments/?hospital=${hospitalId}&status=CONFIRMED&patient_search=${encodeURIComponent(patientSearch)}`,
+      // Inclut aussi les RDV déjà orientés pour informer l'agent d'accueil
+      `hospital/appointments/?hospital=${hospitalId}`
+        + `&status=CONFIRMED,PATIENT_ARRIVED,WAITING_ROOM,PRESENT,IN_PROGRESS,COMPLETED`
+        + `&patient_search=${encodeURIComponent(patientSearch)}`,
       { auth: true }
     ),
 
@@ -165,8 +183,17 @@ export const hospitalService = {
   getInvoices: (hospitalId: string) =>
     api.get(`hospital/invoices/?hospital=${hospitalId}`, { auth: true }),
 
-  getLabResults: (hospitalId: string) =>
-    api.get(`hospital/lab-results/?hospital=${hospitalId}`, { auth: true }),
+  getLabResults: (hospitalId?: string) =>
+    api.get(
+      hospitalId ? `hospital/lab-results/?hospital=${hospitalId}` : 'hospital/lab-results/',
+      { auth: true },
+    ),
+
+  getPendingLabRequests: (hospitalId: string) =>
+    api.get(`hospital/lab-results/pending-requests/?hospital=${hospitalId}`, { auth: true }),
+
+  getLabStats: (hospitalId: string, days = 30) =>
+    api.get(`hospital/lab-results/stats/?hospital=${hospitalId}&days=${days}`, { auth: true }),
 
   getLabEligibleAppointments: (hospitalId: string) =>
     api.get(`hospital/lab-results/eligible-appointments/?hospital=${hospitalId}`, { auth: true }),
@@ -176,6 +203,15 @@ export const hospitalService = {
 
   updateLabResultStatus: (id: string, data: Record<string, unknown>) =>
     api.post(`hospital/lab-results/${id}/update_status/`, data, { auth: true }),
+
+  uploadLabDocument: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('document', file);
+    return api.post(`hospital/lab-results/${id}/upload-document/`, form, { auth: true });
+  },
+
+  getLabFhir: (id: string) =>
+    api.get(`hospital/lab-results/${id}/fhir/`, { auth: true }),
 
   getMedicalRecords: (hospitalId: string) =>
     api.get(`hospital/medical-records/?hospital=${hospitalId}`, { auth: true }),

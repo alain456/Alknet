@@ -18,6 +18,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import SocialIdentity
 from .serializers import UserSerializer
 from .services import log_audit_event
+from .email_identity import get_user_by_login_email
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -284,7 +285,7 @@ def login_or_register_social(*, provider: str, profile: dict, request=None) -> d
     if identity:
         user = identity.user
     else:
-        user = User.objects.filter(email__iexact=email).first()
+        user = get_user_by_login_email(email)
         if not user:
             user = User.objects.create_user(
                 email=email,

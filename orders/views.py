@@ -184,7 +184,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         phone = (request.data.get('payer_phone') or request.data.get('phone') or '').strip()
         if not phone:
-            return Response({'error': 'Numéro Lumicash requis.'}, status=400)
+            return Response({'error': 'Numéro BurundiPay requis.'}, status=400)
         result = order_payment.initiate_order_payment(order, phone)
         return Response({
             'ok': result.get('ok'),

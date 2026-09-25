@@ -13,14 +13,20 @@ export default function AdminServicesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [busyId, setBusyId] = useState(null);
-  const { token } = useAuth();
+  const { token, isAuthenticated } = useAuth();
 
   const load = useCallback(async () => {
-    if (!token) return;
+    if (!isAuthenticated || !token) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get('services/admin/list/', { auth: true });
+      const data = await api.get('services/admin/list/', {
+        auth: true,
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setServices(normalize(data));
     } catch (err) {
       setError(err.message || 'Impossible de charger les services');
@@ -28,7 +34,7 @@ export default function AdminServicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, isAuthenticated]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -37,7 +43,11 @@ export default function AdminServicesPage() {
     setMessage('');
     setError(null);
     try {
-      const updated = await api.post(`services/admin/${service.id}/status/`, { status }, { auth: true });
+      const updated = await api.post(
+        `services/admin/${service.id}/status/`,
+        { status },
+        { auth: true, headers: { Authorization: `Bearer ${token}` } },
+      );
       setServices((prev) => prev.map((s) => (s.id === service.id ? { ...s, ...updated } : s)));
       setMessage(`« ${service.title} » → ${status}`);
     } catch (err) {
@@ -120,7 +130,7 @@ export default function AdminServicesPage() {
       {message && <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-sm">{message}</div>}
       {error && <div className="p-3 rounded-xl bg-red-50 text-error text-sm">{error}</div>}
 
-      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm flex flex-col">
+      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-primary overflow-hidden shadow-sm flex flex-col">
         <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-paper dark:bg-black/10">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />

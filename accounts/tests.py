@@ -127,3 +127,51 @@ class JwtRefreshBlacklistTests(TestCase):
             'refresh': old_refresh,
         }, format='json')
         self.assertEqual(second.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class StrictLoginEmailTests(TestCase):
+    """m@gmail.com et ma@gmail.com ne doivent JAMAIS être confondus."""
+
+    def setUp(self):
+        self.client = APIClient()
+        User.objects.create_user(
+            email='m@gmail.com', password='SecurePass123!', role='BUSINESS_OWNER',
+            first_name='Admin', last_name='Pharma',
+        )
+        User.objects.create_user(
+            email='ma@gmail.com', password='OtherPass123!', role='PROFESSIONAL',
+            first_name='Manager', last_name='Hotel',
+        )
+
+    def test_emails_are_distinct_users(self):
+        from accounts.email_identity import get_user_by_login_email, emails_strictly_equal
+        m = get_user_by_login_email('m@gmail.com')
+        ma = get_user_by_login_email('ma@gmail.com')
+        self.assertIsNotNone(m)
+        self.assertIsNotNone(ma)
+        self.assertNotEqual(m.pk, ma.pk)
+        self.assertFalse(emails_strictly_equal('m@gmail.com', 'ma@gmail.com'))
+
+    def test_login_m_does_not_authenticate_ma(self):
+        # Bon email m@ + mauvais mdp de ma@ → échec
+        bad = self.client.post('/api/v1/accounts/login/', {
+            'email': 'm@gmail.com',
+            'password': 'OtherPass123!',
+        }, format='json')
+        self.assertEqual(bad.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        ok = self.client.post('/api/v1/accounts/login/', {
+            'email': 'm@gmail.com',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(ok.status_code, status.HTTP_200_OK)
+        self.assertEqual(ok.data['user']['email'], 'm@gmail.com')
+        self.assertEqual(ok.data['user']['role'], 'BUSINESS_OWNER')
+
+        ok_ma = self.client.post('/api/v1/accounts/login/', {
+            'email': 'ma@gmail.com',
+            'password': 'OtherPass123!',
+        }, format='json')
+        self.assertEqual(ok_ma.status_code, status.HTTP_200_OK)
+        self.assertEqual(ok_ma.data['user']['email'], 'ma@gmail.com')
+        self.assertEqual(ok_ma.data['user']['role'], 'PROFESSIONAL')

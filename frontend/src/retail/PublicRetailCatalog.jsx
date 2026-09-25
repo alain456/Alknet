@@ -4,7 +4,7 @@ import {
   ArrowLeft, Search, ShoppingCart, X, Minus, Plus, Pill, Trash2, History,
 } from 'lucide-react';
 import api from '../shared/api';
-import LumicashPayerField from '../shared/components/LumicashPayerField';
+import BurundiPayPayerField from '../shared/components/BurundiPayPayerField';
 import OrderPaymentSuccess from '../shared/components/OrderPaymentSuccess';
 import retailService, { PROFORMA_STATUS_LABELS } from './retailService';
 const money = (n, c = 'BIF') => `${Number(n || 0).toLocaleString('fr-BI')} ${c}`;
@@ -75,8 +75,8 @@ export default function PublicRetailCatalog() {
   const [patientName, setPatientName] = useState('');
   const [patientEmail, setPatientEmail] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
-  const [payerLumicash, setPayerLumicash] = useState('');
-  const [prescriptionFileUrl, setPrescriptionFileUrl] = useState('');
+  const [payerBurundiPay, setPayerBurundiPay] = useState('');
+  const [prescriptionFile, setPrescriptionFile] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -268,14 +268,21 @@ export default function PublicRetailCatalog() {
       return;
     }
     setConfirmChecked(false);
-    setPayerLumicash('');
+    setPayerBurundiPay('');
     setConfirmOpen(true);
   };
 
-  const fileToDataUri = (file) => {
-    const reader = new FileReader();
-    reader.onload = () => setPrescriptionFileUrl(String(reader.result || ''));
-    reader.readAsDataURL(file);
+  const fileToUpload = (file) => {
+    if (!file) {
+      setPrescriptionFile(null);
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError('Ordonnance trop volumineuse (max. 8 Mo).');
+      return;
+    }
+    setError('');
+    setPrescriptionFile(file);
   };
 
   const sendOrder = async () => {
@@ -284,12 +291,12 @@ export default function PublicRetailCatalog() {
       setError('Nom et email du patient requis.');
       return;
     }
-    if (!payerLumicash.trim()) {
-      setError('Indiquez votre numéro Lumicash pour le paiement.');
+    if (!payerBurundiPay.trim()) {
+      setError('Indiquez votre numéro BurundiPay pour le paiement.');
       return;
     }
-    if (requiresPrescription && !prescriptionFileUrl.trim()) {
-      setError('Ajoutez une ordonnance pour les produits signalés.');
+    if (requiresPrescription && !prescriptionFile) {
+      setError('Joignez le fichier de l’ordonnance (image ou PDF).');
       return;
     }
     setBusy(true);
@@ -300,16 +307,16 @@ export default function PublicRetailCatalog() {
         patient_name: patientName.trim(),
         patient_email: patientEmail.trim(),
         patient_phone: patientPhone.trim(),
-        payment_method: 'LUMICASH',
-        payer_phone: payerLumicash.trim(),
-        prescription_file_url: prescriptionFileUrl.trim() || undefined,
+        payment_method: 'BURUNDIPAY',
+        payer_phone: payerBurundiPay.trim(),
+        prescription_file: prescriptionFile || undefined,
         items: cart.map((i) => ({ product_id: i.product_id, quantity: i.quantity })),
       });
       persist([]);
       setConfirmOpen(false);
       setCartOpen(false);
-      setPrescriptionFileUrl('');
-      setPayerLumicash('');
+      setPrescriptionFile(null);
+      setPayerBurundiPay('');
       setSuccess(order);
     } catch (e) {
       setError(e.message || 'Échec envoi commande');
@@ -319,7 +326,7 @@ export default function PublicRetailCatalog() {
   };
 
   if (loading) {
-    return <div className="min-h-[50vh] flex items-center justify-center text-ink-muted bg-[#F4F6F6]">Chargement du catalogue...</div>;
+    return <div className="min-h-[50vh] flex items-center justify-center text-ink-muted bg-surface">Chargement du catalogue...</div>;
   }
 
   if (success) {
@@ -336,7 +343,7 @@ export default function PublicRetailCatalog() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F6] text-[#132523]" style={{ fontFamily: 'Inter, IBM Plex Sans, sans-serif' }}>
+    <div className="min-h-screen bg-surface text-ink" style={{ fontFamily: 'Inter, IBM Plex Sans, sans-serif' }}>
       <div className="bg-primary text-white px-5 sm:px-10 py-4">
         <div className="max-w-[1180px] mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -366,7 +373,7 @@ export default function PublicRetailCatalog() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="bg-accent text-[#2B1B05] text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
+              className="bg-accent text-primary text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
             >
               <ShoppingCart className="w-3.5 h-3.5" />
               Panier · {cartCount} article{cartCount > 1 ? 's' : ''}
@@ -461,8 +468,7 @@ export default function PublicRetailCatalog() {
               return (
                 <article
                   key={p.id}
-                  className="relative rounded-2xl border border-border p-4 pb-0 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
-                  style={{ background: 'repeating-linear-gradient(135deg, #EDEFEF 0px, #EDEFEF 2px, #F6F7F7 2px, #F6F7F7 6px)' }}
+                  className="relative rounded-2xl border border-border bg-surface p-4 pb-0 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
                 >
                   <button type="button" onClick={() => { setSelected(p); setQty(1); }} className="w-full text-left">
                     <div className="bg-white border border-border rounded-xl h-40 sm:h-44 flex items-center justify-center overflow-hidden mb-0">
@@ -536,9 +542,9 @@ export default function PublicRetailCatalog() {
                 </div>
                 <p className="text-lg font-mono font-bold text-primary">{money(selected.retail_price, selected.currency)}</p>
                 <div className="flex items-center gap-2">
-                  <button type="button" className="p-2 border rounded-lg" onClick={() => setQty(Math.max(1, Number(qty) - 1))}><Minus className="w-4 h-4" /></button>
+                  <button type="button" className="icon-btn" onClick={() => setQty(Math.max(1, Number(qty) - 1))}><Minus className="w-4 h-4" /></button>
                   <input type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} className="w-16 border rounded-lg px-2 py-2 text-center" />
-                  <button type="button" className="p-2 border rounded-lg" onClick={() => setQty(Number(qty) + 1)}><Plus className="w-4 h-4" /></button>
+                  <button type="button" className="icon-btn" onClick={() => setQty(Number(qty) + 1)}><Plus className="w-4 h-4" /></button>
                 </div>
                 <button
                   type="button"
@@ -608,7 +614,7 @@ export default function PublicRetailCatalog() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <button type="button" className="p-1 border rounded" onClick={() => updateQty(line.product_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
+                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
                       <input
                         type="number"
                         min={1}
@@ -616,7 +622,7 @@ export default function PublicRetailCatalog() {
                         value={line.quantity}
                         onChange={(e) => updateQty(line.product_id, e.target.value)}
                       />
-                      <button type="button" className="p-1 border rounded" onClick={() => updateQty(line.product_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
+                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
                     </div>
                     <span className="text-sm font-semibold">{money(line.line_total)}</span>
                   </div>
@@ -752,26 +758,26 @@ export default function PublicRetailCatalog() {
               <span className="text-slate-500">Téléphone</span>
               <input className="w-full border rounded-lg px-3 py-2" value={patientPhone} onChange={(e) => setPatientPhone(e.target.value)} />
             </label>
-            <LumicashPayerField
-              value={payerLumicash}
-              onChange={setPayerLumicash}
+            <BurundiPayPayerField
+              value={payerBurundiPay}
+              onChange={setPayerBurundiPay}
               amountLabel={money(subtotal)}
             />
             {requiresPrescription && (
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 space-y-2">
                 <b className="text-sm text-amber-900">Ordonnance obligatoire</b>
+                <p className="text-xs text-amber-800">Joignez une photo ou un PDF (max. 8 Mo).</p>
                 <input
                   type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => e.target.files?.[0] && fileToDataUri(e.target.files[0])}
+                  accept="image/*,.pdf,application/pdf"
+                  onChange={(e) => fileToUpload(e.target.files?.[0])}
                   className="block text-sm w-full"
                 />
-                <input
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  value={prescriptionFileUrl.startsWith('data:') ? 'Fichier chargé' : prescriptionFileUrl}
-                  onChange={(e) => setPrescriptionFileUrl(e.target.value === 'Fichier chargé' ? prescriptionFileUrl : e.target.value)}
-                  placeholder="Ou coller l’URL de l’ordonnance"
-                />
+                {prescriptionFile && (
+                  <p className="text-xs font-medium text-amber-900 truncate">
+                    Fichier : {prescriptionFile.name}
+                  </p>
+                )}
               </div>
             )}
             <label className="flex items-start gap-2 text-sm">

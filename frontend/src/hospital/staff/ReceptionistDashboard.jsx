@@ -18,6 +18,14 @@ const STATUS_COLORS = {
   COMPLETED: 'bg-green-100 text-green-700',
 };
 
+const ALREADY_ORIENTED = new Set([
+  'PATIENT_ARRIVED', 'WAITING_ROOM', 'PRESENT', 'IN_PROGRESS', 'COMPLETED',
+]);
+
+function isAlreadyOriented(apt) {
+  return ALREADY_ORIENTED.has(String(apt?.status || '').toUpperCase());
+}
+
 function doctorFullName(apt) {
   if (apt?.doctor_name) return apt.doctor_name;
   const d = apt?.doctor_details;
@@ -102,8 +110,10 @@ export default function ReceptionistDashboard() {
         const results = normalizeList(data);
         setSearchResults(results);
         if (results.length === 1) {
-          setSelectedAppointment(results[0]);
-          setOrientationNotes('');
+          selectAppointment(results[0]);
+        } else if (results.length === 0) {
+          setSelectedAppointment(null);
+          setActionError('');
         }
       } catch {
         setSearchResults([]);
@@ -119,6 +129,19 @@ export default function ReceptionistDashboard() {
     setOrientationNotes('');
     setActionError('');
     setSuccessMsg('');
+    if (isAlreadyOriented(apt)) {
+      const when = apt.checked_in_at
+        ? new Date(apt.checked_in_at).toLocaleString('fr-FR', {
+          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+        })
+        : null;
+      setActionError(
+        `Ce rendez-vous a déjà été orienté`
+        + (when ? ` le ${when}` : '')
+        + ` — statut : ${APPOINTMENT_STATUS_LABELS[apt.status] || apt.status}.`
+        + (apt.location_notes ? ` Orientation : ${apt.location_notes}` : '')
+      );
+    }
   };
 
   const handleOrientPatient = async () => {
@@ -217,7 +240,17 @@ export default function ReceptionistDashboard() {
         </p>
       </div>
 
-      {actionError && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100">{actionError}</div>}
+      {actionError && (
+        <div
+          className={`p-3 rounded-xl text-sm border ${
+            selectedAppointment && isAlreadyOriented(selectedAppointment)
+              ? 'bg-amber-50 text-amber-900 border-amber-200'
+              : 'bg-red-50 text-red-700 border-red-100'
+          }`}
+        >
+          {actionError}
+        </div>
+      )}
       {successMsg && <div className="p-3 bg-emerald-50 text-emerald-800 rounded-xl text-sm border border-emerald-100">{successMsg}</div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -284,14 +317,14 @@ export default function ReceptionistDashboard() {
             )}
             {arrivalSearch.length >= 2 && !searching && searchResults.length === 0 && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
-                Aucun RDV confirmé trouvé pour « {arrivalSearch} ».
+                Aucun rendez-vous trouvé pour « {arrivalSearch} » (confirmé ou déjà orienté).
               </p>
             )}
 
             {searchResults.length > 1 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-gray-600">
-                  {searchResults.length} rendez-vous confirmés — sélectionnez le bon :
+                  {searchResults.length} rendez-vous — sélectionnez le bon :
                 </p>
                 {searchResults.map((apt) => (
                   <button
@@ -301,17 +334,25 @@ export default function ReceptionistDashboard() {
                     className={`w-full text-left p-3 rounded-xl border text-xs transition ${
                       selectedAppointment?.id === apt.id
                         ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-400'
-                        : 'border-gray-200 hover:bg-gray-50'
+                        : isAlreadyOriented(apt)
+                          ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-50'
+                          : 'border-gray-200 hover:bg-gray-50'
                     }`}
                   >
-                    <div className="flex justify-between gap-2">
+                    <div className="flex justify-between gap-2 items-start">
                       <strong className="text-gray-900">{apt.patient_name}</strong>
-                      <span className="font-mono text-indigo-600">{apt.reference_code}</span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="font-mono text-indigo-600">{apt.reference_code}</span>
+                        {getStatusBadge(apt.status)}
+                      </div>
                     </div>
                     <p className="text-gray-500 mt-0.5">
                       {formatDate(apt)} · {formatTime(apt)} · Dr. {doctorFullName(apt)}
                       {apt.service_name ? ` · ${apt.service_name}` : ''}
                     </p>
+                    {isAlreadyOriented(apt) && (
+                      <p className="text-amber-800 font-semibold mt-1">Déjà orienté</p>
+                    )}
                   </button>
                 ))}
               </div>
@@ -456,10 +497,52 @@ export default function ReceptionistDashboard() {
                       </button>
                     </div>
                   </div>
+                ) : isAlreadyOriented(selectedAppointment) ? (
+                  <div className="px-4 pb-4 space-y-3 border-t border-amber-100 pt-4 bg-amber-50/80">
+                    <div className="p-3 rounded-xl bg-amber-100 border border-amber-200 text-sm text-amber-950">
+                      <p className="font-bold flex items-center gap-1.5 mb-1">
+                        <UserCheck className="w-4 h-4" />
+                        Ce rendez-vous a déjà été orienté
+                      </p>
+                      <p className="text-xs">
+                        Statut actuel :{' '}
+                        <strong>
+                          {APPOINTMENT_STATUS_LABELS[selectedAppointment.status] || selectedAppointment.status}
+                        </strong>
+                        {selectedAppointment.checked_in_at && (
+                          <>
+                            {' '}
+                            — arrivée enregistrée le{' '}
+                            {new Date(selectedAppointment.checked_in_at).toLocaleString('fr-FR', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </>
+                        )}
+                      </p>
+                      {selectedAppointment.location_notes && (
+                        <p className="text-xs mt-2">
+                          <strong>Orientation :</strong> {selectedAppointment.location_notes}
+                        </p>
+                      )}
+                      <p className="text-xs mt-2 text-amber-800">
+                        Aucune nouvelle orientation n’est nécessaire.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openHistory(selectedAppointment)}
+                      className="px-4 py-2.5 bg-white border border-amber-200 text-amber-900 text-sm font-semibold rounded-xl flex items-center gap-1"
+                    >
+                      <History className="w-4 h-4" /> Voir l’historique
+                    </button>
+                  </div>
                 ) : (
                   <div className="px-4 pb-4">
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg p-2">
-                      Ce rendez-vous n’est plus en statut « Confirmé » ({APPOINTMENT_STATUS_LABELS[selectedAppointment.status] || selectedAppointment.status}).
+                      Ce rendez-vous n’est plus orientable ({APPOINTMENT_STATUS_LABELS[selectedAppointment.status] || selectedAppointment.status}).
                     </p>
                   </div>
                 )}

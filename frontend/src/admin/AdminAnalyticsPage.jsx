@@ -100,7 +100,7 @@ export default function AdminAnalyticsPage() {
 
 function StatCard({ icon: Icon, label, value, accent = 'text-ink dark:text-white' }) {
   return (
-    <div className="bg-white dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-2xl p-4 shadow-sm">
+    <div className="bg-white dark:bg-primary border border-border dark:border-white/10 rounded-2xl p-4 shadow-sm">
       <div className="flex items-center gap-2 text-xs text-ink-muted mb-2">
         <Icon className="w-3.5 h-3.5" /> {label}
       </div>

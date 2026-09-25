@@ -1,18 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { 
   LayoutDashboard, Compass, MessageSquare, Heart, 
   Calendar, ShoppingBag, CreditCard, Bell, User, 
-  Crown, Settings, Menu, X, Search, LogOut 
+  Crown, Settings, Menu, X, Search, LogOut, FlaskConical,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canAccessZone, ZONE_ACCESS } from '../auth/roleAccess';
+import api from '../shared/api';
+import ThemeToggle from '../shared/components/ThemeToggle';
+
+const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
 export default function DashboardLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, getRedirectPath } = useAuth();
+
+  const loadUnread = useCallback(async () => {
+    try {
+      const data = await api.get('hospital/notifications/', { auth: true });
+      const list = normalizeList(data);
+      setUnreadCount(list.filter((n) => !n.is_read).length);
+    } catch {
+      setUnreadCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    loadUnread();
+    const id = window.setInterval(loadUnread, 60000);
+    return () => window.clearInterval(id);
+  }, [user, loadUnread, location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -29,6 +51,7 @@ export default function DashboardLayout() {
     { name: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
     { name: 'Favorites', icon: Heart, path: '/dashboard/favorites' },
     { name: 'Bookings', icon: Calendar, path: '/dashboard/bookings' },
+    { name: 'Lab results', icon: FlaskConical, path: '/dashboard/lab-results' },
     { name: 'Orders', icon: ShoppingBag, path: '/dashboard/orders' },
     { name: 'Payments', icon: CreditCard, path: '/dashboard/payments' },
     { name: 'Notifications', icon: Bell, path: '/dashboard/notifications' },
@@ -78,6 +101,7 @@ export default function DashboardLayout() {
         <div className="flex-1 overflow-y-auto py-6 px-4 flex flex-col gap-1">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
+            const showNotifBadge = item.path === '/dashboard/notifications' && unreadCount > 0;
             return (
               <Link 
                 key={item.name} 
@@ -89,8 +113,13 @@ export default function DashboardLayout() {
                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                <item.icon className="w-5 h-5" />
-                {item.name}
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span className="flex-1 truncate">{item.name}</span>
+                {showNotifBadge && (
+                  <span className="min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -139,7 +168,7 @@ export default function DashboardLayout() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="hidden sm:flex items-center max-w-md w-full bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 border border-transparent focus-within:border-primary transition">
+            <div className="hidden sm:flex items-center max-w-md w-full bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-2 border border-border focus-within:border-primary transition">
               <Search className="w-4 h-4 text-gray-400 mr-2" />
               <input 
                 type="text" 
@@ -149,11 +178,20 @@ export default function DashboardLayout() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <button className="relative text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition cursor-pointer">
+          <div className="flex items-center gap-3">
+            <ThemeToggle variant="ghost" size="sm" />
+            <Link
+              to="/dashboard/notifications"
+              className="relative text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
+              title="Notifications"
+            >
               <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-accent rounded-full"></span>
-            </button>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[1rem] h-4 px-1 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
             <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm cursor-pointer shadow-sm border-2 border-white dark:border-gray-800">
               {user?.first_name ? user.first_name[0].toUpperCase() : 'U'}
             </div>

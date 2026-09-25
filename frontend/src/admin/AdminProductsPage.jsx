@@ -1,38 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, MoreHorizontal, Package, Tag, Building2, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, Filter, Download, Package, Tag, Building2, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../shared/api';
+
+const normalize = (data) => (Array.isArray(data) ? data : data?.results || []);
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { token } = useAuth();
+  const { token, isAuthenticated } = useAuth();
 
   useEffect(() => {
     const fetchProducts = async () => {
+      if (!isAuthenticated || !token) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setError(null);
       try {
-        const response = await fetch('/api/v1/products/admin/list/', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+        const data = await api.get('products/admin/list/', {
+          auth: true,
+          headers: { Authorization: `Bearer ${token}` },
         });
-        if (!response.ok) throw new Error('Failed to fetch products');
-        const data = await response.json();
-        setProducts(data);
+        setProducts(normalize(data));
       } catch (err) {
-        setError(err.message);
+        setError(err.message || 'Impossible de charger les produits');
+        setProducts([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProducts();
-  }, [token]);
+  }, [token, isAuthenticated]);
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (p.business_name && p.business_name.toLowerCase().includes(searchTerm.toLowerCase()))
+  const filteredProducts = products.filter((p) =>
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    || (p.business_name || '').toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   return (
@@ -50,7 +57,7 @@ export default function AdminProductsPage() {
       </div>
 
       {/* Table Container */}
-      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm flex flex-col">
+      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-primary overflow-hidden shadow-sm flex flex-col">
         
         {/* Toolbar */}
         <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-paper dark:bg-black/10">
@@ -161,7 +168,7 @@ export default function AdminProductsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="p-1.5 text-ink-faint hover:text-green-900 dark:text-green-100/40 dark:hover:text-white transition-colors rounded-md hover:bg-paper dark:hover:bg-white/10 opacity-0 group-hover:opacity-100">
+                        <button className="icon-btn">
                           <MoreHorizontal className="w-5 h-5" />
                         </button>
                       </td>

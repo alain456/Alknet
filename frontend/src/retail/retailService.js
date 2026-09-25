@@ -1,9 +1,41 @@
-import api from '../shared/api';
+import api, { getToken } from '../shared/api';
 
 const query = (params = {}) => {
   const value = new URLSearchParams(params).toString();
   return value ? `?${value}` : '';
 };
+
+async function postForm(path, formData, { auth = false } = {}) {
+  const url = path.startsWith('/api') ? path : `/api/v1/${path.replace(/^\//, '')}`;
+  const headers = {};
+  if (auth) {
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(url, { method: 'POST', headers, body: formData });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data.detail || data.error || data.message || `Erreur HTTP ${res.status}`;
+    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+  }
+  return data;
+}
+
+function appendCheckoutFields(fd, data = {}) {
+  Object.entries(data).forEach(([key, value]) => {
+    if (value == null || value === '') return;
+    if (key === 'prescription_file' || key === 'file') return;
+    if (key === 'items' && typeof value !== 'string') {
+      fd.append('items', JSON.stringify(value));
+      return;
+    }
+    fd.append(key, value);
+  });
+  const file = data.prescription_file || data.file;
+  if (file instanceof File || file instanceof Blob) {
+    fd.append('prescription_file', file, file.name || 'ordonnance');
+  }
+}
 
 const retailService = {
   getDashboard: () => api.get('retail/dashboard/', { auth: true }),
@@ -35,9 +67,23 @@ const retailService = {
   getProformas: (params = {}) => api.get(`retail/proformas/${query(params)}`, { auth: true }),
   getPrescriptions: () => api.get('retail/prescriptions/', { auth: true }),
   reviewPrescription: (id, data) => api.post(`retail/prescriptions/${id}/review/`, data, { auth: true }),
-  createPrescription: (data) => api.post('retail/prescriptions/', data),
+  createPrescription: (data) => {
+    if (data?.prescription_file || data?.file) {
+      const fd = new FormData();
+      appendCheckoutFields(fd, data);
+      return postForm('retail/prescriptions/', fd);
+    }
+    return api.post('retail/prescriptions/', data);
+  },
   listPharmacies: () => api.get('retail/pharmacies/'),
-  guestCheckout: (data) => api.post('retail/guest-checkout/', data),
+  guestCheckout: (data) => {
+    if (data?.prescription_file || data?.file) {
+      const fd = new FormData();
+      appendCheckoutFields(fd, data);
+      return postForm('retail/guest-checkout/', fd);
+    }
+    return api.post('retail/guest-checkout/', data);
+  },
   payOrder: (id, payerPhone) => api.post(`retail/orders/${id}/pay/`, { payer_phone: payerPhone }),
   confirmOrderPayment: (id) => api.post(`retail/orders/${id}/confirm-payment/`, {}),
   getCart: (pharmacy) => api.get(`retail/cart/${query(pharmacy ? { pharmacy } : {})}`, { auth: true }),
@@ -45,7 +91,14 @@ const retailService = {
   updateCartItem: (data) => api.post('retail/cart/update_item/', data, { auth: true }),
   removeCartItem: (data) => api.post('retail/cart/remove_item/', data, { auth: true }),
   clearCart: (data) => api.post('retail/cart/clear/', data, { auth: true }),
-  checkout: (data) => api.post('retail/cart/checkout/', data, { auth: true }),
+  checkout: (data) => {
+    if (data?.prescription_file || data?.file) {
+      const fd = new FormData();
+      appendCheckoutFields(fd, data);
+      return postForm('retail/cart/checkout/', fd, { auth: true });
+    }
+    return api.post('retail/cart/checkout/', data, { auth: true });
+  },
 };
 
 export default retailService;
@@ -62,7 +115,7 @@ export const ORDER_STATUS_LABELS = {
 
 export const PAYMENT_STATUS_LABELS = {
   UNPAID: 'Non payée',
-  AWAITING_PIN: 'PIN Lumicash',
+  AWAITING_PIN: 'PIN BurundiPay',
   PAID: 'Payée',
   FAILED: 'Échec paiement',
   REFUNDED: 'Remboursée',

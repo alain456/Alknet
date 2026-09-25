@@ -167,7 +167,7 @@ function OrderDetail({ id, clientMode }) {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [acceptOpen, setAcceptOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
-  const [payMethod, setPayMethod] = useState('LUMICASH');
+  const [payMethod, setPayMethod] = useState('BURUNDIPAY');
   const [payNote, setPayNote] = useState('');
   const [reason, setReason] = useState('');
   const [comment, setComment] = useState('');
@@ -281,8 +281,8 @@ function OrderDetail({ id, clientMode }) {
           </p>
           {(order.payment_method || order.payer_phone) && (
             <p className="text-xs text-slate-500 mt-1">
-              Paiement prévu : {order.payment_method || 'LUMICASH'}
-              {order.payer_phone ? ` · Lumicash ${order.payer_phone}` : ''}
+              Paiement prévu : {order.payment_method || 'BURUNDIPAY'}
+              {order.payer_phone ? ` · BurundiPay ${order.payer_phone}` : ''}
             </p>
           )}
         </div>
@@ -293,7 +293,7 @@ function OrderDetail({ id, clientMode }) {
                 type="button"
                 onClick={() => setAcceptOpen(true)}
                 disabled={!canAccept}
-                title={!canAccept ? 'L\'acheteur doit d\'abord payer via Lumicash' : undefined}
+                title={!canAccept ? 'L\'acheteur doit d\'abord payer via BurundiPay' : undefined}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-semibold disabled:opacity-40"
               >
                 Accepter
@@ -318,7 +318,7 @@ function OrderDetail({ id, clientMode }) {
       {canDecide && !paymentSettled && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           Paiement non validé ({PAYMENT_STATUS_LABELS[order.payment_status] || order.payment_status}).
-          L&apos;acceptation n&apos;est possible qu&apos;après paiement Lumicash
+          L&apos;acceptation n&apos;est possible qu&apos;après paiement BurundiPay
           {order.payer_phone ? ` (${order.payer_phone})` : ''}.
         </div>
       )}
@@ -346,7 +346,7 @@ function OrderDetail({ id, clientMode }) {
         <div className="p-4 bg-teal-50 border border-teal-100 rounded-xl text-sm space-y-1">
           <strong>Paiement validé</strong>
           <div>Méthode : {order.payment_method || '—'}</div>
-          {order.payer_phone && <div>Lumicash : {order.payer_phone}</div>}
+          {order.payer_phone && <div>BurundiPay : {order.payer_phone}</div>}
           {order.paid_at && <div>Le {new Date(order.paid_at).toLocaleString('fr-FR')}</div>}
           {order.payment_note && <div className="text-slate-600">{order.payment_note}</div>}
         </div>
@@ -428,13 +428,13 @@ function OrderDetail({ id, clientMode }) {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-3">
             <h3 className="font-bold text-lg">Marquer comme payée</h3>
             <p className="text-xs text-slate-500">
-              Confirmez le paiement (Lumicash déjà reçu, espèces, virement…) pour permettre l&apos;acceptation.
+              Confirmez le paiement (BurundiPay déjà reçu, espèces, virement…) pour permettre l&apos;acceptation.
               Isoko Hub n&apos;encaisse pas ce montant.
             </p>
             <label className="text-sm block space-y-1">
               <span>Méthode</span>
               <select className="w-full border rounded-lg px-3 py-2" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-                <option value="LUMICASH">Lumicash</option>
+                <option value="BURUNDIPAY">BurundiPay</option>
                 <option value="CASH">Espèces</option>
                 <option value="BANK">Virement / banque</option>
                 <option value="OTHER">Autre</option>

@@ -236,10 +236,10 @@ export default function ManageExams() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button type="button" onClick={() => openEdit(ex)} className="p-2 rounded-lg hover:bg-teal-50 text-teal-700">
+                    <button type="button" onClick={() => openEdit(ex)} className="icon-btn">
                       <Pencil className="w-4 h-4" />
                     </button>
-                    <button type="button" onClick={() => handleDelete(ex)} className="p-2 rounded-lg hover:bg-red-50 text-red-600">
+                    <button type="button" onClick={() => handleDelete(ex)} className="icon-btn icon-btn--danger">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -264,7 +264,7 @@ export default function ManageExams() {
               <h2 className="font-bold text-gray-900">
                 {editingId ? 'Modifier l’examen' : 'Nouvel examen'}
               </h2>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="icon-btn">
                 <X className="w-5 h-5" />
               </button>
             </div>

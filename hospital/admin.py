@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     HospitalProfile, MedicalService, DoctorProfile, DoctorSchedule,
     HospitalExam,
-    Appointment, MedicalRecord, LabResult, Notification, Prescription,
+    Appointment, MedicalRecord, LabResult, LabResultEvent, Notification, Prescription,
     Invoice, Specialty,
 )
 
@@ -162,8 +162,16 @@ class LabResultAdmin(admin.ModelAdmin):
     search_fields = ('test_name', 'patient__email')
 
 
+@admin.register(LabResultEvent)
+class LabResultEventAdmin(admin.ModelAdmin):
+    list_display = ('lab_result', 'action', 'from_status', 'to_status', 'actor', 'created_at')
+    list_filter = ('action',)
+    search_fields = ('lab_result__test_name', 'actor__email', 'note')
+    readonly_fields = ('id', 'created_at')
+
+
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ('id', 'patient', 'hospital', 'amount', 'status', 'issued_at')
+    list_display = ('invoice_number', 'patient', 'hospital', 'amount', 'status', 'payment_method', 'issued_at')
     list_filter = ('status',)
 

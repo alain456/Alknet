@@ -28,7 +28,7 @@ class Business(models.Model):
     lumicash_merchant_account = models.CharField(
         max_length=80,
         blank=True,
-        help_text="Compte marchand Lumicash de l'établissement (encaissement consultations / RDV)",
+        help_text="Compte marchand BurundiPay de l'établissement (encaissement consultations / commandes)",
     )
     
     VERIFICATION_STATUS_CHOICES = (
@@ -49,6 +49,14 @@ class Business(models.Model):
 
     class Meta:
         verbose_name_plural = "Businesses"
+
+    @property
+    def burundipay_merchant_account(self):
+        return self.lumicash_merchant_account
+
+    @burundipay_merchant_account.setter
+    def burundipay_merchant_account(self, value):
+        self.lumicash_merchant_account = value or ''
 
     @property
     def full_address(self):
@@ -77,6 +85,7 @@ class Business(models.Model):
 class BusinessRole(models.Model):
     """Rôle dynamique créé par un hôpital/entreprise, lié à un niveau de sécurité strict."""
     SYSTEM_ACCESS_CHOICES = (
+        ('OWNER_ACCESS', 'Accès Propriétaire'),
         ('ADMIN_ACCESS', 'Accès Administrateur'),
         ('MEDICAL_ACCESS', 'Accès Médical (Médecins, Spécialistes)'),
         ('RECEPTIONIST_ACCESS', 'Accès Accueil & Réception'),
@@ -142,6 +151,7 @@ class BusinessSubscription(models.Model):
     STATUS_CHOICES = (
         ('TRIAL', 'Free'),
         ('ACTIVE', 'Actif'),
+        ('GRACE', 'Période de grâce'),
         ('EXPIRED', 'Expiré'),
         ('SUSPENDED', 'Suspendu'),
         ('CANCELLED', 'Annulé'),
@@ -159,6 +169,14 @@ class BusinessSubscription(models.Model):
     ends_at = models.DateTimeField()
     payment_reference = models.CharField(max_length=100, blank=True)
     notes = models.TextField(blank=True)
+    expiry_warning_ends_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Échéance pour laquelle l'alerte des 5 jours a déjà été envoyée",
+    )
+    grace_notice_ends_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Échéance pour laquelle le début de grâce a déjà été signalé",
+    )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -172,24 +190,38 @@ class BusinessSubscription(models.Model):
 
     @property
     def is_currently_active(self):
-        if self.status in ('SUSPENDED', 'CANCELLED'):
-            return False
-        if self.status in ('TRIAL', 'ACTIVE'):
-            return self.ends_at >= timezone.now()
-        return False
+        from .subscription import subscription_still_usable
+        return subscription_still_usable(self)
 
     def refresh_status(self, save=True):
-        """Passe en EXPIRED si la date est dépassée."""
-        if self.status in ('TRIAL', 'ACTIVE') and self.ends_at < timezone.now():
-            self.status = 'EXPIRED'
-            if save:
-                self.save(update_fields=['status', 'updated_at'])
-        return self.status
+        """Met à jour actif / grâce / expiré et envoie les alertes d'échéance."""
+        from .subscription import apply_subscription_lifecycle
+        return apply_subscription_lifecycle(self, save=save)
+
+
+class PlatformSubscriptionSettings(models.Model):
+    """Réglage unique : période de grâce SaaS appliquée à toutes les entreprises."""
+    grace_period_days = models.PositiveIntegerField(
+        default=7,
+        help_text="Jours d'accès après l'échéance, pour toutes les entreprises",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Réglage abonnement plateforme"
+        verbose_name_plural = "Réglages abonnement plateforme"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"Période de grâce : {self.grace_period_days} j"
 
 
 class SubscriptionPayment(models.Model):
     """
-    Paiement d'abonnement SaaS : Entreprise → compte marchand Isoko Hub (Lumicash).
+    Paiement d'abonnement SaaS : Entreprise → compte marchand Isoko Hub (BurundiPay).
     Distinct des paiements privés client↔vendeur sur les commandes.
     """
     STATUS_CHOICES = (
@@ -214,9 +246,9 @@ class SubscriptionPayment(models.Model):
     )
     amount_bif = models.PositiveIntegerField()
     currency = models.CharField(max_length=10, default='BIF')
-    payer_phone = models.CharField(max_length=40, help_text='Numéro Lumicash du payeur (entreprise)')
+    payer_phone = models.CharField(max_length=40, help_text='Numéro BurundiPay du payeur (entreprise)')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    provider = models.CharField(max_length=40, default='LUMICASH')
+    provider = models.CharField(max_length=40, default='BURUNDIPAY')
     provider_reference = models.CharField(max_length=120, blank=True, db_index=True)
     merchant_account = models.CharField(
         max_length=80, blank=True,
@@ -250,6 +282,8 @@ class PlatformNotification(models.Model):
     TYPE_CHOICES = (
         ('SUBSCRIPTION_PAID', 'Abonnement payé'),
         ('SUBSCRIPTION_FAILED', 'Échec paiement abo'),
+        ('SUBSCRIPTION_EXPIRING', 'Abonnement bientôt expiré'),
+        ('SUBSCRIPTION_GRACE', 'Période de grâce'),
         ('INFO', 'Information'),
     )
 

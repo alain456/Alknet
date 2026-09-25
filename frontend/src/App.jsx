@@ -1,6 +1,5 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './auth/ProtectedRoute';
 import { ZONE_ACCESS } from './auth/roleAccess';
 import PublicLayout from './layouts/PublicLayout';
@@ -24,19 +23,37 @@ import ManageInvoices from './hospital/admin/ManageInvoices';
 import ManageLabResults from './hospital/admin/ManageLabResults';
 import HospitalDashboard from './hospital/admin/HospitalDashboard';
 import ManageReports from './hospital/admin/ManageReports';
-import AuditLogs from './hospital/admin/AuditLogs';
 import ManagePatients from './hospital/admin/ManagePatients';
 import PatientDetail from './hospital/admin/PatientDetail';
 import ManageAdmissions from './hospital/admin/ManageAdmissions';
-import HospitalSettings from './hospital/admin/HospitalSettings';
 import LegacyHospitalAdminRedirect from './hospital/LegacyHospitalAdminRedirect';
 import PermissionGuard from './auth/PermissionGuard';
 import { PERMISSIONS } from './lib/permissions';
 import LabTechnicianDashboard from './hospital/staff/LabTechnicianDashboard';
 import DoctorDashboard from './hospital/staff/DoctorDashboard';
 import NurseDashboard from './hospital/staff/NurseDashboard';
-import CashierDashboard from './hospital/staff/CashierDashboard';
+import HospitalCashierDashboard from './hospital/staff/CashierDashboard';
 import ReceptionistDashboard from './hospital/staff/ReceptionistDashboard';
+import HotelDashboard from './hotel/admin/HotelDashboard';
+import HotelCompany from './hotel/admin/HotelCompany';
+import ManageRoomTypes from './hotel/admin/ManageRoomTypes';
+import ManageRooms from './hotel/admin/ManageRooms';
+import ManageRates from './hotel/admin/ManageRates';
+import ManageReservations from './hotel/admin/ManageReservations';
+import ManageStays from './hotel/admin/ManageStays';
+import ManageGuests, { ManageHotelServices } from './hotel/admin/ManageGuests';
+import ManageHousekeeping from './hotel/admin/ManageHousekeeping';
+import ManageMaintenance from './hotel/admin/ManageMaintenance';
+import ManageHotelInvoices, { HotelReports } from './hotel/admin/ManageHotelInvoices';
+import FrontDeskArrivals, { FrontDeskDepartures } from './hotel/admin/FrontDesk';
+import CashierFolios from './hotel/admin/CashierFolios';
+import HotelCashierDashboard from './hotel/admin/CashierDashboard';
+import HotelReservationSettings from './hotel/admin/HotelReservationSettings';
+import HotelClientMessages from './hotel/admin/HotelClientMessages';
+import HotelClientReschedules from './hotel/admin/HotelClientReschedules';
+import HotelStaffLayout from './hotel/staff/HotelStaffLayout';
+import PublicHotels from './hotel/public/PublicHotels';
+import PublicHotelBook from './hotel/public/PublicHotelBook';
 import AuthLayout from './layouts/AuthLayout';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
@@ -49,6 +66,7 @@ import UserDashboardPage from './dashboard/UserDashboardPage';
 import UserBookingsPage from './dashboard/UserBookingsPage';
 import UserProfilePage from './dashboard/UserProfilePage';
 import Notifications from './patient/Notifications';
+import PatientLabResults from './patient/PatientLabResults';
 import BusinessLayout from './layouts/BusinessLayout';
 import ManageRoles from './business/ManageRoles';
 import BusinessDashboardPage from './business/BusinessDashboardPage';
@@ -61,6 +79,7 @@ import BusinessBookingsPage from './business/BusinessBookingsPage';
 import BusinessProfilePage from './business/BusinessProfilePage';
 import BusinessSettingsPage from './business/BusinessSettingsPage';
 import BusinessSubscriptionPage from './business/BusinessSubscriptionPage';
+import BusinessAuditLogsPage from './business/BusinessAuditLogsPage';
 import CommerceDashboard from './commerce/CommerceDashboard';
 import CommerceCatalog from './commerce/CommerceCatalog';
 import CommerceInventory from './commerce/CommerceInventory';
@@ -79,6 +98,11 @@ import AdminLocationsPage from './admin/AdminLocationsPage';
 import AdminSettingsPage from './admin/AdminSettingsPage';
 import AdminAuditLogsPage from './admin/AdminAuditLogsPage';
 import AdminCmsPage from './admin/AdminCmsPage';
+import AdminPlatformRolesPage from './admin/AdminPlatformRolesPage';
+import AdminModerationPage from './admin/AdminModerationPage';
+import AdminSupportPage from './admin/AdminSupportPage';
+import AdminHotelsPage from './admin/AdminHotelsPage';
+import HotelCalendar from './hotel/admin/HotelCalendar';
 import ContentPageView from './public/ContentPageView';
 import BusinessClientHistoryPage from './public/BusinessClientHistoryPage';
 import WholesaleDashboard from './wholesale/WholesaleDashboard';
@@ -87,7 +111,6 @@ import WholesaleInventory from './wholesale/WholesaleInventory';
 import WholesaleOrders from './wholesale/WholesaleOrders';
 import WholesaleClients from './wholesale/WholesaleClients';
 import WholesaleHistory from './wholesale/WholesaleHistory';
-import WholesaleSettings from './wholesale/WholesaleSettings';
 import WholesaleCompany from './wholesale/WholesaleCompany';
 import WholesaleCart from './wholesale/WholesaleCart';
 import WholesaleProforma from './wholesale/WholesaleProforma';
@@ -102,15 +125,13 @@ import RetailPatients from './retail/RetailPatients';
 import RetailPrescriptions from './retail/RetailPrescriptions';
 import RetailHistory from './retail/RetailHistory';
 import RetailCompany from './retail/RetailCompany';
-import RetailSettings from './retail/RetailSettings';
 import RetailProforma from './retail/RetailProforma';
 import RetailCart from './retail/RetailCart';
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <BrowserRouter>
+      <Routes>
           <Route path="/" element={<PublicLayout />}>
             <Route index element={<LandingPage />} />
             <Route path="services" element={<ServicesPage />} />
@@ -126,7 +147,11 @@ function App() {
             <Route path="hospitals" element={<HospitalDirectory />} />
             <Route path="hospitals/:id" element={<HospitalProfile />} />
             <Route path="hospitals/:id/historique" element={<BusinessClientHistoryPage />} />
-            <Route path="hospital/book-appointment" element={<PublicAppointmentBooking />} />            <Route path="register-business" element={<BusinessRegistrationPage />} />
+            <Route path="hospital/book-appointment" element={<PublicAppointmentBooking />} />
+            <Route path="hotels" element={<PublicHotels />} />
+            <Route path="hotels/:id/historique" element={<BusinessClientHistoryPage />} />
+            <Route path="hotels/:id" element={<PublicHotelBook />} />
+            <Route path="register-business" element={<BusinessRegistrationPage />} />
             <Route path="pages/:slug" element={<ContentPageView />} />
           </Route>
 
@@ -149,6 +174,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<UserDashboardPage />} />
               <Route path="bookings" element={<UserBookingsPage />} />
+              <Route path="lab-results" element={<PatientLabResults />} />
               <Route path="profile" element={<UserProfilePage />} />
               <Route path="notifications" element={<Notifications />} />
             </Route>
@@ -173,6 +199,7 @@ function App() {
               <Route path="profile" element={<BusinessProfilePage />} />
               <Route path="settings" element={<BusinessSettingsPage />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
             </Route>
 
             {/* Module Commerce — Boutique / Mode / Quincaillerie / … */}
@@ -186,6 +213,7 @@ function App() {
               <Route path="settings" element={<Navigate to="/business/settings" replace />} />
               <Route path="employees" element={<Navigate to="/business/employees" replace />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
             </Route>
             
             {/* Module Hôpital — routes MVP + compatibilité /hospital/admin/* */}
@@ -231,13 +259,46 @@ function App() {
               <Route path="staff" element={<BusinessEmployeesPage />} />
               <Route path="audit" element={
                 <PermissionGuard anyPermissions={[PERMISSIONS.AUDIT_VIEW]}>
-                  <AuditLogs />
+                  <BusinessAuditLogsPage />
                 </PermissionGuard>
               } />
-              <Route path="settings" element={<HospitalSettings />} />
+              <Route path="settings" element={<Navigate to="/business/settings" replace />} />
               {/* Redirections legacy */}
               <Route path="admin" element={<Navigate to="/hospital/dashboard" replace />} />
               <Route path="admin/:section" element={<LegacyHospitalAdminRedirect />} />
+            </Route>
+
+            {/* Module Hôtel — PMS MVP */}
+            <Route path="/hotel" element={<BusinessLayout />}>
+              <Route index element={<Navigate to="/hotel/dashboard" replace />} />
+              <Route path="dashboard" element={<HotelDashboard />} />
+              <Route path="company" element={<HotelCompany />} />
+              <Route path="room-types" element={<ManageRoomTypes />} />
+              <Route path="rooms" element={<ManageRooms />} />
+              <Route path="rates" element={<ManageRates />} />
+              <Route path="reservations" element={<ManageReservations view="list" listPath="/hotel/reservations" createPath="/hotel/reservations/new" />} />
+              <Route path="reservations/new" element={<ManageReservations view="create" listPath="/hotel/reservations" createPath="/hotel/reservations/new" />} />
+              <Route path="messages" element={<HotelClientMessages />} />
+              <Route path="reschedules" element={<HotelClientReschedules />} />
+              <Route path="reservation-settings" element={<HotelReservationSettings focus="all" />} />
+              <Route path="stays" element={<ManageStays />} />
+              <Route path="guests" element={<ManageGuests />} />
+              <Route path="services" element={<ManageHotelServices />} />
+              <Route path="housekeeping" element={<ManageHousekeeping />} />
+              <Route path="maintenance" element={<ManageMaintenance />} />
+              <Route path="cashier" element={<HotelCashierDashboard />} />
+              <Route path="folios" element={<CashierFolios />} />
+              <Route path="invoices" element={<ManageHotelInvoices />} />
+              <Route path="reports" element={<HotelReports />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
+              <Route path="front-desk/arrivals" element={<FrontDeskArrivals />} />
+              <Route path="front-desk/departures" element={<FrontDeskDepartures />} />
+              <Route path="front-desk/stays" element={<Navigate to="/hotel/stays" replace />} />
+              <Route path="calendar" element={<HotelCalendar />} />
+              <Route path="users" element={<ManageRoles />} />
+              <Route path="staff" element={<BusinessEmployeesPage />} />
+              <Route path="settings" element={<Navigate to="/business/settings" replace />} />
+              <Route path="subscription" element={<BusinessSubscriptionPage />} />
             </Route>
 
             {/* Module Pharmacie de gros — même logique que /hospital */}
@@ -252,7 +313,8 @@ function App() {
               <Route path="clients" element={<WholesaleClients />} />
               <Route path="clients/:clientKey" element={<WholesaleClients />} />
               <Route path="history" element={<WholesaleHistory />} />
-              <Route path="settings" element={<WholesaleSettings />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
+              <Route path="settings" element={<BusinessSettingsPage />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
               {/* Espace client — pharmacie de détail */}
               <Route path="client" element={<Navigate to="/wholesale-pharmacy/client/dashboard" replace />} />
@@ -280,7 +342,8 @@ function App() {
               <Route path="patients/:key" element={<RetailPatients />} />
               <Route path="proformas" element={<RetailProforma />} />
               <Route path="history" element={<RetailHistory />} />
-              <Route path="settings" element={<RetailSettings />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
+              <Route path="settings" element={<BusinessSettingsPage />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
             </Route>
           </Route>
@@ -312,8 +375,18 @@ function App() {
               <Route path="/hospital/staff/lab-technician" element={<LabTechnicianDashboard />} />
               <Route path="/hospital/staff/doctor" element={<DoctorDashboard />} />
               <Route path="/hospital/staff/nurse" element={<NurseDashboard />} />
-              <Route path="/hospital/staff/cashier" element={<CashierDashboard />} />
+              <Route path="/hospital/staff/cashier" element={<HospitalCashierDashboard />} />
             </Route>
+          </Route>
+
+          {/* Ancien portail staff hôtel → redirection PMS (/hotel/*) filtrée par droits */}
+          <Route element={
+            <ProtectedRoute
+              allowedRoles={ZONE_ACCESS.hotelStaff.allowedRoles}
+              forbiddenRoles={ZONE_ACCESS.hotelStaff.forbiddenRoles}
+            />
+          }>
+            <Route path="/hotel/staff/*" element={<HotelStaffLayout />} />
           </Route>
 
           {/* Super Admin plateforme — exclusif */}
@@ -333,6 +406,10 @@ function App() {
               <Route path="locations" element={<AdminLocationsPage />} />
               <Route path="services" element={<AdminServicesPage />} />
               <Route path="payments" element={<AdminPaymentsPage />} />
+              <Route path="roles" element={<AdminPlatformRolesPage />} />
+              <Route path="moderation" element={<AdminModerationPage />} />
+              <Route path="support" element={<AdminSupportPage />} />
+              <Route path="hotels" element={<AdminHotelsPage />} />
               <Route path="audit-logs" element={<AdminAuditLogsPage />} />
               <Route path="cms" element={<AdminCmsPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />
@@ -343,7 +420,6 @@ function App() {
           <Route path="*" element={<div className="p-20 text-center text-2xl font-bold">404 - Page Not Found</div>} />
         </Routes>
       </BrowserRouter>
-    </AuthProvider>
   );
 }
 

@@ -24,9 +24,59 @@ from .subscription import (
     update_catalog_plan,
     activate_subscription_from_payment,
     payment_detail_dict,
+    get_grace_period_days,
+    update_grace_period_days,
+    reset_subscription_notices,
+    EXPIRY_WARNING_DAYS,
 )
-from . import lumicash
-from permissions.custom_permissions import IsSuperAdmin, IsBusinessOwner, IsBusinessTenantMember
+from . import burundipay
+from permissions.custom_permissions import IsSuperAdmin, IsBusinessOwner, IsBusinessTenantMember, PlatformMethodPermission
+
+
+def _business_is_hotel(business):
+    if not business:
+        return False
+    try:
+        from hotel.models import HotelProfile
+        if HotelProfile.objects.filter(business_id=business.id).exists():
+            return True
+    except Exception:
+        pass
+    cat = getattr(business, 'primary_category', None)
+    name = (getattr(cat, 'name', '') or '').lower()
+    slug = (getattr(cat, 'slug', '') or '').lower()
+    parent = (getattr(getattr(cat, 'parent', None), 'name', '') or '').lower()
+    return any(
+        k in name or k in slug or k in parent
+        for k in ('hôtel', 'hotel', 'hôtellerie', 'hotellerie')
+    )
+
+
+class CanManageBusinessRoles(BasePermission):
+    """
+    Lecture : membre du tenant.
+    Écriture hôtel : permission hotel.roles.* (attribuable à n'importe qui) ou propriétaire / manage.
+    Autres secteurs : membre du tenant.
+    """
+
+    def has_permission(self, request, view):
+        if not IsBusinessTenantMember().has_permission(request, view):
+            return False
+        business = get_user_tenant_business(request.user)
+        if not _business_is_hotel(business):
+            return True
+        from hotel.permissions import can_access_hotel_roles
+        method = request.method.upper()
+        if method in ('GET', 'HEAD', 'OPTIONS'):
+            return can_access_hotel_roles(request.user, business, 'view')
+        if method == 'POST':
+            return can_access_hotel_roles(request.user, business, 'create')
+        if method in ('PUT', 'PATCH'):
+            return can_access_hotel_roles(request.user, business, 'update')
+        if method == 'DELETE':
+            return can_access_hotel_roles(request.user, business, 'delete')
+        return can_access_hotel_roles(request.user, business, 'view')
+
 
 class CanCreateBusiness(BasePermission):
     """
@@ -64,7 +114,9 @@ class BusinessListView(generics.ListAPIView):
             queryset = queryset.filter(commune__iexact=commune.strip())
         if quartier:
             queryset = queryset.filter(quartier__icontains=quartier.strip())
-        return queryset.select_related('primary_category', 'hospital_profile').prefetch_related('categories')
+        return queryset.select_related(
+            'primary_category', 'primary_category__parent', 'hospital_profile'
+        ).prefetch_related('categories', 'categories__parent')
 
 class BusinessDetailView(generics.RetrieveAPIView):
     """
@@ -80,7 +132,9 @@ class BusinessDetailView(generics.RetrieveAPIView):
                 is_verified=True,
                 verification_status='APPROVED',
             )
-        ).select_related('primary_category', 'hospital_profile').prefetch_related('categories')
+        ).select_related(
+            'primary_category', 'primary_category__parent', 'hospital_profile'
+        ).prefetch_related('categories', 'categories__parent')
 
 
 class MyBusinessListView(generics.ListCreateAPIView):
@@ -151,12 +205,52 @@ class MyBusinessListView(generics.ListCreateAPIView):
 class AdminBusinessListView(generics.ListCreateAPIView):
     queryset = Business.objects.all().order_by('-created_at')
     serializer_class = AdminBusinessSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.businesses.view',
+        'POST': 'platform.businesses.create',
+    }
 
 class AdminBusinessDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Business.objects.all()
     serializer_class = AdminBusinessSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.businesses.view',
+        'PUT': 'platform.businesses.update',
+        'PATCH': 'platform.businesses.update',
+        'DELETE': 'platform.businesses.delete',
+    }
+
+    def update(self, request, *args, **kwargs):
+        from accounts.platform_access import user_has_platform_perm
+        from accounts.models import AuditLog
+
+        if 'is_active' in request.data and not user_has_platform_perm(request.user, 'platform.businesses.suspend'):
+            return Response(
+                {'detail': 'La suspension d’une entreprise exige le droit platform.businesses.suspend.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        instance = self.get_object()
+        previous_active = bool(instance.is_active)
+        response = super().update(request, *args, **kwargs)
+        if response.status_code < 400 and 'is_active' in request.data:
+            instance.refresh_from_db(fields=['is_active', 'name'])
+            now_active = bool(instance.is_active)
+            if now_active != previous_active:
+                AuditLog.objects.create(
+                    user=request.user,
+                    user_email=getattr(request.user, 'email', '') or '',
+                    user_role=getattr(request.user, 'role', '') or '',
+                    action='BUSINESS_REACTIVATED' if now_active else 'BUSINESS_SUSPENDED',
+                    resource=f'business:{instance.id}',
+                    details={
+                        'business_name': instance.name,
+                        'business_id': str(instance.id),
+                        'is_active': now_active,
+                    },
+                )
+        return response
 
     def destroy(self, request, *args, **kwargs):
         """
@@ -191,7 +285,7 @@ from .serializers import BusinessEmployeeSerializer, BusinessRoleSerializer
 
 class BusinessRoleListCreateView(generics.ListCreateAPIView):
     serializer_class = BusinessRoleSerializer
-    permission_classes = [IsBusinessTenantMember]
+    permission_classes = [CanManageBusinessRoles]
 
     def get_queryset(self):
         business = get_user_tenant_business(self.request.user)
@@ -205,7 +299,7 @@ class BusinessRoleListCreateView(generics.ListCreateAPIView):
 
 class BusinessRoleDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BusinessRoleSerializer
-    permission_classes = [IsBusinessTenantMember]
+    permission_classes = [CanManageBusinessRoles]
 
     def get_queryset(self):
         business = get_user_tenant_business(self.request.user)
@@ -213,10 +307,30 @@ class BusinessRoleDetailView(generics.RetrieveUpdateDestroyAPIView):
             return BusinessRole.objects.filter(business=business)
         return BusinessRole.objects.none()
 
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        from hotel.role_defaults import is_hotel_owner_role, OWNER_ROLE_NAME
+        if is_hotel_owner_role(instance):
+            # Nom / niveau du rôle Propriétaire verrouillés
+            serializer.save(name=OWNER_ROLE_NAME, system_access_level='OWNER_ACCESS')
+            return
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        from hotel.role_defaults import is_hotel_owner_role
+        business = get_user_tenant_business(request.user)
+        if _business_is_hotel(business) and is_hotel_owner_role(instance):
+            return Response(
+                {'detail': 'Le rôle Propriétaire ne peut pas être supprimé.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class SeedReceptionistRoleView(APIView):
     """Crée ou met à jour le rôle standard « Agent d'accueil » avec ses permissions."""
-    permission_classes = [IsBusinessTenantMember]
+    permission_classes = [CanManageBusinessRoles]
 
     def post(self, request):
         from hospital.reception_constants import RECEPTIONIST_ROLE_DEFAULTS
@@ -258,42 +372,110 @@ class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
         return BusinessEmployee.objects.none()
 
     def create(self, request, *args, **kwargs):
+        """
+        Crée / rattache un collaborateur au tenant.
+        Comme l'admin hôpital (ManageDoctors) : email + password créent le compte de connexion.
+        Champs : email (requis), password (requis si nouveau compte), first_name, last_name,
+                 position, role_id.
+        """
+        from django.db import transaction
+
         business = get_user_tenant_business(request.user)
         if not business:
             return Response({'detail': 'Aucune entreprise associée à votre compte.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        email = request.data.get('email')
-        position = request.data.get('position', 'STAFF')
+        email = (request.data.get('email') or '').strip().lower()
+        position = (request.data.get('position') or 'STAFF').strip() or 'STAFF'
         role_id = request.data.get('role_id')
+        password = request.data.get('password') or ''
+        first_name = (request.data.get('first_name') or '').strip()
+        last_name = (request.data.get('last_name') or '').strip()
 
-        if not email:
+        from accounts.email_identity import normalize_login_email, get_user_by_login_email, emails_strictly_equal
+        email = normalize_login_email(email)
+
+        if not email or '@' not in email:
             return Response({'email': 'L\'email est requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            User = get_user_model()
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({'email': 'Aucun utilisateur trouvé avec cet email.'}, status=status.HTTP_404_NOT_FOUND)
+        User = get_user_model()
+        account_created = False
+        with transaction.atomic():
+            # Correspondance STRICTE uniquement (m@gmail.com ≠ ma@gmail.com)
+            user = get_user_by_login_email(email)
+            if user and not emails_strictly_equal(user.email, email):
+                user = None
 
-        if user.role == 'SUPER_ADMIN':
-            return Response(
-                {'email': 'Le super administrateur plateforme ne peut pas être ajouté au personnel d\'une entreprise.'},
-                status=status.HTTP_400_BAD_REQUEST,
+            if user is None:
+                if not password or len(str(password)) < 8:
+                    return Response(
+                        {
+                            'password': (
+                                'Mot de passe requis (min. 8 caractères) pour créer '
+                                'le compte de connexion de ce collaborateur.'
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                user = User(
+                    email=email,
+                    first_name=first_name or email.split('@')[0],
+                    last_name=last_name,
+                    role='PROFESSIONAL',
+                    is_active=True,
+                )
+                user.set_password(password)
+                user.save()
+                account_created = True
+            else:
+                if user.role == 'SUPER_ADMIN':
+                    return Response(
+                        {'email': 'Le super administrateur plateforme ne peut pas être ajouté au personnel d\'une entreprise.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if BusinessEmployee.objects.filter(business=business, user=user).exists():
+                    return Response(
+                        {
+                            'email': (
+                                f'Le compte {user.email} est déjà un employé de cette entreprise. '
+                                'Attention : m@gmail.com et ma@gmail.com sont deux adresses différentes.'
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # Compte déjà existant : ne JAMAIS écraser prénom/nom
+                # (sinon un proprio pharmacie rattaché à un hôtel devient « Manager hotel » partout)
+                fields_changed = False
+                if password and len(str(password)) >= 8:
+                    user.set_password(password)
+                    fields_changed = True
+                if user.role == 'CUSTOMER':
+                    user.role = 'PROFESSIONAL'
+                    fields_changed = True
+                if fields_changed:
+                    user.save()
+
+            role = None
+            if role_id:
+                role = BusinessRole.objects.filter(id=role_id, business=business).first()
+
+            employee = BusinessEmployee.objects.create(
+                business=business, user=user, position=position, role=role,
             )
 
-        if BusinessEmployee.objects.filter(business=business, user=user).exists():
-            return Response({'detail': 'Cet utilisateur est déjà un employé.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        role = None
-        if role_id:
-            try:
-                role = BusinessRole.objects.get(id=role_id, business=business)
-            except BusinessRole.DoesNotExist:
-                pass
-
-        employee = BusinessEmployee.objects.create(business=business, user=user, position=position, role=role)
         serializer = self.get_serializer(employee)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        data = serializer.data
+        data['account_created'] = account_created
+        data['login_email'] = user.email
+        data['message'] = (
+            f'Nouveau compte créé pour {user.email}. Communiquez l\'email et le mot de passe au collaborateur.'
+            if account_created
+            else f'Collaborateur rattaché au compte existant {user.email} (email exact, pas un alias).'
+        )
+        return Response(data, status=status.HTTP_201_CREATED)
+
+    def perform_create(self, serializer):
+        # create() gère déjà la logique métier
+        pass
 
 class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BusinessEmployeeSerializer
@@ -308,9 +490,16 @@ class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
         return BusinessEmployee.objects.none()
 
     def update(self, request, *args, **kwargs):
+        from django.db import transaction
+        from django.contrib.auth import get_user_model
+
         instance = self.get_object()
         role_id = request.data.get('role_id')
         position = request.data.get('position')
+        password = request.data.get('password') or ''
+        first_name = request.data.get('first_name')
+        last_name = request.data.get('last_name')
+        email_raw = request.data.get('email')
 
         if position is not None:
             instance.position = position
@@ -321,9 +510,55 @@ class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
             except BusinessRole.DoesNotExist:
                 pass
 
-        instance.save()
+        user = instance.user
+        # Ne pas écraser l'identité d'un propriétaire d'une AUTRE entreprise
+        owns_other = user.businesses.exclude(pk=instance.business_id).exists()
+        if not owns_other:
+            if first_name is not None:
+                user.first_name = first_name
+            if last_name is not None:
+                user.last_name = last_name
+        elif first_name is not None or last_name is not None:
+            # Ignorer silencieusement le renommage cross-tenant (le rôle/poste restent modifiables)
+            pass
+        if password and len(str(password)) >= 8:
+            user.set_password(password)
+
+        email_changed = False
+        if email_raw is not None:
+            new_email = str(email_raw).strip().lower()
+            if not new_email:
+                return Response({'email': 'L\'email ne peut pas être vide.'}, status=status.HTTP_400_BAD_REQUEST)
+            if new_email != (user.email or '').strip().lower():
+                from accounts.email_identity import get_user_by_login_email, emails_strictly_equal
+                conflict = get_user_by_login_email(new_email)
+                if conflict and conflict.pk != user.pk and emails_strictly_equal(conflict.email, new_email):
+                    return Response(
+                        {
+                            'email': (
+                                f'Un compte utilise déjà exactement « {conflict.email} ». '
+                                'Deux adresses proches restent distinctes '
+                                '(ex. m@gmail.com ≠ ma@gmail.com).'
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                user.email = new_email
+                email_changed = True
+
+        with transaction.atomic():
+            user.save()
+            instance.save()
+
         serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+        data = serializer.data
+        if email_changed:
+            data['login_email'] = user.email
+            data['email_changed'] = True
+            data['message'] = (
+                'Email de connexion mis à jour. Communiquez la nouvelle adresse au collaborateur.'
+            )
+        return Response(data)
 
 # --- VIEWS DE MODÉRATION ET IMPORTATION CSV ---
 from business_categories.models import BusinessCategory
@@ -429,11 +664,90 @@ def send_business_rejection_email(business, reason=''):
 class AdminModerationListView(generics.ListAPIView):
     queryset = Business.objects.filter(verification_status='PENDING').order_by('-created_at')
     serializer_class = AdminBusinessSerializer
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'GET': 'platform.businesses.view'}
+
+
+class AdminModerationDeskView(APIView):
+    """Tableau de bord Modération : volumes + file d’attente + décisions récentes."""
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'GET': 'platform.businesses.view'}
+
+    def get(self, request):
+        from accounts.models import AuditLog
+
+        now = timezone.now()
+        week_ago = now - timedelta(days=7)
+        qs = Business.objects.select_related('owner', 'primary_category')
+        pending_qs = qs.filter(verification_status='PENDING').order_by('-created_at')
+        approved_count = qs.filter(verification_status='APPROVED').count()
+        rejected_count = qs.filter(verification_status='REJECTED').count()
+        pending_count = pending_qs.count()
+        suspended_count = qs.filter(is_active=False).exclude(verification_status='REJECTED').count()
+        active_qs = qs.filter(verification_status='APPROVED', is_active=True).order_by('-updated_at')
+        suspended_qs = qs.filter(is_active=False).exclude(verification_status='REJECTED').order_by('-updated_at')
+
+        by_category = {}
+        for row in pending_qs[:200]:
+            label = getattr(row.primary_category, 'name', None) or 'Sans catégorie'
+            by_category[label] = by_category.get(label, 0) + 1
+
+        decisions = []
+        for log in AuditLog.objects.filter(
+            action__in=('BUSINESS_APPROVED', 'BUSINESS_REJECTED', 'BUSINESS_SUSPENDED', 'BUSINESS_REACTIVATED'),
+            created_at__gte=week_ago,
+        ).select_related('user').order_by('-created_at')[:20]:
+            details = log.details if isinstance(log.details, dict) else {}
+            if log.action == 'BUSINESS_APPROVED':
+                status_label = 'APPROVED'
+            elif log.action == 'BUSINESS_REJECTED':
+                status_label = 'REJECTED'
+            elif log.action == 'BUSINESS_SUSPENDED':
+                status_label = 'SUSPENDED'
+            else:
+                status_label = 'REACTIVATED'
+            decisions.append({
+                'id': str(log.id),
+                'action': log.action,
+                'business_name': details.get('business_name') or log.resource,
+                'actor_email': log.user_email or getattr(log.user, 'email', None),
+                'created_at': log.created_at.isoformat() if log.created_at else None,
+                'status': status_label,
+            })
+
+        pending = AdminBusinessSerializer(pending_qs[:50], many=True).data
+        active = AdminBusinessSerializer(active_qs[:30], many=True).data
+        suspended = AdminBusinessSerializer(suspended_qs[:30], many=True).data
+        return Response({
+            'metrics': {
+                'pending': pending_count,
+                'approved': approved_count,
+                'rejected': rejected_count,
+                'suspended': suspended_count,
+                'decisions_week': len(decisions),
+                'missing_logo': sum(1 for b in pending if not (b.get('logo') or '').strip()),
+                'missing_docs': sum(
+                    1 for b in pending
+                    if not (b.get('proof_document') or '').strip()
+                    and not (b.get('commerce_compliance') or {}).get('nif_document')
+                ),
+            },
+            'by_category': [
+                {'name': name, 'count': count}
+                for name, count in sorted(by_category.items(), key=lambda item: (-item[1], item[0]))
+            ],
+            'pending': pending,
+            'active': active,
+            'suspended': suspended,
+            'recent_decisions': decisions,
+            'generated_at': now.isoformat(),
+        })
+
 
 class AdminModerationApproveView(APIView):
     """Approuve une entreprise (PENDING ou REJECTED) → Actif & Approuvé."""
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'POST': 'platform.businesses.approve'}
 
     def post(self, request, pk):
         try:
@@ -474,6 +788,15 @@ class AdminModerationApproveView(APIView):
             email_result = None
             if previous != 'APPROVED':
                 email_result = send_business_approval_email(business, admin_message=admin_message)
+            from accounts.services import log_audit_event
+            log_audit_event(
+                user=request.user,
+                action='BUSINESS_APPROVED',
+                resource=f'business:{business.id}',
+                request=request,
+                status='SUCCESS',
+                details={'business_name': business.name, 'on_behalf': True},
+            )
             return Response({
                 'message': f'L\'entreprise "{business.name}" est maintenant Active & Approuvée.',
                 'verification_status': 'APPROVED',
@@ -486,7 +809,8 @@ class AdminModerationApproveView(APIView):
 
 
 class AdminModerationRejectView(APIView):
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'POST': 'platform.businesses.reject'}
 
     def post(self, request, pk):
         try:
@@ -506,6 +830,15 @@ class AdminModerationRejectView(APIView):
                 'rejection_reason', 'updated_at',
             ])
             email_result = send_business_rejection_email(business, reason=reason)
+            from accounts.services import log_audit_event
+            log_audit_event(
+                user=request.user,
+                action='BUSINESS_REJECTED',
+                resource=f'business:{business.id}',
+                request=request,
+                status='SUCCESS',
+                details={'business_name': business.name, 'on_behalf': True, 'reason': reason},
+            )
             return Response({
                 'message': f'L\'entreprise "{business.name}" a été rejetée.',
                 'email_notification': email_result,
@@ -610,36 +943,65 @@ class PublicBusinessRegistrationView(APIView):
     @transaction.atomic
     def post(self, request):
         data = request.data
-        email = data.get('owner_email_input') or data.get('email')
+        from accounts.email_identity import normalize_login_email, get_user_by_login_email
+        email = normalize_login_email(data.get('owner_email_input') or data.get('email'))
         password = data.get('password')
         name = data.get('name')
         
         if not email or not password or not name:
             return Response({'error': 'Le nom de l\'entreprise, l\'email et le mot de passe sont obligatoires.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        logo_data = (data.get('logo') or '').strip()
+        owner_avatar = (
+            data.get('owner_avatar')
+            or data.get('avatar')
+            or data.get('profile_image')
+            or ''
+        ).strip()
+
+        def _valid_image_payload(value):
+            return bool(value) and (
+                value.startswith('http://')
+                or value.startswith('https://')
+                or value.startswith('data:image/')
+            )
+
+        if not _valid_image_payload(owner_avatar):
+            return Response(
+                {'error': 'La photo de profil du propriétaire est obligatoire.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not _valid_image_payload(logo_data):
+            return Response(
+                {'error': 'Le logo de l\'établissement est obligatoire.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         
         # 1. Vérification si le nom de l'entreprise existe déjà
         if Business.objects.filter(name__iexact=name).exists():
             return Response({'error': 'Une entreprise avec ce nom existe déjà.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 2. Création ou récupération de l'utilisateur (Propriétaire)
+        # 2. Création ou récupération STRICTE du propriétaire (m@ ≠ ma@)
         try:
-            user, created = User.objects.get_or_create(
-                email=email,
-                defaults={
-                    'role': 'BUSINESS_OWNER',
-                    'first_name': data.get('first_name', 'Admin'),
-                    'last_name': data.get('last_name', name),
-                    'is_active': True
-                }
-            )
-            
-            if created:
-                user.set_password(password)
-                user.save()
+            user = get_user_by_login_email(email)
+            created = False
+            if user is None:
+                user = User.objects.create_user(
+                    email=email,
+                    password=password,
+                    role='BUSINESS_OWNER',
+                    first_name=data.get('first_name', 'Admin'),
+                    last_name=data.get('last_name', name),
+                    is_active=True,
+                )
+                created = True
             else:
-                # Si l'utilisateur existe déjà, on vérifie si le mot de passe correspond, sinon on refuse (sécurité basique)
+                # Si l'utilisateur existe déjà (email EXACT), vérifier le mot de passe
                 if not user.check_password(password):
                      return Response({'error': 'Un compte avec cet email existe déjà. Mot de passe incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+                if user.role != 'BUSINESS_OWNER':
+                    user.role = 'BUSINESS_OWNER'
+                    user.save(update_fields=['role', 'updated_at'])
 
             # 3. Création de l'entreprise (Tenant)
             primary_cat_id = data.get('primary_category')
@@ -699,11 +1061,17 @@ class PublicBusinessRegistrationView(APIView):
             if is_commerce_category(primary_cat):
                 apply_commerce_compliance(business, data)
 
-            # Gestion du Logo
-            logo_data = data.get('logo')
-            if logo_data and logo_data.startswith('http'):
-                # Simple URL binding (If you are using CharField or similar for logo URL in the future)
-                pass
+            # Logo établissement (URL ou data:image base64)
+            if _valid_image_payload(logo_data):
+                business.logo = logo_data
+                business.save(update_fields=['logo'])
+
+            # Photo propriétaire → profil utilisateur (visible admin)
+            if _valid_image_payload(owner_avatar):
+                from profiles.models import Profile
+                profile, _ = Profile.objects.get_or_create(user=user)
+                profile.avatar = owner_avatar
+                profile.save(update_fields=['avatar'])
 
             # Catégories secondaires
             cat_ids = data.get('category_ids', [])
@@ -744,16 +1112,190 @@ class MyBusinessSubscriptionView(APIView):
         )
         data = subscription_summary(business)
         data['plans'] = list_paid_plans()
-        data['lumicash_stub'] = lumicash.is_stub_mode()
-        data['merchant_account'] = lumicash.merchant_account()
+        data['burundipay_stub'] = burundipay.is_stub_mode()
+        data['merchant_account'] = burundipay.merchant_account()
         data['recent_payments'] = [payment_detail_dict(p) for p in payments]
         data['payments_count'] = SubscriptionPayment.objects.filter(business=business).count()
         return Response(data)
 
 
-class MySubscriptionLumicashPayView(APIView):
+class MyBusinessAuditLogsView(APIView):
     """
-    Initie un paiement Lumicash d'abonnement : Entreprise → marchand Isoko Hub.
+    Journal d'audit de l'entreprise courante (propriétaire / admin).
+    Agrège accounts.AuditLog (+ HotelAuditLog pour les hôtels).
+    """
+    permission_classes = [IsAuthenticated, IsBusinessTenantMember]
+
+    def get(self, request):
+        from django.db.models import Q
+        from accounts.models import AuditLog
+        from accounts.serializers import AuditLogSerializer
+
+        if request.user.role == 'SUPER_ADMIN':
+            return Response({'error': 'Accès refusé.'}, status=status.HTTP_403_FORBIDDEN)
+
+        business = get_user_tenant_business(request.user)
+        if not business and request.user.role == 'BUSINESS_OWNER':
+            business = Business.objects.filter(owner=request.user).first()
+        if not business:
+            return Response({'error': 'Aucune entreprise associée.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Réservé au propriétaire ou admin d'entreprise (pas tout le staff)
+        is_owner = business.owner_id == request.user.id
+        emp = BusinessEmployee.objects.filter(
+            business=business, user=request.user, is_active=True,
+        ).select_related('role').first()
+        emp_admin = False
+        if emp and emp.role_id:
+            level = (getattr(emp.role, 'system_access_level', None) or '').upper()
+            perms = list(getattr(emp.role, 'permissions', None) or [])
+            emp_admin = (
+                level in ('ADMIN_ACCESS', 'ADMIN')
+                or 'audit.view' in perms
+                or 'hotel.manage' in perms
+                or 'can_manage_hospital' in perms
+            )
+        if not (is_owner or emp_admin or request.user.role == 'BUSINESS_OWNER'):
+            return Response({'error': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
+
+        business_id = str(business.id)
+        employee_ids = list(
+            BusinessEmployee.objects.filter(business=business, is_active=True)
+            .values_list('user_id', flat=True)
+        )
+        user_ids = set(employee_ids)
+        if business.owner_id:
+            user_ids.add(business.owner_id)
+
+        queryset = AuditLog.objects.filter(
+            Q(details__business_id=business_id)
+            | Q(details__hospital_id=business_id)
+            | Q(details__hotel_id=business_id)
+            | Q(user_id__in=user_ids)
+        ).select_related('user').order_by('-created_at')
+
+        search = (request.query_params.get('search') or '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(user_email__icontains=search)
+                | Q(action__icontains=search)
+                | Q(resource__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+            )
+
+        action_filter = (request.query_params.get('action') or '').strip()
+        if action_filter and action_filter != 'ALL':
+            queryset = queryset.filter(action=action_filter)
+
+        status_filter = (request.query_params.get('status') or '').strip().upper()
+        if status_filter and status_filter != 'ALL':
+            queryset = queryset.filter(status=status_filter)
+
+        category = (request.query_params.get('category') or '').strip().upper()
+        if category and category != 'ALL':
+            if category == 'ACCESS':
+                queryset = queryset.filter(
+                    Q(action__icontains='LOGIN') | Q(action__icontains='LOGOUT')
+                    | Q(action__icontains='PASSWORD') | Q(action__icontains='2FA')
+                )
+            elif category == 'SECURITY':
+                queryset = queryset.filter(
+                    Q(action__icontains='ROLE') | Q(action__icontains='PERMISSION')
+                    | Q(action__icontains='RBAC') | Q(action__icontains='ADMIN')
+                )
+            elif category == 'BILLING':
+                queryset = queryset.filter(
+                    Q(action__icontains='PAY') | Q(action__icontains='BILLING')
+                    | Q(action__icontains='SUBSCRIPTION') | Q(action__icontains='INVOICE')
+                    | Q(action__icontains='MARK_PAID')
+                )
+            elif category == 'DATA_EXPORT':
+                queryset = queryset.filter(
+                    Q(action__icontains='EXPORT') | Q(action__icontains='DOWNLOAD')
+                    | Q(action__icontains='CSV')
+                )
+            elif category == 'DATA_CHANGE':
+                queryset = queryset.filter(
+                    Q(action__icontains='CREATE') | Q(action__icontains='UPDATE')
+                    | Q(action__icontains='DELETE') | Q(action__icontains='CONFIRM')
+                    | Q(action__icontains='CANCEL') | Q(action__icontains='CHECK')
+                )
+
+        results = list(AuditLogSerializer(queryset[:200], many=True).data)
+
+        # Hôtels : inclure le journal PMS dédié
+        try:
+            from datetime import timezone as dt_timezone
+            from hotel.models import HotelAuditLog
+            hotel_qs = HotelAuditLog.objects.filter(hotel=business).select_related('actor')
+            if search:
+                hotel_qs = hotel_qs.filter(
+                    Q(action__icontains=search)
+                    | Q(entity_type__icontains=search)
+                    | Q(actor__email__icontains=search)
+                )
+            if action_filter and action_filter != 'ALL':
+                hotel_qs = hotel_qs.filter(action=action_filter)
+            # Hotel PMS n'a pas de statut natif : traité comme SUCCESS
+            if status_filter and status_filter not in ('ALL', 'SUCCESS'):
+                hotel_qs = hotel_qs.none()
+            if category and category not in ('ALL', 'DATA_CHANGE', 'OTHER'):
+                hotel_qs = hotel_qs.none()
+            for log in hotel_qs[:200]:
+                actor = log.actor
+                created = log.created_at
+                created_utc = None
+                if created:
+                    if timezone.is_naive(created):
+                        created_aware = timezone.make_aware(created, dt_timezone.utc)
+                    else:
+                        created_aware = created
+                    created_utc = created_aware.astimezone(dt_timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+                results.append({
+                    'id': str(log.id),
+                    'user': str(actor.id) if actor else None,
+                    'user_id': str(actor.id) if actor else None,
+                    'user_email': getattr(actor, 'email', None) or '',
+                    'user_name': (
+                        actor.get_full_name() if actor and hasattr(actor, 'get_full_name') else ''
+                    ) or (getattr(actor, 'email', None) or 'Système'),
+                    'user_role': getattr(actor, 'role', '') or 'STAFF',
+                    'action': log.action,
+                    'resource': f'{log.entity_type} {log.entity_id}'.strip(),
+                    'ip_address': None,
+                    'user_agent': '',
+                    'status': 'SUCCESS',
+                    'details': {
+                        'source': 'hotel_pms',
+                        'old_value': log.old_value,
+                        'new_value': log.new_value,
+                    },
+                    'created_at': created.isoformat() if created else None,
+                    'created_at_utc': created_utc,
+                    'impersonation': None,
+                    'changes': {'old': log.old_value, 'new': log.new_value},
+                    'error_code': None,
+                    'error_message': None,
+                    'geo_location': None,
+                    'event_category': 'DATA_CHANGE',
+                })
+        except Exception:
+            pass
+
+        results.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+        results = results[:200]
+        return Response({
+            'results': results,
+            'count': len(results),
+            'business_id': business_id,
+            'business_name': business.name,
+        })
+
+
+class MySubscriptionBurundiPayPayView(APIView):
+    """
+    Initie un paiement BurundiPay d'abonnement : Entreprise → marchand Isoko Hub.
     Body: { "plan_code": "monthly", "payer_phone": "79xxxxxx" }
     """
     permission_classes = [IsAuthenticated]
@@ -767,15 +1309,12 @@ class MySubscriptionLumicashPayView(APIView):
         if request.user.role not in ('BUSINESS_OWNER', 'PROFESSIONAL') and not getattr(request.user, 'is_superuser', False):
             return Response({'detail': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Seul le propriétaire (ou admin tenant) paie l'abo plateforme
+        # Abonnement plateforme = propriétaire uniquement (pas le Manager employé)
         if request.user.role == 'PROFESSIONAL' and business.owner_id != request.user.id:
-            emp = request.user.employments.filter(business=business, is_active=True).select_related('role').first()
-            level = getattr(getattr(emp, 'role', None), 'system_access_level', '') if emp else ''
-            if level != 'ADMIN_ACCESS':
-                return Response(
-                    {'detail': 'Seul le propriétaire ou un admin entreprise peut payer l\'abonnement.'},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+            return Response(
+                {'detail': 'Seul le propriétaire de l\'entreprise peut gérer l\'abonnement plateforme.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         get_or_create_default_plans()
         plan_code = (request.data.get('plan_code') or 'monthly').strip()
@@ -784,7 +1323,7 @@ class MySubscriptionLumicashPayView(APIView):
         if not plan:
             return Response({'detail': f'Plan payant inconnu: {plan_code}'}, status=status.HTTP_400_BAD_REQUEST)
         if not payer_phone:
-            return Response({'detail': 'payer_phone (numéro Lumicash) requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'payer_phone (numéro BurundiPay) requis.'}, status=status.HTTP_400_BAD_REQUEST)
 
         ensure_business_subscription(business)
         payment = SubscriptionPayment.objects.create(
@@ -792,9 +1331,9 @@ class MySubscriptionLumicashPayView(APIView):
             subscription=getattr(business, 'subscription', None),
             plan=plan,
             amount_bif=plan.price_bif,
-            payer_phone=lumicash.normalize_phone(payer_phone),
+            payer_phone=burundipay.normalize_phone(payer_phone),
             status='PENDING',
-            merchant_account=lumicash.merchant_account(),
+            merchant_account=burundipay.merchant_account(),
             initiated_by=request.user,
             raw_request={
                 'plan_code': plan.code,
@@ -802,7 +1341,7 @@ class MySubscriptionLumicashPayView(APIView):
             },
         )
 
-        result = lumicash.initiate_collection(
+        result = burundipay.initiate_collection(
             amount_bif=payment.amount_bif,
             payer_phone=payment.payer_phone,
             external_id=str(payment.id),
@@ -815,7 +1354,7 @@ class MySubscriptionLumicashPayView(APIView):
             payment.error_message = ''
         else:
             payment.status = 'FAILED'
-            payment.error_message = result.get('message') or 'Échec initiation Lumicash'
+            payment.error_message = result.get('message') or 'Échec initiation BurundiPay'
         payment.save()
 
         return Response(
@@ -828,14 +1367,14 @@ class MySubscriptionLumicashPayView(APIView):
                 'provider_reference': payment.provider_reference,
                 'merchant_account': payment.merchant_account,
                 'message': result.get('message') or '',
-                'stub_mode': lumicash.is_stub_mode(),
+                'stub_mode': burundipay.is_stub_mode(),
                 'subscription': subscription_summary(business),
             },
             status=status.HTTP_201_CREATED if result.get('ok') else status.HTTP_400_BAD_REQUEST,
         )
 
 
-class MySubscriptionLumicashConfirmView(APIView):
+class MySubscriptionBurundiPayConfirmView(APIView):
     """
     Confirme un paiement (simulation PIN en mode stub, ou polling statut).
     Body: { "payment_id": "..." }
@@ -868,12 +1407,51 @@ class MySubscriptionLumicashConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not lumicash.is_stub_mode():
+        if not burundipay.is_stub_mode():
+            # Live : polling statut auprès de BurundiPay
+            poll = burundipay.check_collection_status(
+                provider_reference=payment.provider_reference or '',
+                external_id=str(payment.id),
+            )
+            payment.raw_response = {
+                **(payment.raw_response or {}),
+                'status_poll': poll.get('raw') or {},
+            }
+            if poll.get('provider_reference'):
+                payment.provider_reference = poll['provider_reference']
+            mapped = (poll.get('status') or '').upper()
+            if mapped == 'PAID':
+                with transaction.atomic():
+                    activate_subscription_from_payment(payment)
+                return Response({
+                    'payment_id': str(payment.id),
+                    'status': 'SUCCESS',
+                    'message': 'Paiement confirmé via BurundiPay.',
+                    'subscription': subscription_summary(business),
+                })
+            if mapped == 'FAILED':
+                payment.status = 'FAILED'
+                payment.error_message = poll.get('message') or 'Échec BurundiPay'
+                payment.save(update_fields=[
+                    'status', 'error_message', 'raw_response', 'provider_reference', 'updated_at',
+                ])
+                return Response({
+                    'payment_id': str(payment.id),
+                    'status': payment.status,
+                    'message': payment.error_message,
+                    'subscription': subscription_summary(business),
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            payment.status = 'AWAITING_PIN'
+            payment.save(update_fields=[
+                'status', 'raw_response', 'provider_reference', 'updated_at',
+            ])
             return Response(
                 {
                     'detail': (
-                        'En mode live, la confirmation arrive via webhook Lumicash. '
-                        'Rafraîchissez le statut dans quelques instants.'
+                        poll.get('message')
+                        or 'Paiement encore en attente. Le client doit valider sur BurundiPay, '
+                           'ou attendez le webhook.'
                     ),
                     'payment_id': str(payment.id),
                     'status': payment.status,
@@ -893,24 +1471,41 @@ class MySubscriptionLumicashConfirmView(APIView):
         })
 
 
-class LumicashSubscriptionWebhookView(APIView):
+class BurundiPaySubscriptionWebhookView(APIView):
     """
-    Callback Lumicash (production) — active l'abonnement si SUCCESS.
-    Header: X-Lumicash-Webhook-Secret
-    Body: { "external_id" | "payment_id", "provider_reference", "status": "SUCCESS"|"FAILED", ... }
+    Callback BurundiPay (production).
+    Header: X-BurundiPay-Webhook-Secret
+    Body: { "external_id" | "payment_id", "provider_reference", "status": "SUCCESS"|"FAILED"|..., ... }
+
+    external_id :
+      - UUID paiement abonnement SaaS
+      - res-{reservation_id}
+      - apt-{appointment_id}
     """
     permission_classes = [AllowAny]
     authentication_classes = []
 
     def post(self, request):
-        expected = getattr(settings, 'LUMICASH_WEBHOOK_SECRET', '') or ''
-        provided = request.headers.get('X-Lumicash-Webhook-Secret', '')
+        expected = getattr(settings, 'BURUNDIPAY_WEBHOOK_SECRET', '') or ''
+        provided = (
+            request.headers.get('X-BurundiPay-Webhook-Secret')
+            or request.headers.get('X-Lumicash-Webhook-Secret')
+            or ''
+        )
         if expected and provided != expected:
             return Response({'detail': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
         payment_id = request.data.get('payment_id') or request.data.get('external_id')
         provider_ref = (request.data.get('provider_reference') or '').strip()
         event_status = (request.data.get('status') or '').strip().upper()
+        external_raw = str(payment_id or '').strip()
+
+        # Réservation hôtel
+        if external_raw.startswith('res-'):
+            return self._apply_hotel_reservation(external_raw[4:], provider_ref, event_status, request.data)
+        # RDV hôpital
+        if external_raw.startswith('apt-'):
+            return self._apply_hospital_appointment(external_raw[4:], provider_ref, event_status, request.data)
 
         payment = None
         if payment_id:
@@ -944,6 +1539,62 @@ class LumicashSubscriptionWebhookView(APIView):
         payment.save(update_fields=['raw_response', 'provider_reference', 'updated_at'])
         return Response({'ok': True, 'payment_status': payment.status, 'note': 'Statut ignoré'})
 
+    def _apply_hotel_reservation(self, reservation_id, provider_ref, event_status, payload):
+        from hotel.models import Reservation
+        res = Reservation.objects.filter(id=reservation_id).first()
+        if not res:
+            return Response({'detail': 'Réservation introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        if provider_ref:
+            res.payment_provider_reference = provider_ref
+        if event_status in ('SUCCESS', 'SUCCESSFUL', 'PAID', 'COMPLETED'):
+            if res.payment_status != 'PAID':
+                res.payment_status = 'PAID'
+                res.paid_at = timezone.now()
+                res.payment_method = res.payment_method or 'BURUNDIPAY'
+                res.payment_note = 'Confirmé via webhook BurundiPay'
+            res.save(update_fields=[
+                'payment_status', 'paid_at', 'payment_method', 'payment_note',
+                'payment_provider_reference', 'updated_at',
+            ])
+            return Response({'ok': True, 'kind': 'reservation', 'payment_status': res.payment_status})
+        if event_status in ('FAILED', 'CANCELLED', 'EXPIRED'):
+            res.payment_status = 'FAILED'
+            res.payment_note = (payload.get('message') or event_status)[:255]
+            res.save(update_fields=[
+                'payment_status', 'payment_note', 'payment_provider_reference', 'updated_at',
+            ])
+            return Response({'ok': True, 'kind': 'reservation', 'payment_status': res.payment_status})
+        res.save(update_fields=['payment_provider_reference', 'updated_at'])
+        return Response({'ok': True, 'kind': 'reservation', 'payment_status': res.payment_status})
+
+    def _apply_hospital_appointment(self, appointment_id, provider_ref, event_status, payload):
+        from hospital.models import Appointment
+        apt = Appointment.objects.filter(id=appointment_id).first()
+        if not apt:
+            return Response({'detail': 'RDV introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        if provider_ref:
+            apt.payment_provider_reference = provider_ref
+        if event_status in ('SUCCESS', 'SUCCESSFUL', 'PAID', 'COMPLETED'):
+            if apt.payment_status != 'PAID':
+                apt.payment_status = 'PAID'
+                apt.paid_at = timezone.now()
+                apt.payment_method = apt.payment_method or 'BURUNDIPAY'
+                apt.payment_note = 'Confirmé via webhook BurundiPay'
+            apt.save(update_fields=[
+                'payment_status', 'paid_at', 'payment_method', 'payment_note',
+                'payment_provider_reference', 'updated_at',
+            ])
+            return Response({'ok': True, 'kind': 'appointment', 'payment_status': apt.payment_status})
+        if event_status in ('FAILED', 'CANCELLED', 'EXPIRED'):
+            apt.payment_status = 'FAILED'
+            apt.payment_note = (payload.get('message') or event_status)[:255]
+            apt.save(update_fields=[
+                'payment_status', 'payment_note', 'payment_provider_reference', 'updated_at',
+            ])
+            return Response({'ok': True, 'kind': 'appointment', 'payment_status': apt.payment_status})
+        apt.save(update_fields=['payment_provider_reference', 'updated_at'])
+        return Response({'ok': True, 'kind': 'appointment', 'payment_status': apt.payment_status})
+
 
 class AdminBusinessSubscriptionView(APIView):
     """
@@ -951,7 +1602,11 @@ class AdminBusinessSubscriptionView(APIView):
     POST body: { "action": "activate"|"extend"|"suspend"|"free", "days": 30, "plan_code": "monthly", "payment_reference": "" }
     Alias accepté : action "trial" → free (rétrocompat).
     """
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': ('platform.billing.view', 'platform.subscriptions.view'),
+        'POST': 'platform.businesses.suspend',
+    }
 
     def get(self, request, pk):
         business = Business.objects.filter(pk=pk).first()
@@ -997,6 +1652,7 @@ class AdminBusinessSubscriptionView(APIView):
                 sub.notes = notes
             else:
                 sub.notes = 'Période Free accordée par Super Admin'
+            reset_subscription_notices(sub)
             sub.save()
         elif action in ('activate', 'extend'):
             sub.plan = plan
@@ -1008,6 +1664,7 @@ class AdminBusinessSubscriptionView(APIView):
                 sub.payment_reference = payment_ref
             if notes:
                 sub.notes = notes
+            reset_subscription_notices(sub)
             sub.save()
         else:
             return Response(
@@ -1018,13 +1675,53 @@ class AdminBusinessSubscriptionView(APIView):
         return Response(subscription_summary(business))
 
 
+class AdminSubscriptionSettingsView(APIView):
+    """
+    Super Admin : période de grâce unique pour toutes les entreprises.
+    GET / PATCH { "grace_period_days": 7 }
+    """
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.settings.view',
+        'PATCH': 'platform.settings.update',
+    }
+
+    def get(self, request):
+        return Response({
+            'grace_period_days': get_grace_period_days(),
+            'warning_days': EXPIRY_WARNING_DAYS,
+            'note': (
+                'La période de grâce s\'applique à toutes les entreprises. '
+                f'Une alerte part {EXPIRY_WARNING_DAYS} jours avant l\'échéance, '
+                'au Super Admin et à l\'administrateur de l\'entreprise. '
+                'Après l\'échéance, le décompte de grâce avance chaque jour.'
+            ),
+        })
+
+    def patch(self, request):
+        if 'grace_period_days' not in request.data:
+            return Response({'detail': 'grace_period_days requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            row = update_grace_period_days(request.data.get('grace_period_days'))
+        except (TypeError, ValueError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            'grace_period_days': row.grace_period_days,
+            'warning_days': EXPIRY_WARNING_DAYS,
+        })
+
+
 class AdminSubscriptionPlansView(APIView):
     """
     Super Admin : catalogue Free / Mensuel / Annuel.
     GET  — liste
     PATCH — body { "code": "free"|"monthly"|"yearly", ...champs }
     """
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.settings.view',
+        'PATCH': 'platform.settings.update',
+    }
 
     def get(self, request):
         return Response({
@@ -1054,7 +1751,8 @@ class AdminSubscriptionPlansView(APIView):
 
 class AdminSubscriptionPlanDetailView(APIView):
     """PATCH /admin/plans/<code>/ — alternative REST par code."""
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'PATCH': 'platform.settings.update'}
 
     def patch(self, request, code):
         try:
@@ -1075,7 +1773,10 @@ class AdminSubscriptionListView(APIView):
     Super Admin : liste des abonnements SaaS uniquement.
     Pas d'argent des commandes vendeur↔client.
     """
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': ('platform.billing.view', 'platform.subscriptions.view'),
+    }
 
     def get(self, request):
         get_or_create_default_plans()
@@ -1122,7 +1823,10 @@ class AdminSubscriptionListView(APIView):
 
 class AdminSubscriptionPaymentListView(APIView):
     """Historique global des paiements d'abonnement SaaS (Super Admin)."""
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': ('platform.billing.view', 'platform.subscriptions.view'),
+    }
 
     def get(self, request):
         qs = (
@@ -1156,7 +1860,11 @@ class AdminSubscriptionPaymentListView(APIView):
 
 class AdminPlatformNotificationListView(APIView):
     """Notifications Super Admin (paiements abo, etc.)."""
-    permission_classes = [IsSuperAdmin]
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.alerts.view',
+        'POST': 'platform.alerts.view',
+    }
 
     def get(self, request):
         qs = PlatformNotification.objects.select_related('business', 'payment').order_by('-created_at')

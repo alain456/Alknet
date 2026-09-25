@@ -6,18 +6,24 @@ Règles :
   • l'entreprise n'apparaît plus dans les listes publiques
   • l'espace métier est bloqué (écriture / opérations)
 - Nouvelle entreprise → plan Free (status TRIAL) pendant duration_days du plan
-- Après expiration → paiement Mensuel ou Annuel obligatoire
+- Après expiration → période de grâce globale (réglée par le Super Admin), puis blocage
+- 5 jours avant l'échéance → alerte Super Admin et administrateur de l'entreprise
+- Après l'échéance, le décompte de grâce avance jour après jour
 - Toujours autorisé : consulter son abonnement, profil, paramètres, login
 - Les paiements client↔vendeur (commandes) restent privés et séparés
 """
 from datetime import timedelta
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
 ACTIVE_SUBSCRIPTION_STATUSES = ('TRIAL', 'ACTIVE')
+OPERATING_SUBSCRIPTION_STATUSES = ('TRIAL', 'ACTIVE', 'GRACE')
 DEFAULT_FREE_DAYS = 30
+DEFAULT_GRACE_DAYS = 7
+EXPIRY_WARNING_DAYS = 5
 FREE_PLAN_CODE = 'free'
 PAID_PLAN_CODES = ('monthly', 'yearly')
 
@@ -73,6 +79,219 @@ def get_free_plan():
     return get_or_create_default_plans()
 
 
+def get_platform_subscription_settings():
+    from .models import PlatformSubscriptionSettings
+
+    settings_row, _ = PlatformSubscriptionSettings.objects.get_or_create(
+        pk=1,
+        defaults={'grace_period_days': DEFAULT_GRACE_DAYS},
+    )
+    return settings_row
+
+
+def get_grace_period_days():
+    try:
+        days = int(get_platform_subscription_settings().grace_period_days)
+    except Exception:
+        return DEFAULT_GRACE_DAYS
+    return max(0, min(days, 365))
+
+
+def update_grace_period_days(days):
+    days = int(days)
+    if days < 0 or days > 365:
+        raise ValueError('La période de grâce doit être entre 0 et 365 jours')
+    row = get_platform_subscription_settings()
+    row.grace_period_days = days
+    row.save(update_fields=['grace_period_days', 'updated_at'])
+    return row
+
+
+def grace_deadline(subscription):
+    if not subscription or not subscription.ends_at:
+        return None
+    return subscription.ends_at + timedelta(days=get_grace_period_days())
+
+
+def subscription_still_usable(subscription):
+    if not subscription or subscription.status in ('SUSPENDED', 'CANCELLED'):
+        return False
+    deadline = grace_deadline(subscription)
+    if deadline is None:
+        return False
+    return deadline >= timezone.now()
+
+
+def subscription_access_q(prefix='subscription__'):
+    """Entreprises encore utilisables : échéance + période de grâce globale."""
+    now = timezone.now()
+    cutoff = now - timedelta(days=get_grace_period_days())
+    status_field = f'{prefix}status' if prefix else 'status'
+    ends_field = f'{prefix}ends_at' if prefix else 'ends_at'
+    return Q(**{f'{ends_field}__gte': cutoff}) & ~Q(**{f'{status_field}__in': ('SUSPENDED', 'CANCELLED')})
+
+
+def reset_subscription_notices(subscription):
+    subscription.expiry_warning_ends_at = None
+    subscription.grace_notice_ends_at = None
+
+
+def apply_subscription_lifecycle(subscription, save=True):
+    """
+    Avant l'échéance : alerte à J-5.
+    Après l'échéance : statut GRACE, le jour de grâce s'incrémente.
+    Après la grâce : EXPIRED.
+    """
+    if subscription.status in ('SUSPENDED', 'CANCELLED'):
+        return subscription.status
+
+    now = timezone.now()
+    ends = subscription.ends_at
+    if not ends:
+        return subscription.status
+
+    grace_days = get_grace_period_days()
+    access_until = ends + timedelta(days=grace_days)
+    changed = []
+
+    if now <= ends:
+        if subscription.status in ('EXPIRED', 'GRACE'):
+            subscription.status = 'TRIAL' if getattr(subscription.plan, 'is_trial', False) else 'ACTIVE'
+            changed.append('status')
+        days_left = (ends.date() - now.date()).days
+        if 0 < days_left <= EXPIRY_WARNING_DAYS and subscription.expiry_warning_ends_at != ends:
+            _notify_subscription_expiring(subscription, days_left, grace_days)
+            subscription.expiry_warning_ends_at = ends
+            changed.append('expiry_warning_ends_at')
+    elif now <= access_until and grace_days > 0:
+        if subscription.status != 'GRACE':
+            subscription.status = 'GRACE'
+            changed.append('status')
+        if subscription.grace_notice_ends_at != ends:
+            elapsed = max(1, (now.date() - ends.date()).days)
+            _notify_grace_started(subscription, grace_days, elapsed, access_until)
+            subscription.grace_notice_ends_at = ends
+            changed.append('grace_notice_ends_at')
+    else:
+        if subscription.status != 'EXPIRED':
+            subscription.status = 'EXPIRED'
+            changed.append('status')
+
+    if save and changed:
+        subscription.save(update_fields=list(dict.fromkeys(changed + ['updated_at'])))
+    return subscription.status
+
+
+def _subscription_party_emails(subscription):
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    admins = list(
+        User.objects.filter(role__in=('SUPER_ADMIN', 'PLATFORM_FINANCE'), is_active=True)
+        .exclude(email='')
+        .values_list('email', flat=True)
+    )
+    owner_email = ''
+    business = getattr(subscription, 'business', None)
+    if business and getattr(business, 'owner', None):
+        owner_email = getattr(business.owner, 'email', '') or ''
+    return admins, owner_email
+
+
+def _send_subscription_alert(subscription, notification_type, title, message, details):
+    from django.conf import settings as dj_settings
+    from django.core.mail import send_mail
+
+    from .models import PlatformNotification
+
+    PlatformNotification.objects.create(
+        notification_type=notification_type,
+        title=title,
+        message=message,
+        details=details,
+        business=subscription.business,
+        is_read=False,
+    )
+
+    owner = getattr(getattr(subscription, 'business', None), 'owner', None)
+    if owner is not None:
+        try:
+            from hospital.models import Notification
+            Notification.objects.create(
+                user=owner,
+                notification_type='GENERAL',
+                title=title,
+                message=message,
+            )
+        except Exception:
+            pass
+
+    admin_emails, owner_email = _subscription_party_emails(subscription)
+    recipients = [email for email in dict.fromkeys([*admin_emails, owner_email]) if email]
+    if recipients:
+        try:
+            send_mail(
+                subject=f"[Isoko Hub] {title}",
+                message=message,
+                from_email=getattr(dj_settings, 'DEFAULT_FROM_EMAIL', None),
+                recipient_list=recipients,
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+
+
+def _notify_subscription_expiring(subscription, days_left, grace_days):
+    business_name = subscription.business.name if subscription.business_id else 'Entreprise'
+    when = subscription.ends_at.strftime('%d/%m/%Y') if subscription.ends_at else ''
+    title = f"Abonnement bientôt expiré — {business_name}"
+    grace_text = (
+        f" Ensuite, une période de grâce de {grace_days} jour(s) maintient l'accès."
+        if grace_days
+        else " Aucune période de grâce n'est configurée : l'accès sera bloqué à l'échéance."
+    )
+    message = (
+        f"L'abonnement de « {business_name} » expire dans {days_left} jour(s), le {when}."
+        f"{grace_text}"
+    )
+    _send_subscription_alert(
+        subscription,
+        'SUBSCRIPTION_EXPIRING',
+        title,
+        message,
+        {
+            'business_name': business_name,
+            'days_left': days_left,
+            'ends_at': subscription.ends_at.isoformat() if subscription.ends_at else None,
+            'grace_period_days': grace_days,
+        },
+    )
+
+
+def _notify_grace_started(subscription, grace_days, elapsed, access_until):
+    business_name = subscription.business.name if subscription.business_id else 'Entreprise'
+    until = access_until.strftime('%d/%m/%Y') if access_until else ''
+    title = f"Période de grâce — {business_name}"
+    message = (
+        f"L'abonnement de « {business_name} » est expiré. "
+        f"La période de grâce est au jour {elapsed} sur {grace_days}. "
+        f"L'accès reste ouvert jusqu'au {until}."
+    )
+    _send_subscription_alert(
+        subscription,
+        'SUBSCRIPTION_GRACE',
+        title,
+        message,
+        {
+            'business_name': business_name,
+            'grace_day': elapsed,
+            'grace_period_days': grace_days,
+            'grace_ends_at': access_until.isoformat() if access_until else None,
+            'ends_at': subscription.ends_at.isoformat() if subscription.ends_at else None,
+        },
+    )
+
+
 def ensure_business_subscription(business, free_days=None):
     """Crée une période Free si l'entreprise n'a pas encore d'abonnement."""
     from .models import BusinessSubscription
@@ -108,12 +327,8 @@ def business_has_active_subscription(business):
 
 
 def filter_businesses_with_active_subscription(queryset):
-    """Filtre un queryset Business aux abonnements TRIAL/ACTIVE non expirés."""
-    now = timezone.now()
-    return queryset.filter(
-        subscription__status__in=ACTIVE_SUBSCRIPTION_STATUSES,
-        subscription__ends_at__gte=now,
-    )
+    """Filtre un queryset Business aux abonnements encore utilisables (grâce comprise)."""
+    return queryset.filter(subscription_access_q('subscription__'))
 
 
 def subscription_summary(business):
@@ -129,6 +344,12 @@ def subscription_summary(business):
         'is_blocked': True,
         'payment_reference': '',
         'is_free_period': False,
+        'in_grace': False,
+        'grace_period_days': get_grace_period_days(),
+        'grace_days_elapsed': 0,
+        'grace_days_remaining': None,
+        'grace_ends_at': None,
+        'expiry_warning': False,
     }
     if not business:
         return empty
@@ -141,9 +362,21 @@ def subscription_summary(business):
 
     sub.refresh_status(save=True)
     active = sub.is_currently_active
+    now = timezone.now()
+    grace_days = get_grace_period_days()
+    deadline = grace_deadline(sub)
     days = None
+    if deadline:
+        days = max(0, (deadline.date() - now.date()).days)
+    paid_days = None
     if sub.ends_at:
-        days = max(0, (sub.ends_at.date() - timezone.now().date()).days)
+        paid_days = (sub.ends_at.date() - now.date()).days
+    in_grace = sub.status == 'GRACE' and active
+    elapsed = 0
+    grace_left = None
+    if sub.ends_at and now > sub.ends_at and grace_days:
+        elapsed = min(grace_days, max(1, (now.date() - sub.ends_at.date()).days))
+        grace_left = max(0, grace_days - elapsed)
 
     status_display = sub.get_status_display()
     if sub.status == 'TRIAL':
@@ -157,9 +390,18 @@ def subscription_summary(business):
         'plan_code': sub.plan.code if sub.plan_id else None,
         'plan_name': sub.plan.name if sub.plan_id else None,
         'days_remaining': days,
+        'paid_days_remaining': paid_days,
         'is_blocked': not active,
         'payment_reference': sub.payment_reference or '',
         'is_free_period': sub.status == 'TRIAL',
+        'in_grace': in_grace,
+        'grace_period_days': grace_days,
+        'grace_days_elapsed': elapsed if in_grace else 0,
+        'grace_days_remaining': grace_left if in_grace else None,
+        'grace_ends_at': deadline.isoformat() if deadline and (in_grace or grace_days) else None,
+        'expiry_warning': bool(
+            active and not in_grace and paid_days is not None and 0 < paid_days <= EXPIRY_WARNING_DAYS
+        ),
     }
 
 
@@ -295,7 +537,7 @@ def payment_detail_dict(payment):
 def notify_super_admins_subscription_paid(payment):
     """
     Historique + alerte Super Admin quand une entreprise paie son abo
-    (y compris en simulation Lumicash).
+    (y compris en simulation BurundiPay).
     """
     from django.contrib.auth import get_user_model
     from django.core.mail import send_mail
@@ -303,19 +545,19 @@ def notify_super_admins_subscription_paid(payment):
 
     from accounts.services import log_audit_event
     from .models import PlatformNotification
-    from . import lumicash
+    from . import burundipay
 
     detail = payment_detail_dict(payment)
     business_name = detail.get('business_name') or 'Entreprise'
     amount = detail.get('amount_bif') or 0
-    stub = detail.get('stub_mode') or lumicash.is_stub_mode()
+    stub = detail.get('stub_mode') or burundipay.is_stub_mode()
 
     title = f"Abonnement payé — {business_name}"
     message = (
         f"« {business_name} » a payé son abonnement Isoko Hub : "
         f"{amount} {detail.get('currency') or 'BIF'} "
         f"(plan {detail.get('plan_name') or detail.get('plan_code')}, "
-        f"Lumicash {detail.get('payer_phone')})"
+        f"BurundiPay {detail.get('payer_phone')})"
         f"{' — SIMULATION' if stub else ''}."
     )
 
@@ -343,7 +585,7 @@ def notify_super_admins_subscription_paid(payment):
 
     User = get_user_model()
     admin_emails = list(
-        User.objects.filter(role='SUPER_ADMIN', is_active=True)
+        User.objects.filter(role__in=('SUPER_ADMIN', 'PLATFORM_FINANCE'), is_active=True)
         .exclude(email='')
         .values_list('email', flat=True)
     )
@@ -356,7 +598,7 @@ def notify_super_admins_subscription_paid(payment):
             f"- Propriétaire : {detail.get('owner_email')}",
             f"- Plan : {detail.get('plan_name')} ({detail.get('plan_duration_days')} j)",
             f"- Montant : {detail.get('amount_bif')} {detail.get('currency')}",
-            f"- Téléphone Lumicash : {detail.get('payer_phone')}",
+            f"- Téléphone BurundiPay : {detail.get('payer_phone')}",
             f"- Référence : {detail.get('provider_reference')}",
             f"- Marchand : {detail.get('merchant_account')}",
             f"- Initié par : {detail.get('initiated_by_email')}",
@@ -380,7 +622,7 @@ def notify_super_admins_subscription_paid(payment):
 
 def activate_subscription_from_payment(payment):
     """
-    Après succès Lumicash : active / prolonge l'abonnement SaaS.
+    Après succès BurundiPay : active / prolonge l'abonnement SaaS.
     L'argent est versé au marchand Isoko Hub (pas au tenant).
     """
     if payment.status == 'SUCCESS' and payment.paid_at:
@@ -402,8 +644,9 @@ def activate_subscription_from_payment(payment):
     sub.status = 'ACTIVE'
     sub.ends_at = base + timedelta(days=plan.duration_days)
     sub.payment_reference = payment.provider_reference or str(payment.id)
+    reset_subscription_notices(sub)
     sub.notes = (
-        f'Paiement Lumicash SaaS {payment.amount_bif} BIF '
+        f'Paiement BurundiPay SaaS {payment.amount_bif} BIF '
         f'depuis {payment.payer_phone} → marchand plateforme'
     )
     sub.save()

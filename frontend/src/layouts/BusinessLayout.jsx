@@ -4,7 +4,8 @@ import {
   Building2, Users, Calendar, Settings,
   LayoutDashboard, Menu, X, Bell, LogOut, FileText,
   Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck, FolderPlus,
-  Package, Warehouse, ShoppingCart, History, User, FlaskConical, Crown, AlertTriangle
+  Package, Warehouse, ShoppingCart, History, User, FlaskConical, Crown, AlertTriangle,
+  BedDouble, Wrench, CreditCard, Plus, Mail, MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -13,7 +14,10 @@ import {
   getBusinessCategoryKey,
   getHomePathForUser,
   canAccessCategoryPath,
+  ROLES,
 } from '../auth/roleAccess';
+import { userHasPermission } from '../lib/permissions';
+import ThemeToggle from '../shared/components/ThemeToggle';
 
 const isSubscriptionPath = (pathname) => /\/subscription\/?$/.test(pathname || '');
 
@@ -22,10 +26,15 @@ export default function BusinessLayout() {
   const [business, setBusiness] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [hotelHkAlert, setHotelHkAlert] = useState(0);
+  const [hotelMsgAlert, setHotelMsgAlert] = useState(0);
+  const [hotelRescheduleAlert, setHotelRescheduleAlert] = useState(0);
+  const [planningAlert, setPlanningAlert] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { token, logout, user, authFetch, getRedirectPath } = useAuth();
   const isRetailClientPath = location.pathname.startsWith('/retail-pharmacy/client');
+  const isHotelPath = location.pathname.startsWith('/hotel');
 
   useEffect(() => {
     if (!token) {
@@ -68,6 +77,63 @@ export default function BusinessLayout() {
       .finally(() => setLoading(false));
   }, [token, user, isRetailClientPath]);
 
+  // Alertes hôtel : ménage + messages clients + anticiper/reporter
+  useEffect(() => {
+    if (!token || !isHotelPath) {
+      setHotelHkAlert(0);
+      setHotelMsgAlert(0);
+      setHotelRescheduleAlert(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const tick = () => {
+      authFetch('/api/v1/hotel/dashboard/')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          const n = Number(data.hk_cleaning_required || 0) + Number(data.hk_unassigned || 0);
+          setHotelHkAlert(n > 0 ? Math.max(Number(data.hk_cleaning_required || 0), Number(data.hk_unassigned || 0)) : 0);
+          setHotelMsgAlert(Number(data.client_messages_pending || 0));
+          setHotelRescheduleAlert(Number(data.reschedule_pending || 0));
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 45000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token, isHotelPath, authFetch]);
+
+  const hospitalSpace = location.pathname.startsWith('/hospital')
+    || /hopital|hôpital|hospital|clinique|cabinet|santé|sante/.test(
+      `${business?.primary_category_name || ''} ${business?.category_name || ''}`.toLowerCase()
+    );
+
+  useEffect(() => {
+    if (!token || !hospitalSpace || !business?.id) {
+      setPlanningAlert(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const tick = () => {
+      authFetch(`/api/v1/hospital/schedules/planning_alerts/?hospital=${business.id}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          setPlanningAlert(Number(data.alert_count || 0));
+        })
+        .catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [token, hospitalSpace, business?.id, authFetch]);
+
   if (user && !canAccessZone(user, ZONE_ACCESS.businessAdmin) && !isRetailClientPath) {
     return <Navigate to={getRedirectPath(user)} replace />;
   }
@@ -96,10 +162,17 @@ export default function BusinessLayout() {
       || name.includes('clinique')
       || name.includes('cabinet')
     ) return 'hospital';
+    if (
+      name.includes('hôtel')
+      || name.includes('hotel')
+      || name.includes('hôtellerie')
+      || name.includes('hotellerie')
+    ) return 'hotel';
     if (location.pathname.startsWith('/retail-pharmacy')) return 'retail_pharmacy';
     if (location.pathname.startsWith('/wholesale-pharmacy/client')) return 'retail_pharmacy';
     if (location.pathname.startsWith('/wholesale-pharmacy')) return 'wholesale';
     if (location.pathname.startsWith('/hospital')) return 'hospital';
+    if (location.pathname.startsWith('/hotel')) return 'hotel';
     const commerceKeywords = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
     if (commerceKeywords.some((k) => name.includes(k))) return 'commerce';
     if (location.pathname.startsWith('/commerce')) return 'commerce';
@@ -107,9 +180,123 @@ export default function BusinessLayout() {
   })();
 
   const isHospital = categoryKey === 'hospital';
+  const isHotel = categoryKey === 'hotel';
   const isWholesale = categoryKey === 'wholesale';
   const isRetailPharmacy = categoryKey === 'retail_pharmacy';
   const isCommerce = categoryKey === 'commerce';
+
+  const hotelNavGroups = [
+    {
+      title: "Vue d'ensemble",
+      items: [
+        // Shell PMS : toujours visible si l’utilisateur accède à la zone hôtel
+        { name: 'Tableau de bord', icon: LayoutDashboard, path: '/hotel/dashboard', alwaysShow: true },
+      ],
+    },
+    {
+      title: 'Référentiel',
+      items: [
+        { name: 'Mon hôtel', icon: Store, path: '/hotel/company', perm: 'hotel.company.view' },
+        { name: 'Types de chambres', icon: BedDouble, path: '/hotel/room-types', perm: 'hotel.room_types.view' },
+        { name: 'Chambres', icon: Building2, path: '/hotel/rooms', perm: 'hotel.rooms.view' },
+        { name: 'Tarifs', icon: CreditCard, path: '/hotel/rates', perm: 'hotel.rates.view' },
+        { name: 'Services', icon: Sparkles, path: '/hotel/services', perm: 'hotel.services.view' },
+      ],
+    },
+    {
+      title: 'Opérations',
+      items: [
+        { name: 'Réservations', icon: Calendar, path: '/hotel/reservations', perm: 'hotel.reservations.view' },
+        { name: 'Nouvelle réservation', icon: Plus, path: '/hotel/reservations/new', perm: 'hotel.reservations.create' },
+        {
+          name: 'Messages clients',
+          icon: MessageSquare,
+          path: '/hotel/messages',
+          anyPerm: ['hotel.reservations.view', 'hotel.reservations.reply'],
+          badgeKey: 'clientMessages',
+        },
+        {
+          name: 'Anticiper / reporter',
+          icon: Clock,
+          path: '/hotel/reschedules',
+          anyPerm: ['hotel.reservations.view', 'hotel.reservations.confirm'],
+          badgeKey: 'rescheduleRequests',
+        },
+        { name: 'Emails réservation', icon: Mail, path: '/hotel/reservation-settings', perm: 'hotel.reservations.update', hideForOwner: true },
+        { name: 'Arrivées', icon: UserCheck, path: '/hotel/front-desk/arrivals', anyPerm: ['hotel.stays.check_in', 'hotel.front_desk'] },
+        { name: 'Départs', icon: Users, path: '/hotel/front-desk/departures', anyPerm: ['hotel.stays.check_out', 'hotel.front_desk'] },
+        { name: 'Calendrier', icon: Calendar, path: '/hotel/calendar', anyPerm: ['hotel.reservations.view', 'hotel.front_desk', 'hotel.stays.view'] },
+        { name: 'Séjours', icon: BedDouble, path: '/hotel/stays', perm: 'hotel.stays.view' },
+        { name: 'Clients', icon: Users, path: '/hotel/guests', perm: 'hotel.guests.view' },
+      ],
+    },
+    {
+      title: 'Support',
+      items: [
+        { name: 'Housekeeping', icon: Sparkles, path: '/hotel/housekeeping', perm: 'hotel.housekeeping.view' },
+        { name: 'Maintenance', icon: Wrench, path: '/hotel/maintenance', perm: 'hotel.maintenance.view' },
+        { name: 'Caisse', icon: CreditCard, path: '/hotel/cashier', perm: 'hotel.cashier.view' },
+        { name: 'Folios & paiements', icon: CreditCard, path: '/hotel/folios', perm: 'hotel.cashier.view' },
+        { name: 'Facturation', icon: CreditCard, path: '/hotel/invoices', perm: 'hotel.cashier.view' },
+        { name: 'Rapports', icon: LayoutDashboard, path: '/hotel/reports', perm: 'hotel.reports.view' },
+        { name: "Journal d'Audit", icon: FileText, path: '/hotel/audit', perm: 'hotel.audit.view' },
+      ],
+    },
+    {
+      title: 'Système',
+      items: [
+        { name: 'Rôles & Permissions', icon: Shield, path: '/hotel/users', anyPerm: ['hotel.roles.view', 'hotel.roles.create', 'hotel.roles.update'] },
+        { name: 'Personnel', icon: Users, path: '/hotel/staff', perm: 'hotel.staff.view' },
+        { name: 'Paramètres', icon: Settings, path: '/business/settings', perm: 'hotel.company.update' },
+        // Plateforme : non attribuable via cases PMS — réservé au compte owner
+        { name: 'Abonnement', icon: Crown, path: '/hotel/subscription', ownerOnly: true },
+      ],
+    },
+  ];
+
+  /** Filtre menus hôtel selon permissions (propriétaire = même règles que les employés) */
+  const filterHotelNavForUser = (groups) => {
+    const isOwner = user?.role === ROLES.BUSINESS_OWNER;
+    const can = (code) => userHasPermission(user, code);
+    return groups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          if (item.ownerOnly) return isOwner;
+          if (item.hideForOwner && isOwner) return false;
+          if (item.alwaysShow) return true;
+          if (item.anyPerm?.length) return item.anyPerm.some((p) => can(p));
+          if (item.perm) return can(item.perm);
+          return true;
+        }),
+      }))
+      .filter((group) => group.items.length > 0);
+  };
+
+  /** Garde deep-link : pas d’accès URL si le menu correspondant est masqué */
+  const hotelPathAllowed = (pathname) => {
+    if (!pathname?.startsWith('/hotel')) return true;
+    if (pathname === '/hotel' || pathname === '/hotel/' || pathname.startsWith('/hotel/dashboard')) {
+      return true;
+    }
+    const flat = hotelNavGroups.flatMap((g) => g.items);
+    const exact = flat.find((item) => item.path === pathname);
+    const prefix = flat
+      .filter((item) => (
+        item.path
+        && item.path !== '/hotel/dashboard'
+        && pathname.startsWith(`${item.path}/`)
+      ))
+      .sort((a, b) => (b.path?.length || 0) - (a.path?.length || 0))[0];
+    const item = exact || prefix;
+    if (!item) return true;
+    if (item.ownerOnly) return user?.role === ROLES.BUSINESS_OWNER;
+    if (item.hideForOwner && user?.role === ROLES.BUSINESS_OWNER) return false;
+    if (item.alwaysShow) return true;
+    if (item.anyPerm?.length) return item.anyPerm.some((p) => userHasPermission(user, p));
+    if (item.perm) return userHasPermission(user, item.perm);
+    return true;
+  };
 
   const hospitalNavGroups = [
     {
@@ -126,7 +313,7 @@ export default function BusinessLayout() {
         { name: 'Services & Paquets de Soins', icon: HeartPulse, path: '/hospital/services' },
         { name: 'Examens & tarifs', icon: FlaskConical, path: '/hospital/exams' },
         { name: 'Annuaire des Médecins', icon: Stethoscope, path: '/hospital/doctors' },
-        { name: 'Planning & Horaires', icon: Clock, path: '/hospital/schedules' },
+        { name: 'Planning & Horaires', icon: Clock, path: '/hospital/schedules', badgeKey: 'planningAlerts' },
       ]
     },
     {
@@ -148,7 +335,7 @@ export default function BusinessLayout() {
         { name: 'Gestion du Personnel', icon: Users, path: '/hospital/staff' },
         { name: 'Rapports & Analytics', icon: LayoutDashboard, path: '/hospital/reports' },
         { name: "Journal d'Audit", icon: FileText, path: '/hospital/audit' },
-        { name: 'Paramètres', icon: Settings, path: '/hospital/settings' },
+        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
         { name: 'Abonnement', icon: Crown, path: '/hospital/subscription' },
       ]
     }
@@ -180,6 +367,7 @@ export default function BusinessLayout() {
     {
       title: 'Système',
       items: [
+        { name: "Journal d'Audit", icon: FileText, path: '/wholesale-pharmacy/audit' },
         { name: 'Paramètres', icon: Settings, path: '/wholesale-pharmacy/settings' },
         { name: 'Abonnement', icon: Crown, path: '/wholesale-pharmacy/subscription' },
       ]
@@ -239,6 +427,7 @@ export default function BusinessLayout() {
     {
       title: 'Système',
       items: [
+        { name: "Journal d'Audit", icon: FileText, path: '/retail-pharmacy/audit' },
         { name: 'Paramètres', icon: Settings, path: '/retail-pharmacy/settings' },
         { name: 'Abonnement', icon: Crown, path: '/retail-pharmacy/subscription' },
       ]
@@ -286,6 +475,7 @@ export default function BusinessLayout() {
     {
       title: 'Système',
       items: [
+        { name: "Journal d'Audit", icon: FileText, path: '/business/audit' },
         { name: 'Paramètres', icon: Settings, path: '/business/settings' },
         { name: 'Abonnement', icon: Crown, path: '/business/subscription' },
       ]
@@ -317,7 +507,8 @@ export default function BusinessLayout() {
     {
       title: 'Système',
       items: [
-        { name: 'Paramètres', icon: Settings, path: '/commerce/settings' },
+        { name: "Journal d'Audit", icon: FileText, path: '/commerce/audit' },
+        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
         { name: 'Abonnement', icon: Crown, path: '/commerce/subscription' },
       ]
     }
@@ -329,12 +520,23 @@ export default function BusinessLayout() {
       ? '/retail-pharmacy/subscription'
       : isHospital
         ? '/hospital/subscription'
-        : isCommerce
-          ? '/commerce/subscription'
-          : '/business/subscription';
+        : isHotel
+          ? '/hotel/subscription'
+          : isCommerce
+            ? '/commerce/subscription'
+            : '/business/subscription';
 
   const subscriptionBlocked = Boolean(
     !isRetailClientPath && business?.subscription?.is_blocked
+  );
+  const subscriptionGrace = Boolean(
+    !isRetailClientPath && business?.subscription?.in_grace && !subscriptionBlocked
+  );
+  const subscriptionExpiring = Boolean(
+    !isRetailClientPath
+    && !subscriptionBlocked
+    && !subscriptionGrace
+    && business?.subscription?.expiry_warning
   );
 
   const activeNavGroups = (() => {
@@ -346,10 +548,19 @@ export default function BusinessLayout() {
           ? retailAdminNavGroups
           : isHospital
             ? hospitalNavGroups
-            : isCommerce
-              ? commerceNavGroups
-              : genericNavGroups;
+            : isHotel
+              ? filterHotelNavForUser(hotelNavGroups)
+              : isCommerce
+                ? commerceNavGroups
+                : genericNavGroups;
     if (!subscriptionBlocked) return groups;
+    // Seul le propriétaire gère l'abonnement plateforme
+    if (isHotel && user?.role !== ROLES.BUSINESS_OWNER) {
+      return [{
+        title: 'Accès plateforme',
+        items: [{ name: 'Tableau de bord', icon: LayoutDashboard, path: '/hotel/dashboard' }],
+      }];
+    }
     return [{
       title: 'Accès plateforme',
       items: [{ name: 'Abonnement', icon: Crown, path: subscriptionHome }],
@@ -362,9 +573,11 @@ export default function BusinessLayout() {
       ? 'Pharmacie de détail'
       : isHospital
         ? 'Espace Hôpital'
-        : isCommerce
-          ? 'Espace Commerce'
-          : 'Espace Business';
+        : isHotel
+          ? 'Espace Hôtel'
+          : isCommerce
+            ? 'Espace Commerce'
+            : 'Espace Business';
 
   const homeLink = isRetailClientPath
     ? '/retail-pharmacy/client/dashboard'
@@ -374,9 +587,11 @@ export default function BusinessLayout() {
         ? '/retail-pharmacy/dashboard'
         : isHospital
           ? '/hospital/dashboard'
-          : isCommerce
-            ? '/commerce/dashboard'
-            : '/business';
+          : isHotel
+            ? '/hotel/dashboard'
+            : isCommerce
+              ? '/commerce/dashboard'
+              : '/business';
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
@@ -426,7 +641,28 @@ export default function BusinessLayout() {
   }
 
   if (subscriptionBlocked && !isSubscriptionPath(location.pathname)) {
-    return <Navigate to={subscriptionHome} replace />;
+    // Manager employé : pas de page abonnement — rester sur le dashboard
+    if (isHotel && user?.role !== ROLES.BUSINESS_OWNER) {
+      if (location.pathname !== '/hotel/dashboard') {
+        return <Navigate to="/hotel/dashboard" replace />;
+      }
+    } else {
+      return <Navigate to={subscriptionHome} replace />;
+    }
+  }
+
+  // Manager hôtel (employé) : pas d'accès à l'abonnement plateforme
+  if (
+    isHotel
+    && isSubscriptionPath(location.pathname)
+    && user?.role !== ROLES.BUSINESS_OWNER
+  ) {
+    return <Navigate to="/hotel/dashboard" replace />;
+  }
+
+  // Staff / owner : URL hors droits CRUD → dashboard
+  if (isHotel && user && !hotelPathAllowed(location.pathname)) {
+    return <Navigate to="/hotel/dashboard" replace />;
   }
 
   return (
@@ -443,7 +679,7 @@ export default function BusinessLayout() {
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full xl:translate-x-0'
         }`}
       >
-        <div className="h-20 flex flex-col justify-center px-5 border-b border-gray-100 dark:border-gray-800 shrink-0 bg-gray-50/50 dark:bg-gray-800/30">
+        <div className="h-20 flex flex-col justify-center px-5 border-b border-border dark:border-gray-800 shrink-0 bg-gray-50/50 dark:bg-gray-800/30">
           <div className="flex items-center justify-between">
             <Link to={homeLink} className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-700 to-teal-500 flex items-center justify-center text-white font-black shadow-md shadow-teal-600/20 shrink-0">
@@ -474,15 +710,21 @@ export default function BusinessLayout() {
               <div className="space-y-1">
                 {group.items.map((item) => {
                   const basePath = item.path.split('?')[0];
+                  const exactOnlyPaths = [
+                    '/business',
+                    '/hospital/dashboard',
+                    '/wholesale-pharmacy/dashboard',
+                    '/wholesale-pharmacy/client/dashboard',
+                    '/retail-pharmacy/dashboard',
+                    '/retail-pharmacy/client/dashboard',
+                    '/hotel/reservations',
+                  ];
                   const isActive = location.pathname === basePath
                     || (item.path.includes('tab=queue') && location.pathname === '/hospital/appointments' && location.search.includes('tab=queue'))
-                    || (basePath !== '/business'
-                      && basePath !== '/hospital/dashboard'
-                      && basePath !== '/wholesale-pharmacy/dashboard'
-                      && basePath !== '/wholesale-pharmacy/client/dashboard'
-                      && basePath !== '/retail-pharmacy/dashboard'
-                      && basePath !== '/retail-pharmacy/client/dashboard'
-                      && location.pathname.startsWith(basePath));
+                    || (
+                      !exactOnlyPaths.includes(basePath)
+                      && location.pathname.startsWith(`${basePath}/`)
+                    );
                   return (
                     <Link
                       key={item.name}
@@ -495,7 +737,31 @@ export default function BusinessLayout() {
                       }`}
                     >
                       <item.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
-                      <span className="truncate">{item.name}</span>
+                      <span className="truncate flex-1">{item.name}</span>
+                      {item.badgeKey === 'clientMessages' && hotelMsgAlert > 0 && (
+                        <span className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center ${
+                          isActive ? 'bg-white text-teal-700' : 'bg-teal-600 text-white'
+                        }`}
+                        >
+                          {hotelMsgAlert > 9 ? '9+' : hotelMsgAlert}
+                        </span>
+                      )}
+                      {item.badgeKey === 'rescheduleRequests' && hotelRescheduleAlert > 0 && (
+                        <span className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center ${
+                          isActive ? 'bg-white text-amber-800' : 'bg-amber-500 text-white'
+                        }`}
+                        >
+                          {hotelRescheduleAlert > 9 ? '9+' : hotelRescheduleAlert}
+                        </span>
+                      )}
+                      {item.badgeKey === 'planningAlerts' && planningAlert > 0 && (
+                        <span className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center ${
+                          isActive ? 'bg-white text-amber-800' : 'bg-amber-500 text-white'
+                        }`}
+                        >
+                          {planningAlert > 9 ? '9+' : planningAlert}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -511,7 +777,10 @@ export default function BusinessLayout() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
-                {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'Administrateur'}
+                {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Administrateur'}
+              </div>
+              <div className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold truncate">
+                {user?.business_info?.role_name || spaceLabel}
               </div>
               <div className="text-[10px] text-gray-400 truncate">
                 {user?.email || 'admin@isoko.bi'}
@@ -546,15 +815,82 @@ export default function BusinessLayout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button className="relative p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle variant="ghost" size="sm" />
+            <button
+              type="button"
+              className="relative p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+              title={
+                isHotel && hotelRescheduleAlert > 0
+                  ? `${hotelRescheduleAlert} demande(s) anticiper/reporter`
+                  : (isHotel && hotelMsgAlert > 0
+                    ? `${hotelMsgAlert} message(s) client`
+                    : (isHotel && hotelHkAlert > 0
+                      ? `${hotelHkAlert} chambre(s) à nettoyer`
+                      : (planningAlert > 0
+                        ? `${planningAlert} alerte(s) planning médecin`
+                        : 'Notifications')))
+              }
+              onClick={() => {
+                if (isHotel) {
+                  if (hotelRescheduleAlert > 0) navigate('/hotel/reschedules');
+                  else if (hotelMsgAlert > 0) navigate('/hotel/messages');
+                  else navigate('/hotel/housekeeping');
+                  return;
+                }
+                if (planningAlert > 0) navigate('/hospital/schedules');
+              }}
+            >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-teal-500 rounded-full" />
+              {(isHotel ? (hotelHkAlert > 0 || hotelMsgAlert > 0 || hotelRescheduleAlert > 0) : true) && (
+                <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
+                  (isHotel && (hotelMsgAlert > 0 || hotelHkAlert > 0 || hotelRescheduleAlert > 0)) || planningAlert > 0
+                    ? 'bg-amber-500'
+                    : 'bg-teal-500'
+                }`}
+                />
+              )}
+              {isHotel && (hotelMsgAlert > 0 || hotelHkAlert > 0 || hotelRescheduleAlert > 0) && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                  {(hotelRescheduleAlert || hotelMsgAlert || hotelHkAlert) > 9
+                    ? '9+'
+                    : (hotelRescheduleAlert || hotelMsgAlert || hotelHkAlert)}
+                </span>
+              )}
+              {!isHotel && planningAlert > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                  {planningAlert > 9 ? '9+' : planningAlert}
+                </span>
+              )}
             </button>
           </div>
         </header>
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 bg-gray-50/50 dark:bg-gray-950">
+          {subscriptionExpiring && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Abonnement bientôt expiré</p>
+                <p className="text-amber-900/80 dark:text-amber-100/80">
+                  Il reste {business?.subscription?.paid_days_remaining} jour(s) avant l&apos;échéance.
+                  Une période de grâce de {business?.subscription?.grace_period_days} jour(s) suivra.
+                </p>
+              </div>
+            </div>
+          )}
+          {subscriptionGrace && (
+            <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Période de grâce en cours</p>
+                <p className="text-amber-900/80 dark:text-amber-100/80">
+                  Jour {business?.subscription?.grace_days_elapsed} sur {business?.subscription?.grace_period_days}.
+                  L&apos;accès reste ouvert jusqu&apos;au renouvellement.
+                </p>
+              </div>
+            </div>
+          )}
           {subscriptionBlocked && (
             <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-700 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
               <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />

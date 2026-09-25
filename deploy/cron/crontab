@@ -1,0 +1,9 @@
+# Crontab Isoko Hub — rappels départ hôtel (J-1)
+# Installer dans le conteneur / l’hôte :
+#   crontab /app/deploy/cron/crontab
+#
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Tous les jours à 06:05 (fuseau du serveur)
+5 6 * * * cd /app && python manage.py notify_hotel_departures >> /var/log/isoko-hotel-departures.log 2>&1

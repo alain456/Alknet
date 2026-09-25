@@ -3,7 +3,7 @@ import { Crown, AlertTriangle, CheckCircle2, Clock, Smartphone } from 'lucide-re
 import { useAuth } from '../context/AuthContext';
 
 /**
- * Abonnement SaaS : Entreprise → compte marchand Isoko Hub (Lumicash).
+ * Abonnement SaaS : Entreprise → compte marchand Isoko Hub (BurundiPay).
  * Distinct des paiements privés client↔vendeur.
  */
 export default function BusinessSubscriptionPage() {
@@ -61,8 +61,8 @@ export default function BusinessSubscriptionPage() {
         throw new Error(data.detail || data.message || 'Échec initiation paiement');
       }
       setPendingPaymentId(data.payment_id);
-      setPayMsg(data.message || 'Paiement initié. Validez sur votre téléphone Lumicash.');
-      if (data.subscription) setSub((prev) => ({ ...prev, ...data.subscription, plans: prev?.plans, recent_payments: prev?.recent_payments, lumicash_stub: data.stub_mode }));
+      setPayMsg(data.message || 'Paiement initié. Validez sur votre téléphone BurundiPay.');
+      if (data.subscription) setSub((prev) => ({ ...prev, ...data.subscription, plans: prev?.plans, recent_payments: prev?.recent_payments, burundipay_stub: data.stub_mode }));
       await load();
     } catch (err) {
       setError(err.message || 'Erreur paiement');
@@ -126,7 +126,7 @@ export default function BusinessSubscriptionPage() {
           </h1>
         </div>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Paiement entreprise → compte marchand plateforme (Lumicash).  
+          Paiement entreprise → compte marchand plateforme (BurundiPay).  
           Ce n&apos;est pas le paiement des commandes clients.
         </p>
       </header>
@@ -148,14 +148,28 @@ export default function BusinessSubscriptionPage() {
             <p className="font-semibold text-gray-900 dark:text-white">
               {blocked
                 ? 'Espace bloqué — abonnement requis'
-                : sub?.is_free_period
-                  ? 'Période Free active'
-                  : 'Abonnement actif'}
+                : sub?.in_grace
+                  ? `Période de grâce — jour ${sub.grace_days_elapsed} / ${sub.grace_period_days}`
+                  : sub?.is_free_period
+                    ? 'Période Free active'
+                    : 'Abonnement actif'}
             </p>
             <p className="text-sm text-gray-700 dark:text-gray-300">
               Statut : <strong>{sub?.status_display || sub?.status}</strong>
               {sub?.plan_name ? ` · Plan ${sub.plan_name}` : ''}
             </p>
+            {sub?.expiry_warning && !sub?.in_grace && (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                L&apos;abonnement expire dans {sub.paid_days_remaining} jour(s).
+                La période de grâce de {sub.grace_period_days} jour(s) commencera ensuite.
+              </p>
+            )}
+            {sub?.in_grace && (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                L&apos;échéance est passée. Le décompte de grâce avance chaque jour
+                ({sub.grace_days_remaining} jour(s) restants).
+              </p>
+            )}
             {sub?.is_free_period && !blocked && (
               <p className="text-sm text-teal-800 dark:text-teal-200">
                 Profitez de la période gratuite. Après l&apos;échéance, choisissez Mensuel ou Annuel.
@@ -170,14 +184,17 @@ export default function BusinessSubscriptionPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4 bg-white dark:bg-gray-900">
-        <div className="flex items-center gap-2">
-          <Smartphone className="w-5 h-5 text-teal-700" />
-          <h2 className="font-semibold text-gray-900 dark:text-white">Payer avec Lumicash</h2>
+      <section className="rounded-xl border border-accent/25 p-6 space-y-4 bg-white dark:bg-gray-900">
+        <div className="flex items-center gap-3">
+          <img src="/burundipay.png" alt="BurundiPay" className="h-12 w-auto object-contain" />
+          <div>
+            <h2 className="font-semibold text-gray-900 dark:text-white">Payer avec BurundiPay</h2>
+            <p className="text-[10px] text-accent font-medium">Riha, Ronka, Rungika amafaranga mu kanya isase</p>
+          </div>
         </div>
         <p className="text-xs text-gray-500">
           Marchand : <strong>{sub?.merchant_account || 'ISOKO_HUB_MERCHANT'}</strong>
-          {sub?.lumicash_stub ? ' · mode simulation' : ''}
+          {sub?.burundipay_stub ? ' · mode simulation' : ''}
         </p>
 
         <form onSubmit={startPay} className="space-y-3">
@@ -199,7 +216,7 @@ export default function BusinessSubscriptionPage() {
             <p className="text-xs text-gray-500">{selectedPlan.description}</p>
           )}
           <label className="block text-sm space-y-1">
-            <span className="text-gray-600">Numéro Lumicash (payeur)</span>
+            <span className="text-gray-600">Numéro BurundiPay (payeur)</span>
             <input
               required
               type="tel"
@@ -218,7 +235,7 @@ export default function BusinessSubscriptionPage() {
           </button>
         </form>
 
-        {pendingPaymentId && sub?.lumicash_stub && (
+        {pendingPaymentId && sub?.burundipay_stub && (
           <div className="rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-950/30 p-4 space-y-2">
             <p className="text-sm text-teal-900 dark:text-teal-100">
               Simulation : après le push PIN, confirmez ici pour activer l&apos;abonnement.

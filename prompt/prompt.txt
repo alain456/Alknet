@@ -298,7 +298,7 @@ Future delivery integration
 
 Design the system to support:
 
-Lumicash
+BurundiPay
 
 EcoCash
 

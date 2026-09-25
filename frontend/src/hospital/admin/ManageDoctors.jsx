@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Stethoscope, Plus, Mail, CreditCard, Video, Clock, Shield, HeartPulse, Edit2, Trash2, Upload, User, X } from 'lucide-react';
+import { Stethoscope, Plus, Mail, CreditCard, Video, Clock, Shield, HeartPulse, Edit2, Trash2, Upload, User, X, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import hospitalService from '../hospitalService';
@@ -25,6 +25,7 @@ export default function ManageDoctors() {
     medical_license_number: '', consultation_fee: 0, 
     is_available_for_telemedicine: false, bio: '',
     photo_url: '',
+    office_address: '',
     languages_spoken: 'Français, Kirundi',
     experience_years: 0,
     qualifications: '',
@@ -39,8 +40,15 @@ export default function ManageDoctors() {
   const navigate = useNavigate();
 
   const selectedRole = roles.find((r) => r.id === formData.role_id);
+  const roleName = (selectedRole?.name || '').toLowerCase();
+  const isAccountantRole = selectedRole?.system_access_level === 'CASHIER_ACCESS'
+    || roleName.includes('comptable')
+    || roleName.includes('comptab')
+    || roleName.includes('caissier')
+    || roleName.includes('caisse');
   const isReceptionistRole = selectedRole?.system_access_level === 'RECEPTIONIST_ACCESS'
-    || (selectedRole?.name || '').toLowerCase().includes('accueil');
+    || roleName.includes('accueil');
+  const noConsultationFee = ['NURSE', 'ACCOUNTANT', 'RECEPTIONIST'].includes(formData.staff_category);
 
   useEffect(() => {
     const init = async () => {
@@ -112,6 +120,7 @@ export default function ManageDoctors() {
       medical_license_number: '', consultation_fee: 0, 
       is_available_for_telemedicine: false, bio: '',
       photo_url: '',
+      office_address: '',
       languages_spoken: 'Français, Kirundi',
       experience_years: 0,
       qualifications: '',
@@ -147,6 +156,7 @@ export default function ManageDoctors() {
       is_available_for_telemedicine: source.is_available_for_telemedicine || false,
       bio: source.bio || '',
       photo_url: source.photo_url || source.public_photo_url || '',
+      office_address: source.office_address || '',
       languages_spoken: source.languages_spoken || 'Français, Kirundi',
       experience_years: source.experience_years ?? 0,
       qualifications: source.qualifications || '',
@@ -220,10 +230,10 @@ export default function ManageDoctors() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 rounded-2xl border-duo bg-surface p-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Stethoscope className="w-7 h-7 text-teal-600 dark:text-teal-400" />
+            <Stethoscope className="w-7 h-7 text-accent" />
             Corps Médical & Praticiens
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
@@ -246,12 +256,13 @@ export default function ManageDoctors() {
       )}
 
       {/* Onglets de filtrage par Catégorie de Personnel */}
-      <div className="flex items-center gap-2 overflow-x-auto bg-white dark:bg-gray-900 p-3 rounded-xl border border-gray-200 dark:border-gray-800">
+      <div className="flex items-center gap-2 overflow-x-auto bg-white dark:bg-gray-900 p-3 rounded-xl border-2 border-accent">
         {[
           { key: 'ALL', label: 'Tout le Personnel' },
           { key: 'SPECIALIST', label: 'Médecins Spécialistes' },
           { key: 'DOCTOR', label: 'Docteurs / Généralistes' },
           { key: 'NURSE', label: 'Infirmiers & Soignants' },
+          { key: 'ACCOUNTANT', label: 'Comptabilité' },
           { key: 'RECEPTIONIST', label: 'Agents d\'accueil' },
         ].map(tab => (
           <button
@@ -272,7 +283,7 @@ export default function ManageDoctors() {
         {loading ? (
           <div className="col-span-full py-12 text-center text-gray-500">Chargement du corps médical...</div>
         ) : doctors.filter(d => activeCategoryTab === 'ALL' || d.staff_category === activeCategoryTab).length === 0 && hospitalId ? (
-          <div className="col-span-full py-12 text-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-8">
+          <div className="col-span-full py-12 text-center bg-white dark:bg-gray-900 rounded-2xl border-2 border-alert p-8">
             <Stethoscope className="w-12 h-12 text-teal-500 mx-auto mb-3 opacity-50" />
             <p className="text-gray-500 font-medium">Aucun personnel enregistré dans cette catégorie.</p>
             <button 
@@ -285,13 +296,19 @@ export default function ManageDoctors() {
         ) : (
           doctors
             .filter(d => activeCategoryTab === 'ALL' || d.staff_category === activeCategoryTab)
-            .map(doc => {
+            .map((doc, idx) => {
             const docFullName = `${doc.user_details?.first_name || ''} ${doc.user_details?.last_name || ''}`;
             const isNurse = doc.staff_category === 'NURSE';
-            const isReceptionist = doc.staff_category === 'RECEPTIONIST' || doc.is_public_directory === false
-              || (doc.user_details?.role_name || '').toLowerCase().includes('accueil');
+            const isAccountant = doc.staff_category === 'ACCOUNTANT'
+              || (doc.user_details?.role_name || '').toLowerCase().includes('comptab');
+            const isReceptionist = !isAccountant && (
+              doc.staff_category === 'RECEPTIONIST'
+              || (doc.user_details?.role_name || '').toLowerCase().includes('accueil')
+            );
             return (
-              <div key={doc.id} className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between space-y-4">
+              <div key={doc.id} className={`bg-white dark:bg-gray-900 rounded-2xl border-2 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between space-y-4 ${
+                idx % 2 === 0 ? 'border-accent' : 'border-alert'
+              }`}>
                 <div>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -322,14 +339,14 @@ export default function ManageDoctors() {
                       <button 
                         onClick={() => openEditModal(doc)}
                         title="Modifier les informations du médecin"
-                        className="p-1.5 text-gray-400 hover:text-teal-600 dark:hover:text-teal-400 rounded-lg transition cursor-pointer"
+                        className="icon-btn"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDeleteDoctor(doc.id, docFullName)}
                         title="Supprimer ce médecin"
-                        className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition cursor-pointer"
+                        className="icon-btn icon-btn--danger"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -341,15 +358,17 @@ export default function ManageDoctors() {
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${
                       doc.staff_category === 'SPECIALIST' 
                         ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-200'
+                        : isAccountant
+                        ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300 border border-orange-200'
                         : isNurse
                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200'
                         : isReceptionist
                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200'
                         : 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border border-teal-200'
                     }`}>
-                      {doc.staff_category_display || (isReceptionist ? 'Agent d\'accueil' : isNurse ? 'Infirmier(e)' : 'Médecin')}
+                      {doc.staff_category_display || (isAccountant ? 'Comptable' : isReceptionist ? 'Agent d\'accueil' : isNurse ? 'Infirmier(e)' : 'Médecin')}
                     </span>
-                    {isReceptionist && (
+                    {(isReceptionist || isAccountant) && (
                       <span className="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-bold bg-gray-100 text-gray-600 border border-gray-200">
                         Non publié côté client
                       </span>
@@ -365,6 +384,12 @@ export default function ManageDoctors() {
                     <p className="flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5 text-gray-400" /> {doc.user_details?.email}
                     </p>
+                    {doc.office_address && (
+                      <p className="flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                        <span>Bureau: <span className="font-semibold text-gray-900 dark:text-white">{doc.office_address}</span></span>
+                      </p>
+                    )}
                     <p className="flex items-center gap-2">
                       <CreditCard className="w-3.5 h-3.5 text-gray-400" /> 
                       {isNurse ? (
@@ -434,20 +459,22 @@ export default function ManageDoctors() {
                 <label className="block text-xs font-bold text-teal-900 dark:text-teal-300 mb-1.5">
                   Catégorie du Personnel *
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {[
-                    { key: 'SPECIALIST', label: 'Médecin Spécialiste', feeRequired: true },
-                    { key: 'DOCTOR', label: 'Docteur / Généraliste', feeRequired: true },
-                    { key: 'NURSE', label: 'Infirmier(e) / Soignant(e)', feeRequired: false }
+                    { key: 'SPECIALIST', label: 'Médecin Spécialiste' },
+                    { key: 'DOCTOR', label: 'Docteur / Généraliste' },
+                    { key: 'NURSE', label: 'Infirmier(e) / Soignant(e)' },
+                    { key: 'ACCOUNTANT', label: 'Comptable' },
                   ].map(cat => (
                     <button
                       key={cat.key}
                       type="button"
                       onClick={() => {
+                        const hidden = cat.key === 'NURSE' || cat.key === 'ACCOUNTANT';
                         setFormData({
                           ...formData,
                           staff_category: cat.key,
-                          consultation_fee: cat.key === 'NURSE' ? 0 : formData.consultation_fee
+                          consultation_fee: hidden ? 0 : formData.consultation_fee
                         });
                       }}
                       className={`p-2 rounded-lg text-xs font-semibold border transition cursor-pointer text-center ${
@@ -494,13 +521,13 @@ export default function ManageDoctors() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Frais de consultation (BIF) {formData.staff_category === 'NURSE' && '(Non applicable pour infirmiers)'}
+                    Frais de consultation (BIF) {noConsultationFee && '(Non applicable)'}
                   </label>
                   <input 
                     type="number" 
-                    disabled={formData.staff_category === 'NURSE'}
-                    required={formData.staff_category !== 'NURSE'} 
-                    value={formData.staff_category === 'NURSE' ? 0 : formData.consultation_fee} 
+                    disabled={noConsultationFee}
+                    required={!noConsultationFee} 
+                    value={noConsultationFee ? 0 : formData.consultation_fee} 
                     onChange={e => setFormData({...formData, consultation_fee: e.target.value})} 
                     className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600 disabled:opacity-50 disabled:bg-gray-100 dark:disabled:bg-gray-800/50" 
                   />
@@ -515,14 +542,37 @@ export default function ManageDoctors() {
                 </label>
                 <select 
                   value={formData.role_id}
-                  onChange={e => setFormData({...formData, role_id: e.target.value})}
+                  onChange={e => {
+                    const role = roles.find((r) => r.id === e.target.value);
+                    const name = (role?.name || '').toLowerCase();
+                    const accountant = role?.system_access_level === 'CASHIER_ACCESS'
+                      || name.includes('comptable')
+                      || name.includes('comptab')
+                      || name.includes('caissier')
+                      || name.includes('caisse');
+                    setFormData({
+                      ...formData,
+                      role_id: e.target.value,
+                      ...(accountant ? { staff_category: 'ACCOUNTANT', consultation_fee: 0 } : {}),
+                    });
+                  }}
                   className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-600 outline-none"
                 >
                   <option value="">-- Sélectionner un Rôle (Optionnel) --</option>
                   {roles.map(r => (
-                    <option key={r.id} value={r.id}>{r.name}{r.system_access_level === 'RECEPTIONIST_ACCESS' ? ' (accueil — non publié client)' : ''}</option>
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                      {r.system_access_level === 'RECEPTIONIST_ACCESS' ? ' (accueil — non publié client)' : ''}
+                      {(r.name || '').toLowerCase().includes('comptab') ? ' (comptable — non publié client)' : ''}
+                      {!(r.name || '').toLowerCase().includes('comptab') && (r.system_access_level === 'CASHIER_ACCESS' || (r.name || '').toLowerCase().includes('caiss')) ? ' (caisse — non publié client)' : ''}
+                    </option>
                   ))}
                 </select>
+                {isAccountantRole && (
+                  <p className="text-xs text-orange-800 dark:text-orange-300 mt-2 p-2 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200">
+                    Ce personnel est chargé de la comptabilité uniquement. Il n&apos;apparaît pas dans l&apos;annuaire public ni dans la prise de rendez-vous, au même titre qu&apos;un infirmier.
+                  </p>
+                )}
                 {isReceptionistRole && (
                   <p className="text-xs text-amber-700 dark:text-amber-400 mt-2 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200">
                     Ce personnel sera enregistré comme <strong>agent d&apos;accueil</strong> et n&apos;apparaîtra pas dans l&apos;annuaire public ni dans la réservation en ligne.
@@ -613,6 +663,22 @@ export default function ManageDoctors() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Bureau / cabinet (adresse pour les RDV)
+                </label>
+                <input
+                  type="text"
+                  value={formData.office_address}
+                  onChange={(e) => setFormData({ ...formData, office_address: e.target.value })}
+                  className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                  placeholder="Ex: Bâtiment A, 2e étage, salle 12"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Affiché au patient lors de la prise de rendez-vous.
+                </p>
               </div>
 
               <div>

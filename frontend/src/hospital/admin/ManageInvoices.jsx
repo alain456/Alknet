@@ -13,6 +13,7 @@ export default function ManageInvoices() {
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [closings, setClosings] = useState([]);
 
   const [formData, setFormData] = useState({
     patient: '',
@@ -35,6 +36,7 @@ export default function ManageInvoices() {
             fetchInvoices(hid);
             fetchPatients(hid);
             fetchAppointments(hid);
+            fetchClosings();
           } else {
             setLoading(false);
           }
@@ -46,6 +48,20 @@ export default function ManageInvoices() {
     };
     if (token) init();
   }, [token]);
+
+  const fetchClosings = async () => {
+    try {
+      const res = await authFetch('/api/v1/hospital/invoices/desk/', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setClosings(data.recent_closings || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchInvoices = async (hid) => {
     try {
@@ -198,6 +214,23 @@ export default function ManageInvoices() {
       {!hospitalId && (
         <div className="p-4 bg-yellow-50 text-yellow-800 rounded-xl border border-yellow-200">
           Vous n'avez pas encore configuré votre hôpital.
+        </div>
+      )}
+
+      {closings.length > 0 && (
+        <div className="bg-white rounded-2xl border p-4">
+          <h2 className="font-bold text-gray-900 mb-2">Clôtures de comptabilité</h2>
+          <ul className="text-sm divide-y">
+            {closings.map((item) => (
+              <li key={item.id} className="py-2 flex justify-between gap-3">
+                <span>
+                  {new Date(item.period_date).toLocaleDateString('fr-FR')}
+                  {item.closed_by_name ? ` · ${item.closed_by_name}` : ''}
+                </span>
+                <span className="font-semibold">{Math.round(item.total_collected).toLocaleString('fr-FR')} BIF encaissés</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

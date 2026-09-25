@@ -1,12 +1,14 @@
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
+import json
 
 from business_categories.models import BusinessCategory
 from businesses.models import Business
 
-from .models import ProformaInvoice, RetailProduct
+from .models import Prescription, ProformaInvoice, RetailProduct
 from .order_workflow import (
     accept_order,
     create_order_from_items,
@@ -93,7 +95,7 @@ class RetailWorkflowTests(TestCase):
                 'patient_name': 'Guest Patient',
                 'patient_email': 'guest@example.com',
                 'patient_phone': '+257000000',
-                'payment_method': 'LUMICASH',
+                'payment_method': 'BURUNDIPAY',
                 'payer_phone': '79123456',
                 'items': [{'product_id': str(self.product.id), 'quantity': 1}],
             },
@@ -101,9 +103,36 @@ class RetailWorkflowTests(TestCase):
         )
         self.assertEqual(response.status_code, 201)
         self.assertTrue(response.data['reference'].startswith('CMD-PD-'))
-        self.assertEqual(response.data.get('payment_method'), 'LUMICASH')
+        self.assertEqual(response.data.get('payment_method'), 'BURUNDIPAY')
         self.assertTrue(response.data.get('payer_phone'))
         self.assertIn(response.data.get('payment_status'), ('AWAITING_PIN', 'PAID'))
         self.assertTrue(
             ProformaInvoice.objects.filter(order_id=response.data['id']).exists()
         )
+
+    def test_guest_checkout_prescription_file_upload(self):
+        self.product.prescription_required = True
+        self.product.save(update_fields=['prescription_required'])
+        pdf = SimpleUploadedFile(
+            'ordonnance.pdf',
+            b'%PDF-1.4 test ordonnance',
+            content_type='application/pdf',
+        )
+        response = APIClient().post(
+            '/api/v1/retail/guest-checkout/',
+            {
+                'pharmacy_id': str(self.business.id),
+                'patient_name': 'Guest Rx',
+                'patient_email': 'guest-rx@example.com',
+                'payment_method': 'BURUNDIPAY',
+                'payer_phone': '79123456',
+                'items': json.dumps([{'product_id': str(self.product.id), 'quantity': 1}]),
+                'prescription_file': pdf,
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        rx = Prescription.objects.filter(order_id=response.data['id']).first()
+        self.assertIsNotNone(rx)
+        self.assertTrue(bool(rx.file))
+        self.assertTrue((rx.file_url or '').startswith('/media/') or bool(rx.file.name))

@@ -6,14 +6,6 @@ import useSiteContent from '../shared/useSiteContent';
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
-const PRICE_RANGES = [
-  { value: 'All', label: 'Tous les prix' },
-  { value: '0-50000', label: '0 – 50 000 FBu' },
-  { value: '50000-200000', label: '50 000 – 200 000 FBu' },
-  { value: '200000-500000', label: '200 000 – 500 000 FBu' },
-  { value: '500000+', label: '500 000 FBu+' },
-];
-
 function mapMarketplaceService(s) {
   return {
     id: `mkt-${s.id}`,
@@ -56,7 +48,6 @@ export default function ServicesPage() {
   const { settings } = useSiteContent();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [priceRange, setPriceRange] = useState('All');
   const [sortBy, setSortBy] = useState('relevance');
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,20 +87,12 @@ export default function ServicesPage() {
         || service.title.toLowerCase().includes(q)
         || service.provider.toLowerCase().includes(q);
       const matchesCategory = selectedCategory === 'All' || service.category === selectedCategory;
-      const price = Number(service.price || 0);
-      let matchesPrice = true;
-      if (priceRange === '0-50000') matchesPrice = price <= 50000;
-      else if (priceRange === '50000-200000') matchesPrice = price > 50000 && price <= 200000;
-      else if (priceRange === '200000-500000') matchesPrice = price > 200000 && price <= 500000;
-      else if (priceRange === '500000+') matchesPrice = price > 500000;
-      return matchesSearch && matchesCategory && matchesPrice;
+      return matchesSearch && matchesCategory;
     });
 
-    if (sortBy === 'price_asc') list = [...list].sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
-    if (sortBy === 'price_desc') list = [...list].sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
     if (sortBy === 'rating') list = [...list].sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
     return list;
-  }, [services, searchTerm, selectedCategory, priceRange, sortBy]);
+  }, [services, searchTerm, selectedCategory, sortBy]);
 
   const pageTitle = settings?.services_page_title || 'Find Services';
   const pageSubtitle = settings?.services_page_subtitle || 'Discover trusted professionals for any job';
@@ -159,22 +142,9 @@ export default function ServicesPage() {
                 </select>
               </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Price Range</label>
-                <select
-                  value={priceRange}
-                  onChange={(e) => setPriceRange(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                >
-                  {PRICE_RANGES.map((range) => (
-                    <option key={range.value} value={range.value}>{range.label}</option>
-                  ))}
-                </select>
-              </div>
-
               <button
                 type="button"
-                onClick={() => { setSearchTerm(''); setSelectedCategory('All'); setPriceRange('All'); }}
+                onClick={() => { setSearchTerm(''); setSelectedCategory('All'); }}
                 className="w-full text-primary hover:text-secondary font-medium py-2 text-sm"
               >
                 Clear All Filters
@@ -191,8 +161,6 @@ export default function ServicesPage() {
                 className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary outline-none"
               >
                 <option value="relevance">Tri : pertinence</option>
-                <option value="price_asc">Prix : croissant</option>
-                <option value="price_desc">Prix : décroissant</option>
                 <option value="rating">Note</option>
               </select>
             </div>
@@ -257,10 +225,8 @@ export default function ServicesPage() {
                         )}
                       </div>
                       <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                        <span className="font-bold text-gray-900">
-                          {service.price != null && service.price > 0
-                            ? `${service.price.toLocaleString('fr-BI')} ${service.currency}`
-                            : 'Sur devis'}
+                        <span className="text-sm font-medium text-gray-500">
+                          {service.source === 'hospital' ? 'Service médical' : 'Service'}
                         </span>
                         <span className="bg-primary text-white font-medium py-2 px-4 rounded-lg text-sm">
                           {service.href ? 'Voir' : 'Détails'}

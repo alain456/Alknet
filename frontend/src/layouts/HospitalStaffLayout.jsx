@@ -5,8 +5,9 @@ import {
   Settings, Menu, X, LogOut, Stethoscope, Bell, HeartPulse, UserCheck, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { canAccessZone, ZONE_ACCESS, getStaffNavItems, getStaffHomePath, isReceptionist } from '../auth/roleAccess';
+import { canAccessZone, ZONE_ACCESS, getStaffNavItems, getStaffHomePath, isReceptionist, isComptable } from '../auth/roleAccess';
 import hospitalService from '../hospital/hospitalService';
+import ThemeToggle from '../shared/components/ThemeToggle';
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
@@ -36,7 +37,7 @@ export default function HospitalStaffLayout() {
   if (isReception) spaceTitle = "Accueil & Admissions";
   if (isNurse) spaceTitle = "Espace Infirmier";
   if (isLab) spaceTitle = "Espace Laboratoire";
-  if (isCashier) spaceTitle = "Espace Caisse";
+  if (isCashier) spaceTitle = isComptable(user) ? "Comptabilité" : "Espace Caisse";
 
   const navItems = getStaffNavItems(user).map((item) => ({
     name: item.name,
@@ -67,7 +68,31 @@ export default function HospitalStaffLayout() {
       }
     };
     loadNotifications();
+    const id = window.setInterval(loadNotifications, 60000);
+    return () => window.clearInterval(id);
   }, [user]);
+
+  const unreadStaffCount = staffNotifications.filter((n) => !n.isRead).length;
+
+  const markNotificationRead = async (notificationId) => {
+    try {
+      await hospitalService.markNotificationRead(notificationId);
+      setStaffNotifications((prev) =>
+        prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n))
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      await hospitalService.markAllNotificationsRead();
+      setStaffNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    } catch {
+      /* ignore */
+    }
+  };
 
   useEffect(() => {
     if (!user || !authFetch) return;
@@ -144,7 +169,7 @@ export default function HospitalStaffLayout() {
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-            <div className="px-3 mb-2 text-[10.5px] font-extrabold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+            <div className="px-3 mb-2 text-xs font-extrabold text-ink-muted uppercase tracking-wider">
               Postes Hospitaliers
             </div>
             {navItems.map((item) => {
@@ -155,13 +180,13 @@ export default function HospitalStaffLayout() {
                   key={item.path}
                   to={item.path}
                   onClick={closeSidebar}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-xs font-semibold ${
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-bold ${
                     isActive
-                      ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+                      ? 'bg-primary text-surface shadow-md border-2 border-accent'
+                      : 'text-ink hover:bg-primary/10 hover:text-ink'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-surface' : 'text-accent'}`} />
                   <span className="truncate">{item.name}</span>
                 </Link>
               );
@@ -193,7 +218,13 @@ export default function HospitalStaffLayout() {
                 <Bell className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
                 <span>Notifications</span>
               </div>
-              <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse"></span>
+              {unreadStaffCount > 0 ? (
+                <span className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadStaffCount > 9 ? '9+' : unreadStaffCount}
+                </span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600" />
+              )}
             </button>
           </div>
 
@@ -244,13 +275,18 @@ export default function HospitalStaffLayout() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle variant="ghost" size="sm" />
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-teal-500 rounded-full"></span>
+              {unreadStaffCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[1rem] h-4 px-1 rounded-full bg-teal-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadStaffCount > 9 ? '9+' : unreadStaffCount}
+                </span>
+              )}
             </button>
           </div>
         </header>
@@ -258,17 +294,28 @@ export default function HospitalStaffLayout() {
         {/* Modal / Drawer des Notifications Hospitalières */}
         {showNotifications && (
           <div className="absolute top-16 right-4 sm:right-8 z-50 w-80 sm:w-96 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="p-4 bg-teal-700 text-white flex items-center justify-between">
+            <div className="p-4 bg-teal-700 text-white flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Bell className="w-4 h-4" />
                 <h3 className="font-bold text-xs uppercase tracking-wider">Alertes Hospitalières</h3>
               </div>
-              <button 
-                onClick={() => setShowNotifications(false)}
-                className="text-teal-200 hover:text-white transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                {unreadStaffCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="text-[10px] font-semibold text-teal-100 hover:text-white underline"
+                  >
+                    Tout lu
+                  </button>
+                )}
+                <button 
+                  onClick={() => setShowNotifications(false)}
+                  className="text-teal-200 hover:text-white transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div className="max-h-80 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800">
               {notificationsLoading ? (
@@ -277,7 +324,12 @@ export default function HospitalStaffLayout() {
                 <div className="p-6 text-center text-xs text-gray-500">Aucune notification pour le moment.</div>
               ) : (
                 staffNotifications.map((n) => (
-                  <div key={n.id} className={`p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition ${n.isRead ? 'opacity-70' : ''}`}>
+                  <button
+                    type="button"
+                    key={n.id}
+                    onClick={() => { if (!n.isRead) markNotificationRead(n.id); }}
+                    className={`w-full text-left p-3.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition ${n.isRead ? 'opacity-70' : 'bg-teal-50/40 dark:bg-teal-950/20'}`}
+                  >
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <span className="font-bold text-xs text-gray-900 dark:text-white">{n.title}</span>
                       <span className="text-[10px] text-gray-400 shrink-0 flex items-center gap-1">
@@ -285,13 +337,15 @@ export default function HospitalStaffLayout() {
                       </span>
                     </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400">{n.desc}</p>
-                  </div>
+                  </button>
                 ))
               )}
             </div>
             <div className="p-2.5 bg-gray-50 dark:bg-gray-800/40 border-t border-gray-100 dark:border-gray-800 text-center">
               <span className="text-[11px] font-semibold text-teal-600 dark:text-teal-400">
-                Notifications depuis la base de données
+                {unreadStaffCount > 0
+                  ? `${unreadStaffCount} non lue${unreadStaffCount > 1 ? 's' : ''}`
+                  : 'À jour'}
               </span>
             </div>
           </div>

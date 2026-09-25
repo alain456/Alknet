@@ -15,6 +15,8 @@ export default function HospitalEmailSettings() {
   const [success, setSuccess] = useState('');
 
   const load = async () => {
+    setError('');
+    setSuccess('');
     try {
       const data = await hospitalService.getEmailSettings();
       setSettings(data);

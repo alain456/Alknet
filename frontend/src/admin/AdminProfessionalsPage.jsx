@@ -55,7 +55,7 @@ export default function AdminProfessionalsPage() {
       </div>
 
       {/* Table Container */}
-      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-[#1A2E25] overflow-hidden shadow-sm flex flex-col">
+      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-primary overflow-hidden shadow-sm flex flex-col">
         
         {/* Toolbar */}
         <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-paper dark:bg-black/10">
@@ -136,7 +136,7 @@ export default function AdminProfessionalsPage() {
                       </td>
                       <td className="px-6 py-4">
                         {user.is_email_verified ? (
-                          <div className="flex items-center gap-1.5 text-[12.5px] text-success dark:text-[#3E9F6A] font-medium">
+                          <div className="flex items-center gap-1.5 text-[12.5px] text-success dark:text-primary-300 font-medium">
                             <UserCheck className="w-4 h-4" /> Vérifié
                           </div>
                         ) : (
@@ -151,7 +151,7 @@ export default function AdminProfessionalsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button className="p-1.5 text-ink-faint hover:text-green-900 dark:text-green-100/40 dark:hover:text-white transition-colors rounded-md hover:bg-paper dark:hover:bg-white/10 opacity-0 group-hover:opacity-100">
+                        <button className="icon-btn">
                           <MoreHorizontal className="w-5 h-5" />
                         </button>
                       </td>

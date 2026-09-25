@@ -19,7 +19,7 @@ const NEXT_STEP = {
   REQUESTED: { status: 'SAMPLE_COLLECTED', label: 'Enregistrer le prélèvement' },
   SAMPLE_COLLECTED: { status: 'IN_ANALYSIS', label: 'Démarrer l\'analyse' },
   IN_ANALYSIS: { status: 'RESULT_AVAILABLE', label: 'Saisir / publier le résultat', needsResult: true },
-  RESULT_AVAILABLE: { status: 'VALIDATED', label: 'Valider le résultat' },
+  // VALIDATED = médecin / validateur (pas le laborantin)
   VALIDATED: { status: 'COMMUNICATED', label: 'Notifier le patient' },
 };
 
@@ -30,6 +30,8 @@ export default function LabTechnicianDashboard() {
   const [labResults, setLabResults] = useState([]);
   const [eligibleAppointments, setEligibleAppointments] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [hospitalExams, setHospitalExams] = useState([]);
+  const [selectedExamIds, setSelectedExamIds] = useState([]);
   const [hospitalId, setHospitalId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -60,6 +62,9 @@ export default function LabTechnicianDashboard() {
     reference_values: '',
     result_notes: '',
   });
+  const [parameters, setParameters] = useState([{ name: '', value: '', unit: '', reference: '', flag: '' }]);
+  const [apiStats, setApiStats] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const refreshStats = (list) => {
     setStats({
@@ -72,10 +77,14 @@ export default function LabTechnicianDashboard() {
 
   const fetchLabResults = useCallback(async (hid) => {
     try {
-      const data = await hospitalService.getLabResults(hid);
+      const [data, statsData] = await Promise.all([
+        hospitalService.getLabResults(hid),
+        hospitalService.getLabStats(hid).catch(() => null),
+      ]);
       const list = normalizeList(data);
       setLabResults(list);
       refreshStats(list);
+      if (statsData) setApiStats(statsData);
     } catch (err) {
       console.error(err);
       setLabResults([]);
@@ -98,15 +107,18 @@ export default function LabTechnicianDashboard() {
           setHospitalId(hid);
           await fetchLabResults(hid);
           try {
-            const [eligibleData, doctorsData] = await Promise.all([
+            const [eligibleData, doctorsData, examsData] = await Promise.all([
               hospitalService.getLabEligibleAppointments(hid),
               hospitalService.getDoctors({ hospital: hid }),
+              hospitalService.getExams(hid, true),
             ]);
             setEligibleAppointments(normalizeList(eligibleData));
             setDoctors(normalizeList(doctorsData));
+            setHospitalExams(normalizeList(examsData).filter((e) => e.is_active !== false));
           } catch {
             setEligibleAppointments([]);
             setDoctors([]);
+            setHospitalExams([]);
           }
         } else {
           setLoading(false);
@@ -119,6 +131,27 @@ export default function LabTechnicianDashboard() {
     init();
   }, [isAuthenticated, fetchLabResults]);
 
+  const toggleExamSelection = (examId) => {
+    setSelectedExamIds((prev) => (
+      prev.includes(examId) ? prev.filter((id) => id !== examId) : [...prev, examId]
+    ));
+  };
+
+  const resetCreateForm = () => {
+    setFormData({
+      appointment: '',
+      patient: '',
+      ordered_by: '',
+      test_name: '',
+      test_date: new Date().toISOString().split('T')[0],
+      result_value: '',
+      unit: '',
+      reference_values: '',
+      result_notes: '',
+    });
+    setSelectedExamIds([]);
+  };
+
   const handleCreateResult = async (e) => {
     e.preventDefault();
     if (!hospitalId) return;
@@ -126,28 +159,52 @@ export default function LabTechnicianDashboard() {
       setActionError('Sélectionnez un rendez-vous d’un patient déjà Présent.');
       return;
     }
+    const freeName = (formData.test_name || '').trim();
+    const selectedExams = hospitalExams.filter((ex) => selectedExamIds.includes(String(ex.id)) || selectedExamIds.includes(ex.id));
+    if (selectedExams.length === 0 && !freeName) {
+      setActionError('Sélectionnez au moins un examen catalogue, ou saisissez un nom libre.');
+      return;
+    }
+
     setActionLoading(true);
     setActionError('');
     try {
-      await hospitalService.createLabResult({
-        ...formData,
+      const base = {
+        appointment: formData.appointment,
+        patient: formData.patient,
         hospital: hospitalId,
         ordered_by: formData.ordered_by || null,
-        result_value: formData.result_value?.trim() || 'En attente',
-      });
-      setIsModalOpen(false);
-      setFormData({
-        appointment: '',
-        patient: '',
-        ordered_by: '',
-        test_name: '',
-        test_date: new Date().toISOString().split('T')[0],
-        result_value: '',
+        test_date: formData.test_date,
+        result_value: 'En attente',
         unit: '',
         reference_values: '',
-        result_notes: '',
-      });
-      setActionSuccess('Demande / résultat créé. Poursuivez le workflow étape par étape.');
+        result_notes: formData.result_notes || '',
+      };
+
+      const jobs = selectedExams.map((exam) => (
+        hospitalService.createLabResult({
+          ...base,
+          hospital_exam: exam.id,
+          test_name: exam.name,
+        })
+      ));
+      if (freeName) {
+        jobs.push(hospitalService.createLabResult({
+          ...base,
+          hospital_exam: null,
+          test_name: freeName,
+        }));
+      }
+
+      await Promise.all(jobs);
+      setIsModalOpen(false);
+      resetCreateForm();
+      const count = jobs.length;
+      setActionSuccess(
+        count > 1
+          ? `${count} demandes labo créées pour ce patient. Poursuivez chaque examen séparément.`
+          : 'Demande / résultat créé. Poursuivez le workflow étape par étape.'
+      );
       await fetchLabResults(hospitalId);
       const eligibleData = await hospitalService.getLabEligibleAppointments(hospitalId).catch(() => []);
       setEligibleAppointments(normalizeList(eligibleData));
@@ -177,9 +234,10 @@ export default function LabTechnicianDashboard() {
     try {
       const payload = { status: next.status };
       if (next.needsResult || next.status === 'RESULT_AVAILABLE') {
+        const cleanParams = parameters.filter((p) => (p.name || '').trim() && (p.value || '').trim());
         const value = (resultEdit.result_value || result.result_value || '').trim();
-        if (!value || value === 'En attente') {
-          setActionError('Saisissez la valeur du résultat avant de continuer.');
+        if ((!value || value === 'En attente') && cleanParams.length === 0) {
+          setActionError('Saisissez la valeur du résultat ou au moins un paramètre avant de continuer.');
           setActionLoading(false);
           setSelectedResult(result);
           setViewMode('detail');
@@ -191,7 +249,8 @@ export default function LabTechnicianDashboard() {
           });
           return;
         }
-        payload.result_value = value;
+        if (value && value !== 'En attente') payload.result_value = value;
+        if (cleanParams.length) payload.parameters = cleanParams;
         payload.unit = resultEdit.unit || result.unit || '';
         payload.reference_values = resultEdit.reference_values || result.reference_values || '';
         payload.result_notes = resultEdit.result_notes || result.result_notes || '';
@@ -211,11 +270,30 @@ export default function LabTechnicianDashboard() {
           reference_values: updated.reference_values || '',
           result_notes: updated.result_notes || '',
         });
+        if (Array.isArray(updated.parameters) && updated.parameters.length) {
+          setParameters(updated.parameters);
+        }
       }
     } catch (err) {
       setActionError(err.message || 'Étape impossible');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleUploadDocument = async (file) => {
+    if (!selectedResult || !file) return;
+    setUploadingDoc(true);
+    setActionError('');
+    try {
+      const updated = await hospitalService.uploadLabDocument(selectedResult.id, file);
+      setSelectedResult(updated);
+      setActionSuccess('Document joint.');
+      await fetchLabResults(hospitalId);
+    } catch (err) {
+      setActionError(err.message || 'Upload impossible');
+    } finally {
+      setUploadingDoc(false);
     }
   };
 
@@ -227,6 +305,11 @@ export default function LabTechnicianDashboard() {
       reference_values: result.reference_values || '',
       result_notes: result.result_notes || '',
     });
+    setParameters(
+      Array.isArray(result.parameters) && result.parameters.length
+        ? result.parameters
+        : [{ name: '', value: '', unit: '', reference: '', flag: '' }]
+    );
     setViewMode('detail');
     setActionError('');
   };
@@ -271,18 +354,27 @@ export default function LabTechnicianDashboard() {
           </h1>
           <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
             <Shield className="w-4 h-4 text-amber-500" />
-            Vous créez les résultats et menez le workflow jusqu&apos;à la notification patient
+            Workflow : prélèvement → analyse → résultat → (validation médecin) → notifier le patient
           </p>
         </div>
         {viewMode === 'list' && (
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            disabled={!hospitalId}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" /> Nouveau résultat
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => hospitalId && fetchLabResults(hospitalId)}
+              className="px-3 py-2 text-sm font-semibold border border-slate-200 rounded-lg hover:bg-slate-50"
+            >
+              Actualiser
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              disabled={!hospitalId}
+              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" /> Nouveau résultat
+            </button>
+          </div>
         )}
       </div>
 
@@ -299,10 +391,16 @@ export default function LabTechnicianDashboard() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[
-              { label: 'Total', value: stats.total, icon: FlaskConical, color: 'text-blue-600', bg: 'bg-blue-100' },
-              { label: 'En attente', value: stats.pending, icon: AlertCircle, color: 'text-yellow-600', bg: 'bg-yellow-100' },
-              { label: 'En cours', value: stats.inAnalysis, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-100' },
-              { label: 'Terminés', value: stats.completed, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-100' },
+              { label: 'Total', value: apiStats?.total ?? stats.total, icon: FlaskConical, color: 'text-blue-600', bg: 'bg-blue-100' },
+              { label: 'File ouverte', value: apiStats?.pending ?? stats.pending, icon: AlertCircle, color: 'text-yellow-600', bg: 'bg-yellow-100' },
+              { label: 'Validés (30j)', value: apiStats?.validated_period ?? stats.completed, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-100' },
+              {
+                label: 'Délai moyen',
+                value: apiStats?.avg_hours_to_validate != null ? `${apiStats.avg_hours_to_validate}h` : '—',
+                icon: CheckCircle,
+                color: 'text-green-600',
+                bg: 'bg-green-100',
+              },
             ].map(({ label, value, icon: Icon, color, bg }) => (
               <div key={label} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex justify-between items-center">
                 <div>
@@ -449,13 +547,13 @@ export default function LabTechnicianDashboard() {
               </div>
 
               <div className="border border-teal-100 rounded-xl p-4 bg-teal-50/40 space-y-3">
-                <h3 className="font-semibold text-teal-900">Saisie du résultat (avant validation / notification)</h3>
+                <h3 className="font-semibold text-teal-900">Saisie du résultat (avant publication)</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <input
                     type="text"
                     value={resultEdit.result_value}
                     onChange={(e) => setResultEdit({ ...resultEdit, result_value: e.target.value })}
-                    placeholder="Valeur du résultat"
+                    placeholder="Valeur résumé"
                     className="w-full px-3 py-2 border rounded-lg text-sm"
                     disabled={['VALIDATED', 'COMMUNICATED'].includes(selectedResult.status)}
                   />
@@ -467,6 +565,38 @@ export default function LabTechnicianDashboard() {
                     className="w-full px-3 py-2 border rounded-lg text-sm"
                     disabled={['VALIDATED', 'COMMUNICATED'].includes(selectedResult.status)}
                   />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-teal-900">Paramètres (multi-valeurs)</p>
+                    <button
+                      type="button"
+                      className="text-xs text-teal-700 font-semibold"
+                      disabled={['VALIDATED', 'COMMUNICATED'].includes(selectedResult.status)}
+                      onClick={() => setParameters((prev) => [...prev, { name: '', value: '', unit: '', reference: '', flag: '' }])}
+                    >
+                      + Ligne
+                    </button>
+                  </div>
+                  {parameters.map((row, idx) => (
+                    <div key={idx} className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                      {['name', 'value', 'unit', 'reference', 'flag'].map((key) => (
+                        <input
+                          key={key}
+                          type="text"
+                          value={row[key] || ''}
+                          placeholder={key === 'name' ? 'Nom' : key === 'value' ? 'Valeur' : key === 'unit' ? 'Unité' : key === 'reference' ? 'Réf.' : 'Flag'}
+                          className="px-2 py-1.5 border rounded-lg text-xs"
+                          disabled={['VALIDATED', 'COMMUNICATED'].includes(selectedResult.status)}
+                          onChange={(e) => {
+                            const next = [...parameters];
+                            next[idx] = { ...next[idx], [key]: e.target.value };
+                            setParameters(next);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ))}
                 </div>
                 <textarea
                   rows={2}
@@ -484,7 +614,49 @@ export default function LabTechnicianDashboard() {
                   className="w-full px-3 py-2 border rounded-lg text-sm resize-none"
                   disabled={['VALIDATED', 'COMMUNICATED'].includes(selectedResult.status)}
                 />
+                <div>
+                  <label className="block text-xs font-semibold text-teal-900 mb-1">Compte-rendu PDF / image</label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    disabled={uploadingDoc || ['COMMUNICATED'].includes(selectedResult.status)}
+                    onChange={(e) => handleUploadDocument(e.target.files?.[0])}
+                    className="block w-full text-xs"
+                  />
+                  {(selectedResult.document_display_url || selectedResult.document_url) && (
+                    <a
+                      href={selectedResult.document_display_url || selectedResult.document_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block mt-2 text-xs font-semibold text-teal-700 underline"
+                    >
+                      Voir le document joint
+                    </a>
+                  )}
+                </div>
               </div>
+
+              {selectedResult.status === 'RESULT_AVAILABLE' && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 text-sm text-amber-900">
+                  Résultat publié — en attente de validation médicale avant notification patient.
+                </div>
+              )}
+
+              {Array.isArray(selectedResult.events) && selectedResult.events.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-sm">Audit</h3>
+                  <ul className="space-y-1 text-xs text-slate-600 max-h-40 overflow-y-auto">
+                    {selectedResult.events.map((ev) => (
+                      <li key={ev.id} className="rounded-lg bg-slate-50 px-3 py-1.5">
+                        {ev.action}
+                        {ev.from_status ? ` ${ev.from_status}` : ''}
+                        {ev.to_status ? ` → ${ev.to_status}` : ''}
+                        {ev.actor_email ? ` · ${ev.actor_email}` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>{getStatusBadge(selectedResult.status)}</div>
@@ -576,13 +748,61 @@ export default function LabTechnicianDashboard() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom de l&apos;examen</label>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="block text-sm font-medium text-gray-700">Examens catalogue (plusieurs possibles)</label>
+                  {selectedExamIds.length > 0 && (
+                    <span className="text-xs font-semibold text-teal-700">{selectedExamIds.length} sélectionné(s)</span>
+                  )}
+                </div>
+                {hospitalExams.length === 0 ? (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    Aucun examen catalogue. Configurez-les côté admin hôpital, ou saisissez un nom libre ci-dessous.
+                  </p>
+                ) : (
+                  <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1">
+                    {hospitalExams.map((exam) => {
+                      const id = String(exam.id);
+                      const checked = selectedExamIds.includes(id);
+                      return (
+                        <label
+                          key={id}
+                          className={`flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm ${
+                            checked ? 'bg-teal-50 border border-teal-200' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={checked}
+                            onChange={() => toggleExamSelection(id)}
+                          />
+                          <span className="min-w-0">
+                            <span className="font-medium text-slate-900">{exam.name}</span>
+                            <span className="block text-xs text-slate-500">
+                              {exam.category_display || exam.category || 'Examen'}
+                              {exam.price != null ? ` · ${exam.price} ${exam.currency || 'BIF'}` : ''}
+                              {exam.loinc_code ? ` · LOINC ${exam.loinc_code}` : ''}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-slate-500 mt-1">
+                  Chaque examen sélectionné crée une demande labo séparée pour le même patient (workflow indépendant).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Examen libre (optionnel{selectedExamIds.length ? ' — en plus du catalogue' : ''})
+                </label>
                 <input
                   type="text"
-                  required
                   value={formData.test_name}
                   onChange={(e) => setFormData({ ...formData, test_name: e.target.value })}
-                  placeholder="ex: NFS, Glycémie…"
+                  placeholder="ex: Analyse non listée…"
                   className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
                 />
               </div>
@@ -592,7 +812,7 @@ export default function LabTechnicianDashboard() {
               </p>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+                <button type="button" onClick={() => { setIsModalOpen(false); resetCreateForm(); }} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">
                   Annuler
                 </button>
                 <button
@@ -601,7 +821,9 @@ export default function LabTechnicianDashboard() {
                   className="px-4 py-2 bg-teal-600 text-white hover:bg-teal-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
                 >
                   {actionLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Créer
+                  {selectedExamIds.length + ((formData.test_name || '').trim() ? 1 : 0) > 1
+                    ? `Créer ${selectedExamIds.length + ((formData.test_name || '').trim() ? 1 : 0)} demandes`
+                    : 'Créer'}
                 </button>
               </div>
             </form>

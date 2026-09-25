@@ -274,6 +274,7 @@ class DoctorProfile(models.Model):
         ('DOCTOR', 'Docteur / Généraliste'),
         ('NURSE', 'Infirmier(e) / Soignant(e)'),
         ('RECEPTIONIST', 'Agent d\'accueil'),
+        ('ACCOUNTANT', 'Comptable'),
     )
 
     GENDER_CHOICES = (
@@ -325,7 +326,7 @@ class DoctorProfile(models.Model):
     # --- Identité professionnelle ---
     staff_category = models.CharField(
         max_length=20, choices=STAFF_CATEGORY_CHOICES, default='DOCTOR',
-        help_text="Catégorie du personnel : Médecin Spécialiste, Docteur/Généraliste, ou Infirmier(e)"
+        help_text="Catégorie du personnel : médecin, infirmier, accueil ou comptable"
     )
     professional_title = models.CharField(
         max_length=20, choices=TITLE_CHOICES, default='DR',
@@ -356,6 +357,10 @@ class DoctorProfile(models.Model):
     photo_url = models.TextField(
         blank=True, null=True,
         help_text="URL ou image Base64 de la photo professionnelle (publique)"
+    )
+    office_address = models.CharField(
+        max_length=300, blank=True, null=True,
+        help_text="Bureau / cabinet du médecin (salle, étage, bâtiment…) visible lors des RDV"
     )
 
     # --- Modes de consultation ---
@@ -628,7 +633,7 @@ class Appointment(models.Model):
         'DRAFT': ['REQUEST_SENT', 'CANCELLED'],
         'REQUEST_SENT': ['PENDING', 'CONFIRMED', 'REJECTED', 'CANCELLED'],
         'PENDING': ['CONFIRMED', 'REJECTED', 'CANCELLED'],
-        'CONFIRMED': ['PATIENT_ARRIVED', 'PRESENT', 'CANCELLED', 'RESCHEDULED', 'NO_SHOW'],
+        'CONFIRMED': ['PATIENT_ARRIVED', 'CANCELLED', 'RESCHEDULED', 'NO_SHOW'],
         'PATIENT_ARRIVED': ['WAITING_ROOM', 'PRESENT', 'IN_PROGRESS', 'NO_SHOW', 'CANCELLED'],
         'WAITING_ROOM': ['PRESENT', 'IN_PROGRESS', 'NO_SHOW', 'CANCELLED'],
         'PRESENT': ['COMPLETED', 'NO_SHOW'],
@@ -1387,6 +1392,10 @@ class HospitalExam(models.Model):
         default=True,
         help_text="Afficher cet examen sur la fiche publique de l'hôpital",
     )
+    loinc_code = models.CharField(
+        max_length=32, blank=True, default='',
+        help_text='Code LOINC (interop FHIR Observation / DiagnosticReport)',
+    )
     display_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1418,6 +1427,10 @@ class DoctorSchedule(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     doctor = models.ForeignKey(DoctorProfile, on_delete=models.CASCADE, related_name='schedules')
     hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='doctor_schedules')
+    schedule_date = models.DateField(
+        null=True, blank=True,
+        help_text="Date de début du créneau. Sert à calculer le jour et l'instant de fin.",
+    )
     day_of_week = models.IntegerField(choices=DAYS_OF_WEEK)
     start_time = models.TimeField()
     end_time = models.TimeField()
@@ -1470,25 +1483,63 @@ class LabResult(models.Model):
         null=True,
         blank=True,
         related_name='lab_results',
-        help_text="RDV associé — le patient doit être Présent (après confirmation et arrivée)",
+        help_text="RDV associé (optionnel si créé depuis une prescription)",
+    )
+    prescription = models.ForeignKey(
+        'Prescription',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lab_results',
+        help_text='Prescription EXAM à l’origine de la demande',
+    )
+    hospital_exam = models.ForeignKey(
+        'HospitalExam',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='lab_results',
+        help_text='Examen catalogue (tarif / LOINC)',
     )
     ordered_by = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='ordered_labs')
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='uploaded_labs')
     validated_by = models.ForeignKey(DoctorProfile, on_delete=models.SET_NULL, null=True, blank=True, related_name='validated_labs')
-    
+    validated_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='validated_lab_results',
+        help_text='Validateur (médecin / biologiste) si hors DoctorProfile',
+    )
+    invoice = models.ForeignKey(
+        'Invoice', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='lab_results',
+    )
+
     test_name = models.CharField(max_length=200, help_text="Nom de l'examen")
     test_date = models.DateField(help_text="Date de l'examen")
-    result_value = models.CharField(max_length=500, help_text="Valeur du résultat")
+    result_value = models.CharField(max_length=500, blank=True, default='', help_text="Valeur résumé du résultat")
     unit = models.CharField(max_length=50, blank=True, help_text="Unité de mesure")
     reference_values = models.TextField(blank=True, help_text="Valeurs de référence normales")
     result_notes = models.TextField(blank=True, help_text="Commentaires sur le résultat")
-    document_url = models.URLField(blank=True, null=True, help_text="Lien vers le fichier PDF du résultat")
-    
+    parameters = models.JSONField(
+        default=list, blank=True,
+        help_text='Paramètres multi-valeurs [{name, value, unit, reference, flag}]',
+    )
+    document = models.FileField(
+        upload_to='hospital/lab/%Y/%m/', blank=True, null=True,
+        help_text='PDF / image du compte-rendu',
+    )
+    document_url = models.URLField(blank=True, null=True, help_text="Lien legacy vers le fichier PDF")
+
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='REQUESTED')
-    
+
     validation_date = models.DateTimeField(null=True, blank=True, help_text="Date de validation du résultat")
     communication_date = models.DateTimeField(null=True, blank=True, help_text="Date de communication au patient")
-    
+
+    # P3 — identifiants FHIR pour interop future
+    fhir_resource_type = models.CharField(max_length=40, blank=True, default='ServiceRequest')
+    fhir_service_request_id = models.CharField(max_length=64, blank=True, default='')
+    fhir_diagnostic_report_id = models.CharField(max_length=64, blank=True, default='')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1499,6 +1550,31 @@ class LabResult(models.Model):
 
     def __str__(self):
         return f"Lab: {self.test_name} - {self.patient.get_full_name()} ({self.get_status_display()})"
+
+    @property
+    def document_display_url(self):
+        if self.document:
+            return self.document.url
+        return self.document_url or ''
+
+
+class LabResultEvent(models.Model):
+    """Audit trail des transitions laboratoire (P1)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lab_result = models.ForeignKey(LabResult, on_delete=models.CASCADE, related_name='events')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='lab_result_events',
+    )
+    action = models.CharField(max_length=60)
+    from_status = models.CharField(max_length=30, blank=True, default='')
+    to_status = models.CharField(max_length=30, blank=True, default='')
+    note = models.CharField(max_length=500, blank=True, default='')
+    details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-created_at']
 
 class Notification(models.Model):
     """Notifications pour les patients (résultats de laboratoire, rappels, etc.)."""
@@ -1566,6 +1642,15 @@ class Prescription(models.Model):
     # Pour les examens
     exam_name = models.CharField(max_length=255, blank=True, help_text="Nom de l'examen")
     exam_reason = models.TextField(blank=True, help_text="Raison de l'examen")
+    hospital_exam = models.ForeignKey(
+        'HospitalExam', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='prescriptions',
+        help_text='Examen du catalogue hospitalier',
+    )
+    appointment = models.ForeignKey(
+        'Appointment', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='prescriptions',
+    )
     
     # Statut
     is_active = models.BooleanField(default=True)
@@ -1595,16 +1680,37 @@ class Invoice(models.Model):
         ('PAID', 'Payée'),
         ('CANCELLED', 'Annulée'),
     )
-    
+    PAYMENT_METHOD_CHOICES = (
+        ('', '—'),
+        ('CASH', 'Espèces'),
+        ('BURUNDIPAY', 'BurundiPay'),
+        ('FREE', 'Gratuit'),
+        ('OTHER', 'Autre'),
+    )
+    ACT_TYPE_CHOICES = (
+        ('CONSULTATION', 'Consultation'),
+        ('EXAM', 'Examen'),
+        ('OTHER', 'Autre prestation'),
+    )
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invoice_number = models.CharField(max_length=40, unique=True, null=True, blank=True, db_index=True)
     patient = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='invoices')
     hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='invoices')
     appointment = models.ForeignKey(Appointment, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
-    
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='recorded_invoices',
+    )
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=10, default='BIF')
     description = models.TextField(blank=True, null=True)
+    act_type = models.CharField(max_length=20, choices=ACT_TYPE_CHOICES, default='OTHER')
+    act_label = models.CharField(max_length=200, blank=True, default='')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
-    
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, default='')
+
     issued_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 
@@ -1612,4 +1718,27 @@ class Invoice(models.Model):
         ordering = ['-issued_at']
 
     def __str__(self):
-        return f"Invoice {self.id} - {self.patient.get_full_name()} - {self.amount} BIF"
+        return f"Invoice {self.invoice_number or self.id} - {self.patient.get_full_name()} - {self.amount} BIF"
+
+
+class HospitalCashClosing(models.Model):
+    """Clôture de journée figée, consultable par l'administration."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    hospital = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='hospital_cash_closings')
+    period_date = models.DateField()
+    total_collected = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_pending = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    breakdown = models.JSONField(default=dict, blank=True)
+    notes = models.TextField(blank=True, default='')
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='hospital_cash_closings',
+    )
+    closed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        unique_together = ('hospital', 'period_date')
+        ordering = ['-period_date']
+
+    def __str__(self):
+        return f"Clôture {self.hospital_id} {self.period_date}"

@@ -11,6 +11,8 @@ export default function HospitalReferenceSettings() {
   const [success, setSuccess] = useState('');
 
   const load = async () => {
+    setError('');
+    setSuccess('');
     try {
       const data = await hospitalService.getReferenceSettings();
       setSettings(data);

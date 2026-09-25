@@ -13,7 +13,7 @@ export default function DataSummaryCard({
   const isNeutral = trend === 'neutral';
 
   return (
-    <div className="bg-surface dark:bg-[#1A2E25] border border-border dark:border-white/10 rounded-[10px] p-5 flex flex-col transition-all hover:shadow-md dark:hover:border-gold-600/30">
+    <div className="bg-surface dark:bg-primary border border-border dark:border-white/10 rounded-[10px] p-5 flex flex-col transition-all hover:shadow-md dark:hover:border-gold-600/30">
       <h3 className="text-[13px] font-semibold text-ink-muted dark:text-green-100/70 mb-1">{title}</h3>
       <div className="flex items-baseline justify-between mt-1">
         <span className="text-2xl font-mono font-medium tracking-tight text-green-900 dark:text-white">
@@ -23,8 +23,8 @@ export default function DataSummaryCard({
         {trend && (
           <div className="flex items-center gap-1">
             <span className={`flex items-center text-[12px] font-medium ${
-              isPositive ? 'text-success dark:text-[#3E9F6A]' : 
-              isNegative ? 'text-error dark:text-[#E56353]' : 
+              isPositive ? 'text-success dark:text-primary-300' : 
+              isNegative ? 'text-error dark:text-alert-300' : 
               'text-ink-faint dark:text-green-100/50'
             }`}>
               {isPositive && <TrendingUp className="w-3.5 h-3.5 mr-1" strokeWidth={2} />}

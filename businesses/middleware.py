@@ -12,6 +12,7 @@ _ALWAYS_ALLOW_PREFIXES = (
     '/api/v1/auth/',
     '/admin/',
     '/api/v1/businesses/me/subscription',
+    '/api/v1/businesses/payments/burundipay/',
     '/api/v1/businesses/payments/lumicash/',
     '/api/v1/businesses/admin/',
     '/api/schema',

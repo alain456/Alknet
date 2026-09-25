@@ -17,13 +17,14 @@ class WholesaleProfileSerializer(serializers.ModelSerializer):
     address = serializers.CharField(source='business.address', read_only=True)
     commune = serializers.CharField(source='business.commune', read_only=True)
     description = serializers.CharField(source='business.description', read_only=True)
+    website = serializers.URLField(source='business.website', read_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = WholesalePharmacyProfile
         fields = [
             'id', 'business_id', 'business_name', 'commercial_name', 'license_number',
             'status', 'order_reference_prefix', 'acceptance_email_message',
-            'logo', 'phone', 'email', 'address', 'commune', 'description',
+            'logo', 'phone', 'email', 'address', 'commune', 'description', 'website',
             'created_at', 'updated_at',
         ]
         read_only_fields = ('id', 'created_at', 'updated_at')

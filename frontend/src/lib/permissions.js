@@ -64,12 +64,34 @@ export const ACCESS_LEVEL_FOR_PERMISSION = {
 
 export const ACCESS_DENIED_MESSAGE = 'Accès non autorisé pour votre rôle.';
 
+/** Import expand hôtel (masters legacy + hotel.manage) — source unique hotelPermissions */
+import { expandHotelPermissions } from '../hotel/hotelPermissions';
+import { expandHospitalPermissions } from '../hospital/hospitalPermissions';
+
 export function userHasPermission(user, permission) {
   if (!user) return false;
-  if (user.role === 'BUSINESS_OWNER') return true;
   const userPerms = user.business_info?.permissions || [];
+
+  // Hors hôtel : le propriétaire plateforme garde l’accès métier non-PMS
+  if (user.role === 'BUSINESS_OWNER' && !permission?.startsWith('hotel.')) {
+    return true;
+  }
+
   if (userPerms.includes('*')) return true;
-  if (userPerms.includes(permission)) return true;
+
+  if (permission?.startsWith('hotel.')) {
+    const expanded = expandHotelPermissions(userPerms);
+    if (expanded.includes('hotel.manage') || userPerms.includes('hotel.manage') || expanded.includes('*')) {
+      return true;
+    }
+    if (expanded.includes(permission) || userPerms.includes(permission)) return true;
+    return false;
+  }
+
+  const hospitalExpanded = expandHospitalPermissions(userPerms);
+  if (permission?.startsWith('hospital.') && hospitalExpanded.includes(permission)) return true;
+
+  if (userPerms.includes(permission) || hospitalExpanded.includes(permission)) return true;
   const aliases = PERMISSION_ALIASES[permission] || [];
   if (aliases.some((a) => userPerms.includes(a))) return true;
   const level = (user.system_access_level || user.business_info?.system_access_level || '').toUpperCase();

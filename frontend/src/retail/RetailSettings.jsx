@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import retailService from './retailService';
+import { normalizeWebsiteUrl } from '../shared/websiteUrl';
 
 const inputClass =
   'w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm text-ink outline-none focus:ring-2 focus:ring-primary';
@@ -26,7 +27,10 @@ export default function RetailSettings() {
     setSaved(false);
     setError('');
     try {
-      setData(await retailService.updateProfile(data));
+      setData(await retailService.updateProfile({
+        ...data,
+        website: normalizeWebsiteUrl(data.website),
+      }));
       setSaved(true);
     } catch (err) {
       setError(err.message || 'Échec de l’enregistrement');
@@ -39,12 +43,23 @@ export default function RetailSettings() {
     <section className="space-y-5 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold text-ink">Paramètres</h1>
-        <p className="text-sm text-ink-muted">Références et message d&apos;acceptation.</p>
+        <p className="text-sm text-ink-muted">Coordonnées, références et message d&apos;acceptation.</p>
       </div>
       {saved && <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-sm">Enregistré.</div>}
       {error && <div className="p-3 rounded-xl bg-red-50 text-error text-sm">{error}</div>}
       {data && (
         <form onSubmit={submit} className="bg-white border border-border rounded-2xl p-6 space-y-4">
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-gray-700">Site web officiel</span>
+            <input
+              type="url"
+              placeholder="https://www.exemple.com"
+              value={data.website || ''}
+              onChange={(e) => setData({ ...data, website: e.target.value })}
+              className={inputClass}
+            />
+            <span className="text-xs text-ink-muted">Visible côté clients dans les informations de l&apos;entreprise.</span>
+          </label>
           <label className="block space-y-1.5">
             <span className="text-sm font-medium text-gray-700">Préfixe des commandes</span>
             <input
