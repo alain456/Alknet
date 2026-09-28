@@ -203,7 +203,7 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', '1') in ('1', 'true', 'True', 'y
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', '0') in ('1', 'true', 'True', 'yes')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '').strip().strip('"')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '').strip().strip('"')
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@isokohub.bi').strip().strip('"')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'info.isokohub@gmail.com').strip().strip('"')
 EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '30'))
 
 if EMAIL_HOST:
@@ -216,6 +216,15 @@ else:
         'EMAIL_BACKEND',
         'django.core.mail.backends.console.EmailBackend',
     )
+
+# Sans mot de passe d'application Gmail, le développement envoie les messages à Mailpit
+# (interface http://localhost:8025) au lieu d'échouer silencieusement.
+if DEBUG and EMAIL_HOST == 'smtp.gmail.com' and not EMAIL_HOST_PASSWORD:
+    EMAIL_HOST = os.environ.get('EMAIL_FALLBACK_HOST', 'mailpit')
+    EMAIL_PORT = int(os.environ.get('EMAIL_FALLBACK_PORT', '1025'))
+    EMAIL_USE_TLS = False
+    EMAIL_USE_SSL = False
+    EMAIL_HOST_USER = ''
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
@@ -304,6 +313,21 @@ if (not DEBUG) and BURUNDIPAY_STUB and _env_first(
         'BURUNDIPAY_STUB=1 est interdit hors DEBUG. '
         'Configurez BURUNDIPAY_API_URL/KEY et BURUNDIPAY_STUB=0, '
         'ou forcez BURUNDIPAY_ALLOW_STUB_IN_PROD=1 uniquement pour un staging contrôlé.'
+    )
+
+# Webhook : le secret est OBLIGATOIRE. Sans lui, l'endpoint est un port ouvert —
+# n'importe qui peut forger status=SUCCESS et faire passer une réservation, un
+# rendez-vous ou un abonnement pour payé. On échoue au démarrage, pas à la requête.
+# Seul le mode stub en local s'en passe (aucun appel sortant réel à usurper).
+# Même exception pour la suite de tests, qui évalue ce module avec DEBUG forcé à
+# False : la contrainte porte sur le serveur, pas sur pytest/unittest in-process.
+_RUNNING_TESTS = 'test' in sys.argv
+if not BURUNDIPAY_WEBHOOK_SECRET and not (DEBUG and BURUNDIPAY_STUB) and not _RUNNING_TESTS:
+    raise ImproperlyConfigured(
+        'BURUNDIPAY_WEBHOOK_SECRET est obligatoire hors DEBUG / hors mode stub. '
+        'Sans secret, POST /api/v1/businesses/payments/burundipay/webhook/ '
+        'accepte un statut forgé de n\'importe qui. Générez une valeur aléatoire '
+        'et configurez-la chez le prestataire comme en-tête X-BurundiPay-Webhook-Secret.'
     )
 
 # Allow large payloads (e.g. Base64 images)

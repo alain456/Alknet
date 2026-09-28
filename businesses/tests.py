@@ -1,13 +1,13 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from business_categories.models import BusinessCategory
-from businesses.models import Business, BusinessSubscription
+from businesses.models import Business, BusinessSubscription, SubscriptionPayment, SubscriptionPlan
 from businesses.subscription import ensure_business_subscription, get_or_create_default_plans
 from businesses.tenant import filter_queryset_by_hospital_tenant, get_user_tenant_business
 from hospital.models import Appointment, DoctorProfile, Specialty
@@ -236,4 +236,144 @@ class SubscriptionGraceTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()['grace_period_days'], 12)
         self.assertEqual(response.json()['warning_days'], 5)
+
+
+class AdminSubscriptionActivateSuspendTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.client = APIClient()
+        self.admin = User.objects.create_user(
+            email='saas-admin@test.bi', password='Pass123456!', role='SUPER_ADMIN', is_staff=True,
+        )
+        owner = User.objects.create_user(
+            email='saas-owner@test.bi', password='Pass123456!', role='BUSINESS_OWNER',
+        )
+        cat = BusinessCategory.objects.create(name='Shop SaaS', slug='shop-saas-act')
+        self.business = Business.objects.create(
+            owner=owner, primary_category=cat, name='Boutique SaaS', province='Bujumbura Mairie',
+        )
+        self.client.force_authenticate(user=self.admin)
+
+    def test_activate_then_suspend(self):
+        url = f'/api/v1/businesses/admin/{self.business.id}/subscription/'
+        activated = self.client.post(url, {'action': 'activate', 'days': 30, 'plan_code': 'monthly'}, format='json')
+        self.assertEqual(activated.status_code, status.HTTP_200_OK, activated.data)
+        self.assertEqual(activated.data['status'], 'ACTIVE')
+        self.assertFalse(activated.data['is_blocked'])
+
+        suspended = self.client.post(url, {'action': 'suspend'}, format='json')
+        self.assertEqual(suspended.status_code, status.HTTP_200_OK, suspended.data)
+        self.assertEqual(suspended.data['status'], 'SUSPENDED')
+        self.assertTrue(suspended.data['is_blocked'])
+
+        listing = self.client.get('/api/v1/businesses/admin/subscriptions/')
+        row = next(r for r in listing.data['results'] if r['business_id'] == str(self.business.id))
+        self.assertEqual(row['status'], 'SUSPENDED')
+        self.assertTrue(row['is_blocked'])
+
+
+class PublicClientSearchTests(TestCase):
+    def setUp(self):
+        owner = User.objects.create_user(email='resto-owner@test.bi', password='Pass123456!', role='BUSINESS_OWNER')
+        cat = BusinessCategory.objects.create(name='Restaurant', slug='restaurant-search')
+        Business.objects.create(
+            owner=owner, primary_category=cat, name='Chez Aline',
+            province='Bujumbura Mairie', commune='Mukaza',
+            description='Restaurant de grillades',
+            verification_status='APPROVED', is_active=True,
+        )
+
+    def test_search_restaurant_in_location(self):
+        client = APIClient()
+        response = client.get('/api/v1/businesses/search/', {'q': 'restaurant', 'location': 'Bujumbura'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        names = [row['title'] for row in response.data['groups']['businesses']]
+        self.assertIn('Chez Aline', names)
+
+    def test_phrase_extracts_location(self):
+        client = APIClient()
+        response = client.get('/api/v1/businesses/search/', {'q': 'restaurant à Bujumbura'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Bujumbura', response.data['location'])
+        self.assertTrue(response.data['groups']['businesses'])
+
+
+class BurundiPayWebhookSecurityTests(TestCase):
+    """
+    Le webhook est public (AllowAny, sans authentification JWT) : sa seule
+    protection est l'en-tête X-BurundiPay-Webhook-Secret. Si ce secret est vide,
+    l'endpoint devient un port ouvert — n'importe qui peut forger status=SUCCESS
+    et activer un abonnement ou faire passer une réservation / un RDV pour payé.
+
+    Ces tests verrouillent le comportement fail-closed des deux côtés :
+    refus sans secret, acceptation avec le bon secret (pas de sur-blocage).
+    """
+
+    URL = '/api/v1/businesses/payments/burundipay/webhook/'
+
+    def setUp(self):
+        owner = User.objects.create_user(
+            email='webhook-owner@test.bi', password='Pass123456!', role='BUSINESS_OWNER',
+        )
+        cat = BusinessCategory.objects.create(name='Shop Webhook', slug='shop-webhook-sec')
+        self.business = Business.objects.create(
+            owner=owner, primary_category=cat, name='Boutique Webhook', province='Bujumbura Mairie',
+        )
+        self.plan = SubscriptionPlan.objects.create(
+            code='webhook-monthly', name='Webhook Mensuel', price_bif=20000, duration_days=30,
+        )
+        self.payment = SubscriptionPayment.objects.create(
+            business=self.business, plan=self.plan, amount_bif=20000,
+            payer_phone='79123456', status='AWAITING_PIN',
+        )
+        self.client = APIClient()
+
+    def _forged_success(self):
+        return {'payment_id': str(self.payment.id), 'status': 'SUCCESS', 'provider_reference': 'forged-1'}
+
+    def _assert_not_paid(self):
+        self.payment.refresh_from_db()
+        self.assertNotEqual(
+            self.payment.status, 'SUCCESS',
+            'Un webhook non authentifié a activé le paiement — faille de sécurité.',
+        )
+
+    @override_settings(BURUNDIPAY_WEBHOOK_SECRET='')
+    def test_refuse_si_secret_non_configure(self):
+        """C'est le test qui aurait attrapé la faille : secret vide => pas d'opt-out silencieux."""
+        response = self.client.post(self.URL, self._forged_success(), format='json')
+        self.assertIn(
+            response.status_code,
+            (status.HTTP_401_UNAUTHORIZED, status.HTTP_503_SERVICE_UNAVAILABLE),
+            response.data,
+        )
+        self._assert_not_paid()
+
+    @override_settings(BURUNDIPAY_WEBHOOK_SECRET='s3cr3t-expected')
+    def test_refuse_si_secret_absent_de_la_requete(self):
+        response = self.client.post(self.URL, self._forged_success(), format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, response.data)
+        self._assert_not_paid()
+
+    @override_settings(BURUNDIPAY_WEBHOOK_SECRET='s3cr3t-expected')
+    def test_refuse_si_secret_incorrect(self):
+        response = self.client.post(
+            self.URL, self._forged_success(), format='json',
+            HTTP_X_BURUNDIPAY_WEBHOOK_SECRET='mauvais-secret',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED, response.data)
+        self._assert_not_paid()
+
+    @override_settings(BURUNDIPAY_WEBHOOK_SECRET='s3cr3t-expected')
+    def test_accepte_avec_le_bon_secret(self):
+        """Garde-fou anti-sur-blocage : le prestataire légitime doit toujours passer."""
+        response = self.client.post(
+            self.URL, self._forged_success(), format='json',
+            HTTP_X_BURUNDIPAY_WEBHOOK_SECRET='s3cr3t-expected',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.payment.refresh_from_db()
+        self.assertEqual(self.payment.status, 'SUCCESS')
+
 

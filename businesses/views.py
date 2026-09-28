@@ -6,6 +6,7 @@ from django.db import transaction
 from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
+import hmac
 
 from .models import (
     Business, BusinessSubscription, SubscriptionPlan, SubscriptionPayment, PlatformNotification,
@@ -617,7 +618,7 @@ def send_business_approval_email(business, admin_message=''):
         send_mail(
             subject=subject,
             message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@isokohub.bi'),
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'info.isokohub@gmail.com'),
             recipient_list=[recipient],
             fail_silently=False,
         )
@@ -651,7 +652,7 @@ def send_business_rejection_email(business, reason=''):
         send_mail(
             subject=subject,
             message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@isokohub.bi'),
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'info.isokohub@gmail.com'),
             recipient_list=[recipient],
             fail_silently=False,
         )
@@ -1486,13 +1487,26 @@ class BurundiPaySubscriptionWebhookView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        expected = getattr(settings, 'BURUNDIPAY_WEBHOOK_SECRET', '') or ''
+        # Fail-closed : un webhook sans secret est un webhook ouvert.
+        # settings.py interdit le démarrage dans ce cas hors stub local ; ce
+        # garde-fou couvre le cas d'un secret vidé à chaud (override, env hot-reload).
+        expected = (getattr(settings, 'BURUNDIPAY_WEBHOOK_SECRET', '') or '').strip()
+        if not expected:
+            logger.error('Webhook BurundiPay refusé : BURUNDIPAY_WEBHOOK_SECRET non configuré.')
+            return Response({'detail': 'Webhook non configuré.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
         provided = (
             request.headers.get('X-BurundiPay-Webhook-Secret')
             or request.headers.get('X-Lumicash-Webhook-Secret')
             or ''
-        )
-        if expected and provided != expected:
+        ).strip()
+        # compare_digest : évite de fuiter le préfixe du secret par canal temporel.
+        if not hmac.compare_digest(provided, expected):
+            logger.warning(
+                'Webhook BurundiPay : secret invalide depuis %s (action=%s)',
+                request.META.get('REMOTE_ADDR') or 'inconnu',
+                str(request.data.get('external_id') or request.data.get('payment_id') or '?')[:64],
+            )
             return Response({'detail': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
         payment_id = request.data.get('payment_id') or request.data.get('external_id')
