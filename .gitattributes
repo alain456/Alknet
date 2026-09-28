@@ -1,0 +1,15 @@
+# Empêche git de traiter ces fichiers comme du texte quand ils sont
+# réintroduits par erreur (sinon « conflicts » en cascade sur des milliers
+# de fichiers binaires).
+venv/**      binary diff=disabled
+*.sqlite3    binary
+*.pyc        binary
+*.png        binary
+*.pdf        binary
+# Normalise les fins de ligne pour éviter des diffs fantômes
+*.py         text eol=lf
+*.js         text eol=lf
+*.jsx        text eol=lf
+*.ts         text eol=lf
+*.tsx        text eol=lf
+*.sh         text eol=lf

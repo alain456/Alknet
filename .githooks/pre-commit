@@ -1,0 +1,20 @@
+#!/bin/sh
+# Garde-fou anti-récidive : le .gitignore est correct mais n'empêche pas
+# `git add -f`. Ce crochet bloque la réintroduction des artefacts et secrets.
+# Activer : git config core.hooksPath .githooks   (fait pour ce dépôt)
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+
+FORBIDDEN=$(printf '%s\n' "$STAGED" | grep -E '^(venv/|\.env$|\.env\.|\.gitleaks)|(^|/).*\.sqlite3$|.*\.py[co]$')
+if [ -n "$FORBIDDEN" ]; then
+  echo ""
+  echo "BLOCK — secret ou artefact interdit en commit :"
+  printf '%s\n' "$FORBIDDEN" | sed 's/^/    /'
+  echo ""
+  echo "  .env        → secrets (SECRET_KEY, mots de passe). Utiliser .env.sample."
+  echo "  venv/       → dépendances. pip install -r requirements.txt suffit."
+  echo "  *.sqlite3   → base locale. PostgreSQL via docker compose."
+  echo "  *.pyc       → régénéré automatiquement."
+  echo ""
+  echo "  Si c'est volontaire : git commit --no-verify (à éviter)."
+  exit 1
+fi
