@@ -4,7 +4,15 @@
 # Activer : git config core.hooksPath .githooks   (fait pour ce dépôt)
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 
-FORBIDDEN=$(printf '%s\n' "$STAGED" | grep -E '^(venv/|\.env$|\.env\.|\.gitleaks)|(^|/).*\.sqlite3$|.*\.py[co]$')
+# .env.sample / .example / .template sont des gabarits sans valeur : autorisés.
+# Tout AUTRE .env.* reste bloqué (.env.production, .env.local, ... contiennent
+# très souvent de vrais secrets).
+ALLOWED_ENV='\.(sample|example|template|dist)$'
+FORBIDDEN=$(
+  printf '%s\n' "$STAGED" \
+    | grep -Ev "$ALLOWED_ENV" \
+    | grep -E '^(venv/|\.env($|\.)|\.gitleaks)|(^|/).*\.sqlite3$|.*\.py[co]$'
+)
 if [ -n "$FORBIDDEN" ]; then
   echo ""
   echo "BLOCK — secret ou artefact interdit en commit :"
