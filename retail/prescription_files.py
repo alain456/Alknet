@@ -5,20 +5,10 @@ import os
 import re
 import uuid
 
+from config.uploads import validate_binary_upload
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import UploadedFile
 
-ALLOWED_PRESCRIPTION_CONTENT_TYPES = frozenset({
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-    'application/pdf',
-})
-ALLOWED_PRESCRIPTION_EXTENSIONS = frozenset({
-    '.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf',
-})
 MAX_PRESCRIPTION_BYTES = 8 * 1024 * 1024
 
 
@@ -29,19 +19,11 @@ def _safe_filename(name: str) -> str:
 
 
 def validate_prescription_upload(uploaded: UploadedFile) -> None:
-    if not uploaded:
-        raise ValidationError('Fichier ordonnance manquant.')
-    size = getattr(uploaded, 'size', None) or 0
-    if size <= 0:
-        raise ValidationError('Fichier ordonnance vide.')
-    if size > MAX_PRESCRIPTION_BYTES:
-        raise ValidationError('Ordonnance trop volumineuse (max. 8 Mo).')
-    content_type = (getattr(uploaded, 'content_type', None) or '').split(';')[0].strip().lower()
-    ext = os.path.splitext(getattr(uploaded, 'name', '') or '')[1].lower()
-    type_ok = content_type in ALLOWED_PRESCRIPTION_CONTENT_TYPES or content_type.startswith('image/')
-    ext_ok = ext in ALLOWED_PRESCRIPTION_EXTENSIONS
-    if not type_ok and not ext_ok:
-        raise ValidationError('Formats acceptés : JPG, PNG, WebP, GIF ou PDF.')
+    try:
+        validate_binary_upload(uploaded, max_bytes=MAX_PRESCRIPTION_BYTES)
+    except ValidationError as exc:
+        message = exc.messages[0] if getattr(exc, 'messages', None) else str(exc)
+        raise ValidationError(message) from exc
 
 
 def prescription_upload_to(instance, filename: str) -> str:

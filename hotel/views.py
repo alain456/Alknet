@@ -2232,7 +2232,7 @@ def public_book(request, hotel_id):
         'hotel_name': b.name,
         'payment_status': res.payment_status,
         'payment_method': res.payment_method,
-        'payer_phone': res.payer_phone,
+        'payment_token': res.payment_token,
         'payment_merchant_account': res.payment_merchant_account,
         'message': 'Demande envoyée. L\'hôtel confirmera votre réservation après paiement.',
         'email_notification': email_result,
@@ -2269,7 +2269,6 @@ def _public_reservation_payload(res):
         'hotel_name': res.hotel.name if res.hotel_id else '',
         'payment_status': res.payment_status,
         'payment_method': res.payment_method,
-        'payer_phone': res.payer_phone,
         'payment_merchant_account': res.payment_merchant_account,
     }
 
@@ -2283,6 +2282,9 @@ def public_pay_reservation(request, reservation_id):
 
     res = Reservation.objects.select_related('hotel').filter(id=reservation_id).first()
     if not res:
+        return Response({'detail': 'Réservation introuvable.'}, status=404)
+    from businesses.payment_access import can_pay_object
+    if not can_pay_object(request, res, owner_fields=('created_by',), business_attr='hotel'):
         return Response({'detail': 'Réservation introuvable.'}, status=404)
     payer_phone = (request.data.get('payer_phone') or request.data.get('phone') or '').strip()
     if not payer_phone:
@@ -2309,6 +2311,9 @@ def public_confirm_reservation_payment(request, reservation_id):
 
     res = Reservation.objects.select_related('hotel').filter(id=reservation_id).first()
     if not res:
+        return Response({'detail': 'Réservation introuvable.'}, status=404)
+    from businesses.payment_access import can_pay_object
+    if not can_pay_object(request, res, owner_fields=('created_by',), business_attr='hotel'):
         return Response({'detail': 'Réservation introuvable.'}, status=404)
     result = confirm_reservation_payment_stub(res)
     res.refresh_from_db()

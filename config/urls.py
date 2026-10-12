@@ -2,9 +2,8 @@
 URL configuration for config project.
 """
 from django.contrib import admin
-from django.conf import settings
 from django.urls import path, include, re_path
-from django.views.static import serve
+from config.media_access import protected_media
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -21,6 +20,7 @@ urlpatterns = [
     path('api/v1/analytics/', include('analytics.urls')),
     path('api/v1/locations/', include('locations.urls')),
     path('api/v1/hospital/', include('hospital.urls')),
+    path('api/v1/education/', include('education.urls')),
     path('api/v1/hotel/', include('hotel.urls')),
     path('api/v1/bookings/', include('bookings.urls')),
     path('api/v1/orders/', include('orders.urls')),
@@ -28,5 +28,5 @@ urlpatterns = [
     path('api/v1/wholesale/', include('wholesale.urls')),
     path('api/v1/retail/', include('retail.urls')),
     # Uploads ordonnances (MVP ; préférer nginx/S3 en prod)
-    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    re_path(r'^media/(?P<path>.*)$', protected_media),
 ]

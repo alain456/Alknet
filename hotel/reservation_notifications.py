@@ -120,7 +120,7 @@ def _send(reservation, subject: str, body: str) -> dict:
             'error': 'Aucune adresse email client disponible.',
             'recipient': '',
         }
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@isokohub.bi'
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'info.isokohub@gmail.com'
     try:
         send_mail(
             subject=subject,

@@ -100,6 +100,7 @@ export default function AdminUsersPage() {
     business_id: '',
     business_relationship: 'EMPLOYEE',
     avatar: '',
+    send_verification_email: true,
   });
 
   // Password Reset Modal (Quick Action)
@@ -193,6 +194,9 @@ export default function AdminUsersPage() {
       if (editingUser && !payload.password) {
         delete payload.password;
       }
+      if (editingUser) {
+        delete payload.send_verification_email;
+      }
 
       if (!payload.business_id) {
         payload.business_id = null;
@@ -276,6 +280,7 @@ export default function AdminUsersPage() {
       business_id: '',
       business_relationship: 'EMPLOYEE',
       avatar: '',
+      send_verification_email: true,
     });
     setAvatarTouched(false);
   };
@@ -1007,6 +1012,17 @@ export default function AdminUsersPage() {
                   <Lock className="w-3.5 h-3.5 text-accent shrink-0" />
                   Minimum {passwordMinLength} caractères.
                 </p>
+                {!editingUser && (
+                  <label className="mt-2 flex items-start gap-2 text-sm font-medium text-ink">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={formData.send_verification_email !== false}
+                      onChange={(e) => setFormData({ ...formData, send_verification_email: e.target.checked })}
+                    />
+                    Envoyer un email de vérification à cet utilisateur
+                  </label>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

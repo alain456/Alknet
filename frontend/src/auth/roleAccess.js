@@ -66,6 +66,28 @@ export function isCashierOrAccountant(user) {
   );
 }
 
+export function isLabTechnician(user) {
+  if (!user) return false;
+  const accessLevel = (user.system_access_level || user.business_info?.system_access_level || '').toUpperCase();
+  const category = (user.staff_category || '').toUpperCase();
+  const roleName = (user.business_info?.role_name || '').toLowerCase();
+  const position = (user.business_info?.position || '').toLowerCase();
+  const perms = user.business_info?.permissions || [];
+  // Rôle ou poste labo (même si un profil médecin/spécialiste existe aussi).
+  // « laboratin » = faute fréquente de « laborantin ».
+  if (accessLevel === ACCESS_LEVELS.LAB) return true;
+  if (['LAB', 'LABORANTIN', 'LAB_TECHNICIAN'].includes(category)) return true;
+  if (/laborat|laboratoire|\blabo\b/.test(roleName) || /laborat|laboratoire|\blabo\b/.test(position)) return true;
+  if (position.includes('lab_technician')) return true;
+  const isDoctor = ['DOCTOR', 'SPECIALIST'].includes(category) || accessLevel === ACCESS_LEVELS.MEDICAL;
+  if (isDoctor) return false;
+  return (
+    perms.includes('can_manage_lab_results')
+    || perms.includes('hospital.lab.create')
+    || perms.includes('hospital.lab.update')
+  );
+}
+
 export function isReceptionist(user) {
   if (!user) return false;
   const accessLevel = (user.system_access_level || user.business_info?.system_access_level || '').toUpperCase();
@@ -85,6 +107,10 @@ export function isReceptionist(user) {
 
 export function isHotelBusinessUser(user) {
   return getBusinessCategoryKey(user) === 'hotel';
+}
+
+export function isEducationBusinessUser(user) {
+  return getBusinessCategoryKey(user) === 'education';
 }
 
 export function isHotelHousekeepingLead(user) {
@@ -185,7 +211,7 @@ export function getStaffHomePath(user) {
   if (accessLevel === ACCESS_LEVELS.RECEPTIONIST || isReceptionist(user)) {
     return '/hospital/staff/receptionist';
   }
-  if (accessLevel === ACCESS_LEVELS.LAB || category === 'LAB' || category === 'LABORANTIN') {
+  if (isLabTechnician(user)) {
     return '/hospital/staff/lab-technician';
   }
   if (isCashierOrAccountant(user)) {
@@ -197,49 +223,158 @@ export function getStaffHomePath(user) {
   return '/hospital/staff/doctor';
 }
 
-/** Chemin d'accueil unique par rôle (aucun chevauchement) */
-export function getBusinessCategoryKey(user) {
-  const name = (user?.business_info?.category_name || '').toLowerCase();
-  const slug = (user?.business_info?.category_slug || '').toLowerCase();
-  if (name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'))) {
+/**
+ * Modules métier reconnus. Doivent rester synchronisés avec
+ * `ModuleKey` (business_categories/models.py) : c'est la donnée qui décide,
+ * cette liste ne sert que de garde-fou.
+ */
+export const MODULE_KEYS = [
+  'business',
+  'commerce',
+  'hotel',
+  'hospital',
+  'retail_pharmacy',
+  'wholesale',
+  'education',
+];
+
+/**
+ * Une seule lecture du secteur, partagée par l'espace entreprise et les fiches publiques.
+ *
+ * `module` (champ explicite de BusinessCategory) est la source de vérité.
+ * Le matching par mots-clés n'est plus qu'un repli pour les catégories dont le
+ * module n'a pas été renseigné : il teste des sous-chaînes, donc « Modélisation »
+ * tombait dans « commerce » et « Commerce de santé » dans « hospital ».
+ * L'ordre des tests ci-dessous est conservé tel quel : c'est lui qui définit
+ * le résultat, et la migration 0003 l'a reproduit à l'identique.
+ */
+export function categoryKeyFromLabels(name = '', slug = '', module = '') {
+  if (module && MODULE_KEYS.includes(module)) return module;
+
+  const n = String(name || '').toLowerCase();
+  const s = String(slug || '').toLowerCase();
+  if (
+    n.includes('pharmacie de gros')
+    || (n.includes('pharmac') && n.includes('gros'))
+    || s.includes('gros')
+    || s.includes('wholesale')
+  ) {
     return 'wholesale';
   }
   if (
-    name.includes('pharmacie de détail')
-    || name.includes('pharmacie de detail')
-    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
-    || name.trim() === 'pharmacie'
+    n.includes('pharmacie de détail')
+    || n.includes('pharmacie de detail')
+    || (n.includes('pharmac') && (n.includes('détail') || n.includes('detail') || n.includes('officine')))
+    || n.trim() === 'pharmacie'
+    || s.includes('detail')
+    || s.includes('retail')
+    || s.includes('officine')
   ) {
     return 'retail_pharmacy';
   }
   if (
-    name.includes('sant')
-    || name.includes('hôpital')
-    || name.includes('hopital')
-    || name.includes('hospital')
-    || name.includes('clinique')
-    || name.includes('cabinet')
+    n.includes('sant')
+    || n.includes('hôpital')
+    || n.includes('hopital')
+    || n.includes('hospital')
+    || n.includes('clinique')
+    || n.includes('cabinet')
+    || n.includes('médical')
+    || n.includes('medical')
+    || n.includes('health')
+    || s.includes('sant')
+    || s.includes('hopital')
+    || s.includes('hospital')
+    || s.includes('clinique')
+    || s.includes('medical')
+    || s.includes('health')
   ) {
     return 'hospital';
   }
   if (
-    name.includes('hôtel')
-    || name.includes('hotel')
-    || name.includes('hôtellerie')
-    || name.includes('hotellerie')
-    || slug.includes('hotel')
+    n.includes('hôtel')
+    || n.includes('hotel')
+    || n.includes('hôtellerie')
+    || n.includes('hotellerie')
+    || s.includes('hotel')
+    || s.includes('hotellerie')
   ) {
     return 'hotel';
   }
-  // Secteur Commerce (parent ou enfants : Boutique, Mode, Quincaillerie, …)
+  if (
+    n.includes('éducation')
+    || n.includes('education')
+    || n.includes('école')
+    || n.includes('ecole')
+    || n.includes('universit')
+    || n.includes('centre de formation')
+    || n.includes('centre-de-formation')
+    || n.includes('formation')
+    || n.includes('enseignement')
+    || n.includes('scolarité')
+    || n.includes('scolarite')
+    || n.includes('académ')
+    || n.includes('academ')
+    || n.includes('cours du soir')
+    || n.includes('cours particuliers')
+    || s.includes('ecole')
+    || s.includes('universite')
+    || s.includes('formation')
+    || s.includes('enseignement')
+    || s.includes('education')
+  ) {
+    // Testé avant « commerce » : une « école de commerce » est un
+    // établissement d'enseignement, pas une boutique.
+    return 'education';
+  }
   const commerceKeywords = [
     'commerce', 'boutique', 'mode', 'quincaillerie',
     'supermarché', 'supermarche', 'électronique', 'electronique',
   ];
-  if (commerceKeywords.some((k) => name.includes(k) || slug.includes(k))) {
+  if (commerceKeywords.some((k) => n.includes(k) || s.includes(k))) {
     return 'commerce';
   }
   return 'business';
+}
+
+export function labelsFromBusiness(business) {
+  return {
+    name: (
+      business?.primary_category_name
+      || business?.category_name
+      || business?.category?.name
+      || business?.primary_category_detail?.name
+      || ''
+    ),
+    slug: (
+      business?.primary_category_slug
+      || business?.category_slug
+      || business?.category?.slug
+      || business?.primary_category_detail?.slug
+      || ''
+    ),
+    module: (
+      business?.primary_category_module
+      || business?.category_module
+      || business?.category?.module
+      || business?.primary_category_detail?.module
+      || ''
+    ),
+  };
+}
+
+export function getBusinessRecordCategoryKey(business) {
+  const { name, slug, module } = labelsFromBusiness(business);
+  return categoryKeyFromLabels(name, slug, module);
+}
+
+/** Chemin d'accueil unique par rôle (aucun chevauchement) */
+export function getBusinessCategoryKey(user) {
+  return categoryKeyFromLabels(
+    user?.business_info?.category_name || '',
+    user?.business_info?.category_slug || '',
+    user?.business_info?.category_module || '',
+  );
 }
 
 export function isHotelManagerUser(user) {
@@ -273,12 +408,25 @@ export function getHomePathForUser(user) {
     if (key === 'hospital') return '/hospital/dashboard';
     if (key === 'hotel') return '/hotel/dashboard';
     if (key === 'commerce') return '/commerce/dashboard';
+    if (key === 'education') return '/education/dashboard';
     return '/business';
   }
 
   if (user.role === ROLES.PROFESSIONAL) {
     // Tout le personnel hôtel → PMS unique (menus selon droits CRUD du rôle)
     if (isHotelBusinessUser(user)) return '/hotel/dashboard';
+    if (isEducationBusinessUser(user)) {
+      const perms = user.business_info?.permissions || [];
+      const roleName = (user.business_info?.role_name || '').toLowerCase();
+      const feesOnly = roleName.includes('comptable') || (
+        perms.includes('education.fees.manage')
+        && !perms.includes('education.admissions.manage')
+        && !perms.includes('*')
+        && !perms.includes('education.manage')
+      );
+      if (feesOnly) return '/education/accounting';
+      return '/education/staff';
+    }
     return getStaffHomePath(user);
   }
 
@@ -321,6 +469,16 @@ export function canAccessCategoryPath(categoryKey, pathname, { role } = {}) {
     return categoryKey === 'commerce';
   }
 
+  // L'annuaire public Éducation reste ouvert à tous ; seules les pages de
+  // gestion sont réservées à l'établissement.
+  if (
+    path.startsWith('/education/dashboard')
+    || path.startsWith('/education/staff')
+    || path.startsWith('/education/accounting')
+  ) {
+    return categoryKey === 'education';
+  }
+
   if (path.startsWith('/business')) {
     // Pharmacies ont leur propre espace (pas /business)
     if (categoryKey === 'wholesale' || categoryKey === 'retail_pharmacy') {
@@ -348,7 +506,7 @@ export function getStaffNavItems(user) {
 
   const staffType = (() => {
     if (isReceptionist(user)) return 'receptionist';
-    if (accessLevel === ACCESS_LEVELS.LAB || category === 'LAB') return 'lab';
+    if (isLabTechnician(user)) return 'lab';
     if (isCashierOrAccountant(user)) return 'cashier';
     if (category === 'NURSE' || category === 'INFIRMIER') return 'nurse';
     if (accessLevel === ACCESS_LEVELS.MEDICAL || category === 'DOCTOR') return 'doctor';
@@ -404,6 +562,10 @@ export const ZONE_ACCESS = {
   hotelStaff: {
     allowedRoles: [ROLES.PROFESSIONAL],
     forbiddenRoles: [ROLES.SUPER_ADMIN, ROLES.BUSINESS_OWNER, ROLES.CUSTOMER],
+  },
+  educationStaff: {
+    allowedRoles: [ROLES.BUSINESS_OWNER, ROLES.PROFESSIONAL],
+    forbiddenRoles: [ROLES.SUPER_ADMIN, ROLES.CUSTOMER],
   },
   receptionistStaff: {
     allowedRoles: [ROLES.PROFESSIONAL],

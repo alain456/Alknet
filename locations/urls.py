@@ -6,7 +6,8 @@ from .views import (
     ZoneListCreateView, ZoneDetailView,
     QuartierListCreateView, QuartierDetailView,
     AvenueListCreateView, AvenueDetailView,
-    SeedLocationsAPIView
+    SeedLocationsAPIView,
+    map_tile,
 )
 
 urlpatterns = [
@@ -27,4 +28,5 @@ urlpatterns = [
 
     path('avenues/', AvenueListCreateView.as_view(), name='avenue-list'),
     path('avenues/<uuid:pk>/', AvenueDetailView.as_view(), name='avenue-detail'),
+    path('map-tile/<int:z>/<int:x>/<int:y>.png', map_tile, name='map-tile'),
 ]

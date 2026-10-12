@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Store, ShieldCheck } from 'lucide-react';
 import BusinessRegistrationForm, {
   emptyBusinessRegistrationForm,
@@ -9,26 +10,27 @@ import BusinessRegistrationForm, {
 
 export default function BusinessRegistrationPage() {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [formData, setFormData] = useState(() => emptyBusinessRegistrationForm());
+  const categoriesQuery = useQuery({
+    queryKey: ['business-categories'],
+    queryFn: async () => {
+      const res = await fetch('/api/v1/business-categories/');
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data?.results || []);
+    },
+  });
+  const categories = categoriesQuery.data || [];
 
   useEffect(() => {
-    fetch('/api/v1/business-categories/')
-      .then((res) => res.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : (data?.results || []);
-        setCategories(list);
-        if (list.length > 0) {
-          setFormData((prev) => (
-            prev.primary_category ? prev : { ...prev, primary_category: list[0].id }
-          ));
-        }
-      })
-      .catch((err) => console.error(err));
-  }, []);
+    const list = categoriesQuery.data;
+    if (!list?.length) return;
+    setFormData((prev) => (
+      prev.primary_category ? prev : { ...prev, primary_category: list[0].id }
+    ));
+  }, [categoriesQuery.data]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

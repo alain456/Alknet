@@ -61,6 +61,12 @@ const HOSPITAL_PERMISSIONS = [
   ...RECEPTIONIST_PERMISSIONS.map((p) => ({ key: p.key, label: p.label, desc: 'Permission rendez-vous — agent d\'accueil' })),
 ];
 
+const SCHOOL_PERMISSIONS = [
+  { key: 'education.fees.manage', label: 'Frais d’inscription', desc: 'Liste des élèves et suivi des paiements' },
+  { key: 'education.admissions.manage', label: 'Admissions', desc: 'Accepter ou refuser les dossiers' },
+  { key: 'education.profile.update', label: 'Fiche de l’école', desc: 'Modifier la fiche et les messages' },
+];
+
 const GENERIC_PERMISSIONS = [
   { key: 'can_manage_staff', label: 'Gérer le personnel', desc: 'Créer et modifier les collaborateurs' },
   { key: 'can_manage_roles', label: 'Gérer les rôles', desc: 'Créer et modifier les rôles & permissions' },
@@ -100,12 +106,19 @@ export default function ManageRoles() {
   const [selectedPermissions, setSelectedPermissions] = useState([]);
   const [submitError, setSubmitError] = useState(null);
   const [seeding, setSeeding] = useState(false);
+  const [accountants, setAccountants] = useState([]);
+  const [accountantForm, setAccountantForm] = useState({
+    email: '', first_name: '', last_name: '', password: '',
+  });
+  const [accountantError, setAccountantError] = useState('');
+  const [accountantNotice, setAccountantNotice] = useState('');
 
   const { isAuthenticated, user, refreshProfile } = useAuth();
   const location = useLocation();
   const categoryKey = getBusinessCategoryKey(user);
   const isHotel = categoryKey === 'hotel' || location.pathname.startsWith('/hotel');
   const isHospital = !isHotel && (categoryKey === 'hospital' || location.pathname.startsWith('/hospital'));
+  const isSchool = !isHotel && !isHospital && user?.business_info?.category_slug === 'ecole';
 
   // Accès via hotel.roles.* / hotel.manage — même règle pour propriétaire et employés
   const { canCreate, canUpdate, canDelete, can } = useHotelPerm();
@@ -129,11 +142,20 @@ export default function ManageRoles() {
     ? HOTEL_PERMISSIONS_FLAT
     : isHospital
       ? HOSPITAL_PERMISSIONS
-      : GENERIC_PERMISSIONS;
+      : isSchool
+        ? SCHOOL_PERMISSIONS
+        : GENERIC_PERMISSIONS;
 
   useEffect(() => {
     if (isAuthenticated) fetchRoles();
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isSchool) return;
+    api.get('businesses/my-business/employees/', { auth: true })
+      .then((rows) => setAccountants(Array.isArray(rows) ? rows : []))
+      .catch(() => setAccountants([]));
+  }, [isAuthenticated, isSchool, roles]);
 
   const fetchRoles = async () => {
     try {
@@ -192,6 +214,44 @@ export default function ManageRoles() {
       alert(res?.message || 'Rôles PMS synchronisés.');
     } catch (err) {
       alert(err.message || 'Erreur');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const ensureAccountantRole = async () => {
+    const existing = roles.find((role) => (role.name || '').trim().toLowerCase() === 'comptable');
+    if (existing) return existing;
+    return api.post('businesses/my-business/roles/', {
+      name: 'Comptable',
+      system_access_level: 'CASHIER_ACCESS',
+      permissions: ['education.fees.manage'],
+    }, { auth: true });
+  };
+
+  const assignAccountant = async (event) => {
+    event.preventDefault();
+    setAccountantError('');
+    setAccountantNotice('');
+    setSeeding(true);
+    try {
+      const role = await ensureAccountantRole();
+      await fetchRoles();
+      const saved = await api.post('businesses/my-business/employees/', {
+        email: accountantForm.email.trim(),
+        first_name: accountantForm.first_name.trim(),
+        last_name: accountantForm.last_name.trim(),
+        password: accountantForm.password,
+        role_id: role.id,
+        position: 'Comptable',
+      }, { auth: true });
+      const email = accountantForm.email.trim();
+      setAccountantForm({ email: '', first_name: '', last_name: '', password: '' });
+      setAccountantNotice(saved.message || `Compte comptable créé pour ${email}.`);
+      const rows = await api.get('businesses/my-business/employees/', { auth: true });
+      setAccountants(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      setAccountantError(err.message || 'Impossible de donner le rôle comptable.');
     } finally {
       setSeeding(false);
     }
@@ -496,7 +556,9 @@ export default function ManageRoles() {
               ? 'Droits CRUD (créer / voir / modifier / supprimer) par module — attribuables à n’importe quel rôle.'
               : isHospital
                 ? 'Droits CRUD par module : rendez-vous, dossiers, laboratoire, comptabilité, personnel.'
-                : 'Créez et assignez les rôles d\'accès de votre entreprise.'}
+                : isSchool
+                  ? 'Donnez le rôle Comptable à la personne qui suit les frais d’inscription.'
+                  : 'Créez et assignez les rôles d\'accès de votre entreprise.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -600,6 +662,38 @@ export default function ManageRoles() {
               L’accès à ce menu se gère via les permissions <code className="text-[11px]">hotel.roles.*</code>.
             </p>
           </div>
+        </div>
+      )}
+
+      {isSchool && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-teal-200 shadow-sm p-5 space-y-4">
+          <div>
+            <h2 className="font-bold text-gray-900">Comptable de l’école</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Cette personne voit uniquement les élèves de l’école et les frais d’inscription. Elle ne gère pas les admissions.
+            </p>
+          </div>
+          {accountantError && <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{accountantError}</p>}
+          {accountantNotice && <p className="text-xs text-green-700 bg-green-50 rounded-lg p-2">{accountantNotice}</p>}
+          <form onSubmit={assignAccountant} className="grid sm:grid-cols-2 gap-3">
+            <input required type="email" placeholder="E-mail de connexion" value={accountantForm.email} onChange={(e) => setAccountantForm({ ...accountantForm, email: e.target.value })} className="px-3 py-2 border rounded-xl text-sm" />
+            <input required placeholder="Mot de passe (8 caractères min.)" type="password" value={accountantForm.password} onChange={(e) => setAccountantForm({ ...accountantForm, password: e.target.value })} className="px-3 py-2 border rounded-xl text-sm" />
+            <input required placeholder="Prénom" value={accountantForm.first_name} onChange={(e) => setAccountantForm({ ...accountantForm, first_name: e.target.value })} className="px-3 py-2 border rounded-xl text-sm" />
+            <input required placeholder="Nom" value={accountantForm.last_name} onChange={(e) => setAccountantForm({ ...accountantForm, last_name: e.target.value })} className="px-3 py-2 border rounded-xl text-sm" />
+            <button type="submit" disabled={seeding} className="sm:col-span-2 px-4 py-2 bg-teal-700 text-white text-sm font-bold rounded-xl disabled:opacity-50">
+              {seeding ? 'Enregistrement…' : 'Donner le rôle Comptable'}
+            </button>
+          </form>
+          <ul className="text-sm space-y-1">
+            {accountants.filter((row) => (row.role_name || '').toLowerCase() === 'comptable').length === 0 && (
+              <li className="text-gray-500 text-xs">Aucun comptable pour le moment.</li>
+            )}
+            {accountants.filter((row) => (row.role_name || '').toLowerCase() === 'comptable').map((row) => (
+              <li key={row.id} className="font-semibold">
+                {row.user_first_name} {row.user_last_name} — {row.user_email}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

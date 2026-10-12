@@ -145,10 +145,10 @@ const hotelService = {
   },
   publicBook: (id, data, { auth = false } = {}) =>
     api.post(`${base}/public/hotels/${id}/book/`, data, { auth }),
-  publicPayReservation: (id, payerPhone, { auth = false } = {}) =>
-    api.post(`${base}/public/reservations/${id}/pay/`, { payer_phone: payerPhone }, { auth }),
-  publicConfirmReservationPayment: (id, { auth = false } = {}) =>
-    api.post(`${base}/public/reservations/${id}/confirm-payment/`, {}, { auth }),
+  publicPayReservation: (id, payerPhone, { auth = false, paymentToken = '' } = {}) =>
+    api.post(`${base}/public/reservations/${id}/pay/`, { payer_phone: payerPhone, payment_token: paymentToken }, { auth }),
+  publicConfirmReservationPayment: (id, { auth = false, paymentToken = '' } = {}) =>
+    api.post(`${base}/public/reservations/${id}/confirm-payment/`, { payment_token: paymentToken }, { auth }),
   payReservation: (id, payerPhone) =>
     api.post(`${base}/reservations/${id}/pay/`, { payer_phone: payerPhone }, { auth: true }),
   confirmReservationPayment: (id) =>

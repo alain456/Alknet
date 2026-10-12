@@ -5,7 +5,7 @@ import { readImageAsDataUrl } from '../shared/imageUpload';
 import api from '../shared/api';
 
 export default function UserProfilePage() {
-  const { user, updateUser, token } = useAuth();
+  const { user, updateUser, token, logout } = useAuth();
 
   const [formData, setFormData] = useState({
     firstName: user?.first_name || '',
@@ -204,6 +204,74 @@ export default function UserProfilePage() {
               </button>
             </div>
           </form>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 border rounded-2xl p-6 space-y-4">
+          <h2 className="font-bold text-lg">Données et sécurité</h2>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={Boolean(user?.email_otp_enabled)}
+              onChange={async (e) => {
+                const enabled = e.target.checked;
+                const updated = await api.patch('accounts/profile/', { email_otp_enabled: enabled }, { auth: true });
+                updateUser(updated);
+              }}
+            />
+            Exiger un code e-mail à chaque connexion
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg border border-[#1B4F9C] text-[#1B4F9C] text-sm font-semibold"
+              onClick={async () => {
+                const data = await api.get('accounts/me/export/', { auth: true });
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'isoko-mes-donnees.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Exporter mes données
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg border border-red-600 text-red-700 text-sm font-semibold"
+              onClick={async () => {
+                const password = window.prompt('Mot de passe pour supprimer le compte');
+                if (!password) return;
+                try {
+                  await api.post('accounts/me/delete/', { password }, { auth: true });
+                  logout();
+                } catch (err) {
+                  window.alert(err.message || 'Suppression impossible');
+                }
+              }}
+            >
+              Supprimer mon compte
+            </button>
+          </div>
+          {user?.role === 'BUSINESS_OWNER' && (
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg bg-[#1B4F9C] text-white text-sm font-semibold"
+              onClick={async () => {
+                const data = await api.get('businesses/me/data-export/', { auth: true });
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'isoko-etablissement.json';
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Exporter les données de l&apos;établissement
+            </button>
+          )}
         </div>
       </div>
     </div>

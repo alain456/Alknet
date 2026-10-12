@@ -97,7 +97,7 @@ class SubscriptionGateTests(TestCase):
         login = self.client.post('/api/v1/accounts/login/', {
             'email': 'sub-owner@test.bi', 'password': 'Pass123456!',
         }, format='json')
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.cookies['isoko_access'].value}")
 
     def test_write_blocked_when_subscription_expired(self):
         from businesses.subscription import update_grace_period_days
@@ -168,7 +168,7 @@ class MyBusinessSelectionTests(TestCase):
         login = self.client.post('/api/v1/accounts/login/', {
             'email': 'multi@test.bi', 'password': 'Pass123456!',
         }, format='json')
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.cookies['isoko_access'].value}")
 
     def test_patch_targets_business_via_query_param(self):
         response = self.client.patch(
@@ -227,7 +227,7 @@ class SubscriptionGraceTests(TestCase):
         login = self.client.post('/api/v1/accounts/login/', {
             'email': 'grace-admin@test.bi', 'password': 'Pass123456!',
         }, format='json')
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.cookies['isoko_access'].value}")
         response = self.client.patch(
             '/api/v1/businesses/admin/subscription-settings/',
             {'grace_period_days': 12},
@@ -368,9 +368,25 @@ class BurundiPayWebhookSecurityTests(TestCase):
     @override_settings(BURUNDIPAY_WEBHOOK_SECRET='s3cr3t-expected')
     def test_accepte_avec_le_bon_secret(self):
         """Garde-fou anti-sur-blocage : le prestataire légitime doit toujours passer."""
+        import hashlib
+        import hmac
+        import json
+        import time
+
+        raw = json.dumps(self._forged_success()).encode()
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            b's3cr3t-expected',
+            timestamp.encode() + b'.' + raw,
+            hashlib.sha256,
+        ).hexdigest()
         response = self.client.post(
-            self.URL, self._forged_success(), format='json',
+            self.URL,
+            data=raw,
+            content_type='application/json',
             HTTP_X_BURUNDIPAY_WEBHOOK_SECRET='s3cr3t-expected',
+            HTTP_X_BURUNDIPAY_TIMESTAMP=timestamp,
+            HTTP_X_BURUNDIPAY_SIGNATURE=signature,
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.payment.refresh_from_db()

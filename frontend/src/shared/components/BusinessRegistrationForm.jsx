@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Building2, User, Lock, Mail, ChevronRight, Camera, ImagePlus, Star, ArrowRight,
 } from 'lucide-react';
+import { categoryKeyFromLabels } from '../../auth/roleAccess';
+import { loadEducationEnums } from '../../education/educationEnums';
+import SchoolSectionsEditor from '../../education/SchoolSectionsEditor';
 import SectorSpecificFields from './SectorSpecificFields';
 import LocationSelector from './LocationSelector';
 import PasswordInput from './PasswordInput';
@@ -67,6 +70,13 @@ export function emptyBusinessRegistrationForm(overrides = {}) {
     primary_category: '',
     category_ids: [],
     extra_attributes: {},
+    school_tracks: {
+      offers_prescolaire: false,
+      offers_ecofo: false,
+      offers_post_fondamental: false,
+      ecofo_cycles: [],
+      post_fondamental_sections: [],
+    },
     ...overrides,
   };
 }
@@ -96,9 +106,10 @@ export function validateBusinessRegistrationForm(formData, categories, {
   }
   if (requireCommerceDocs) {
     const selectedCat = categories.find((c) => String(c.id) === String(formData.primary_category));
-    const catName = `${selectedCat?.name || ''} ${selectedCat?.parent_name || ''}`.toLowerCase();
-    const isCommerce = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique']
-      .some((k) => catName.includes(k));
+    const isCommerce = categoryKeyFromLabels(
+      `${selectedCat?.name || ''} ${selectedCat?.parent_name || ''}`,
+      selectedCat?.slug || '',
+    ) === 'commerce';
     if (isCommerce) {
       const a = formData.extra_attributes || {};
       if (!a.nif_number?.trim()) {
@@ -109,12 +120,30 @@ export function validateBusinessRegistrationForm(formData, categories, {
       }
     }
   }
+  const selectedSchool = categories.find((c) => String(c.id) === String(formData.primary_category));
+  if ((selectedSchool?.slug || '') === 'ecole') {
+    const tracks = formData.school_tracks || {};
+    if (!tracks.offers_prescolaire && !tracks.offers_ecofo && !tracks.offers_post_fondamental) {
+      return 'École : précisez le préscolaire, l’ECOFO, le post-fondamental, ou une combinaison.';
+    }
+    if (tracks.offers_ecofo && !(tracks.ecofo_cycles || []).length) {
+      return 'ECOFO : indiquez au moins un cycle.';
+    }
+    const sections = (tracks.post_fondamental_sections || []).filter((section) => (section.name || '').trim());
+    if (tracks.offers_post_fondamental && !sections.length) {
+      return 'Post-fondamental : ajoutez au moins une section.';
+    }
+  }
   return null;
 }
 
 export function buildBusinessRegistrationPayload(formData) {
   const email = (formData.owner_email_input || '').trim();
   const name = (formData.name || '').trim();
+  const tracks = formData.school_tracks || {};
+  const sections = (tracks.post_fondamental_sections || [])
+    .map((section) => ({ ...section, name: (section.name || '').trim() }))
+    .filter((section) => section.name);
   return {
     ...formData,
     name,
@@ -123,6 +152,16 @@ export function buildBusinessRegistrationPayload(formData) {
     password: formData.password || '',
     latitude: formData.latitude === '' || formData.latitude == null ? null : Number(formData.latitude),
     longitude: formData.longitude === '' || formData.longitude == null ? null : Number(formData.longitude),
+    extra_attributes: {
+      ...(formData.extra_attributes || {}),
+      school_tracks: {
+        offers_prescolaire: !!tracks.offers_prescolaire,
+        offers_ecofo: !!tracks.offers_ecofo,
+        offers_post_fondamental: !!tracks.offers_post_fondamental,
+        ecofo_cycles: tracks.ecofo_cycles || [],
+        post_fondamental_sections: sections,
+      },
+    },
     nif_number: formData.extra_attributes?.nif_number,
     nif_document: formData.extra_attributes?.nif_document,
   };
@@ -148,6 +187,24 @@ export default function BusinessRegistrationForm({
 }) {
   const patchForm = (patch) => {
     onChange({ ...formData, ...patch });
+  };
+  const [schoolEnums, setSchoolEnums] = useState({ ecofo_cycles: [], post_orientations: [] });
+  const selectedCategory = categories.find((cat) => String(cat.id) === String(formData.primary_category));
+  const isSchool = (selectedCategory?.slug || '') === 'ecole';
+  const tracks = formData.school_tracks || {
+    offers_prescolaire: false,
+    offers_ecofo: false,
+    offers_post_fondamental: false,
+    ecofo_cycles: [],
+    post_fondamental_sections: [],
+  };
+
+  useEffect(() => {
+    if (isSchool) loadEducationEnums().then(setSchoolEnums);
+  }, [isSchool]);
+
+  const patchTracks = (patch) => {
+    patchForm({ school_tracks: { ...tracks, ...patch } });
   };
 
   const handleCategoryToggle = (catId) => {
@@ -363,6 +420,72 @@ export default function BusinessRegistrationForm({
             ))}
           </select>
         </div>
+
+        {isSchool && (
+          <div className="mb-4 space-y-3 p-4 rounded-xl border-2 border-accent bg-primary/5">
+            <p className="text-sm font-bold text-ink">Cette école est *</p>
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={!!tracks.offers_prescolaire}
+                onChange={(e) => patchTracks({ offers_prescolaire: e.target.checked })}
+              />
+              Enseignement préscolaire
+            </label>
+            {tracks.offers_prescolaire && (
+              <p className="pl-6 text-xs text-ink-muted">
+                Premier palier, non obligatoire. Il prépare l&apos;enfant à l&apos;enseignement fondamental.
+              </p>
+            )}
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={!!tracks.offers_ecofo}
+                onChange={(e) => patchTracks({ offers_ecofo: e.target.checked })}
+              />
+              École fondamentale (ECOFO)
+            </label>
+            {tracks.offers_ecofo && (
+              <div className="grid sm:grid-cols-2 gap-2 pl-6">
+                {(schoolEnums.ecofo_cycles || []).map((cycle) => (
+                  <label key={cycle.value} className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={(tracks.ecofo_cycles || []).includes(cycle.value)}
+                      onChange={(e) => {
+                        const current = tracks.ecofo_cycles || [];
+                        patchTracks({
+                          ecofo_cycles: e.target.checked
+                            ? [...current, cycle.value]
+                            : current.filter((code) => code !== cycle.value),
+                        });
+                      }}
+                    />
+                    {cycle.label}
+                  </label>
+                ))}
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={!!tracks.offers_post_fondamental}
+                onChange={(e) => patchTracks({ offers_post_fondamental: e.target.checked })}
+              />
+              Post-fondamental
+            </label>
+            {tracks.offers_post_fondamental && (
+              <div className="pl-6">
+                <SchoolSectionsEditor
+                  sections={tracks.post_fondamental_sections || []}
+                  catalog={schoolEnums.post_filieres}
+                  inputClass={fieldClass}
+                  onChange={(post_fondamental_sections) => patchTracks({ post_fondamental_sections })}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mb-4 bg-primary/5 p-4 rounded-xl border-2 border-accent">
           <SectorSpecificFields

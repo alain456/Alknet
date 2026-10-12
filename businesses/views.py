@@ -443,17 +443,52 @@ class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
                         },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                # Compte déjà existant : ne JAMAIS écraser prénom/nom
-                # (sinon un proprio pharmacie rattaché à un hôtel devient « Manager hotel » partout)
-                fields_changed = False
-                if password and len(str(password)) >= 8:
-                    user.set_password(password)
-                    fields_changed = True
-                if user.role == 'CUSTOMER':
-                    user.role = 'PROFESSIONAL'
-                    fields_changed = True
-                if fields_changed:
-                    user.save()
+                # Compte déjà existant : ne JAMAIS toucher à son mot de passe ici.
+                # Un membre d'entreprise pourrait sinon prendre le contrôle de
+                # n'importe quel compte de la plateforme (escalade de privilèges).
+                if password:
+                    return Response(
+                        {
+                            'password': (
+                                f'Le compte {user.email} existe déjà : son mot de passe ne peut pas être '
+                                'défini depuis une entreprise. Demandez au titulaire de passer par '
+                                '« mot de passe oublié », ou au propriétaire de l\'entreprise de le '
+                                'réinitialiser depuis la fiche du collaborateur.'
+                            ),
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                from .models import EmployeeInvitation
+                from accounts.outbound_mail import send_isoko_mail
+                import secrets as secrets_mod
+                invite = EmployeeInvitation.objects.create(
+                    business=business,
+                    email=user.email,
+                    token=secrets_mod.token_urlsafe(32),
+                    position=position,
+                    role=BusinessRole.objects.filter(id=role_id, business=business).first() if role_id else None,
+                    expires_at=timezone.now() + timedelta(hours=48),
+                )
+                send_isoko_mail(
+                    'Invitation à rejoindre un établissement',
+                    (
+                        f'Bonjour,\n\n{business.name} souhaite vous rattacher à son équipe.\n'
+                        f'Connectez-vous avec {user.email} puis confirmez avec ce code : {invite.token}\n'
+                        'Ce code expire dans 48 heures.\n'
+                    ),
+                    [user.email],
+                )
+                return Response(
+                    {
+                        'invitation_sent': True,
+                        'email': user.email,
+                        'message': (
+                            'Un code d’invitation a été envoyé à ce compte. '
+                            'Le rattachement et le changement de rôle n’ont lieu qu’après acceptation.'
+                        ),
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
 
             role = None
             if role_id:
@@ -477,6 +512,37 @@ class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         # create() gère déjà la logique métier
         pass
+
+class EmployeeInvitationAcceptView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .models import EmployeeInvitation, BusinessEmployee
+        token = (request.data.get('token') or '').strip()
+        invite = EmployeeInvitation.objects.select_related('business', 'role').filter(
+            token=token, accepted_at__isnull=True,
+        ).first()
+        if not invite or invite.expires_at < timezone.now():
+            return Response({'detail': 'Invitation invalide ou expirée.'}, status=400)
+        if (request.user.email or '').lower() != (invite.email or '').lower():
+            return Response({'detail': 'Cette invitation ne correspond pas à votre compte.'}, status=403)
+        if BusinessEmployee.objects.filter(business=invite.business, user=request.user).exists():
+            invite.accepted_at = timezone.now()
+            invite.save(update_fields=['accepted_at'])
+            return Response({'detail': 'Vous faites déjà partie de cet établissement.'})
+        if request.user.role == 'CUSTOMER' and not request.user.businesses.exists():
+            request.user.role = 'PROFESSIONAL'
+            request.user.save(update_fields=['role'])
+        BusinessEmployee.objects.create(
+            business=invite.business,
+            user=request.user,
+            position=invite.position,
+            role=invite.role,
+        )
+        invite.accepted_at = timezone.now()
+        invite.save(update_fields=['accepted_at'])
+        return Response({'ok': True, 'business': invite.business.name})
+
 
 class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BusinessEmployeeSerializer
@@ -523,6 +589,18 @@ class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
             # Ignorer silencieusement le renommage cross-tenant (le rôle/poste restent modifiables)
             pass
         if password and len(str(password)) >= 8:
+            # Réinitialiser l'accès de quelqu'un est réservé au propriétaire du tenant.
+            is_owner = getattr(instance.business, 'owner_id', None) == request.user.id
+            if not (is_owner or request.user.is_superuser):
+                return Response(
+                    {
+                        'password': (
+                            'Seul le propriétaire de l\'entreprise peut réinitialiser le mot de '
+                            'passe d\'un collaborateur.'
+                        ),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             user.set_password(password)
 
         email_changed = False
@@ -785,6 +863,14 @@ class AdminModerationApproveView(APIView):
                         profile.save(update_fields=['status', 'updated_at'])
             except Exception:
                 logger.exception('Activation profil retail pour %s', business.id)
+            # Publier la fiche Éducation : sans elle, l'établissement approuvé
+            # reste invisible dans l'annuaire public, qui est piloté par
+            # EducationProfile et non par Business.
+            try:
+                from education.moderation import publish_education_profile
+                publish_education_profile(business)
+            except Exception:
+                logger.exception('Publication fiche education pour %s', business.id)
 
             email_result = None
             if previous != 'APPROVED':
@@ -848,8 +934,13 @@ class AdminModerationRejectView(APIView):
             return Response({'error': 'Entreprise introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
 class AdminCSVImportView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    """Import d'entreprises en masse — réservé à la plateforme.
+
+    Ne jamais remettre ``authentication_classes = []`` ici : la vue crée des
+    comptes gérants et des entreprises vérifiées.
+    """
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {'POST': 'platform.businesses.create'}
 
     def post(self, request):
         items = request.data.get('items', [])
@@ -858,6 +949,7 @@ class AdminCSVImportView(APIView):
 
         created_count = 0
         errors = []
+        activation_pending = []
 
         # Index existing categories by lowercase name for fast matching
         all_categories = {c.name.lower(): c for c in BusinessCategory.objects.all()}
@@ -878,7 +970,9 @@ class AdminCSVImportView(APIView):
                     errors.append(f"Ligne {idx}: Nom et Email requis.")
                     continue
 
-                # 1. User Creation/Get
+                # 1. Compte gérant — aucun mot de passe en clair n'est posé ici.
+                # Le compte démarre sans mot de passe utilisable : le gérant
+                # passe par « mot de passe oublié » pour définir son accès.
                 user, created = User.objects.get_or_create(
                     email=email,
                     defaults={
@@ -888,8 +982,9 @@ class AdminCSVImportView(APIView):
                     }
                 )
                 if created:
-                    user.set_password('Isoko123!')
-                    user.save()
+                    user.set_unusable_password()
+                    user.save(update_fields=['password'])
+                    activation_pending.append(email)
 
                 # 2. Match Primary Category
                 primary_cat = None
@@ -930,6 +1025,7 @@ class AdminCSVImportView(APIView):
         return Response({
             'message': f"{created_count} entreprise(s) importée(s) avec succès.",
             'created_count': created_count,
+            'activation_pending': activation_pending,
             'errors': errors
         })
 
@@ -1061,6 +1157,13 @@ class PublicBusinessRegistrationView(APIView):
 
             if is_commerce_category(primary_cat):
                 apply_commerce_compliance(business, data)
+
+            from education.school_tracks import school_track_errors, apply_registration_tracks
+            track_errors = school_track_errors(primary_cat, data)
+            if track_errors:
+                transaction.set_rollback(True)
+                return Response({'error': ' '.join(track_errors)}, status=status.HTTP_400_BAD_REQUEST)
+            apply_registration_tracks(business)
 
             # Logo établissement (URL ou data:image base64)
             if _valid_image_payload(logo_data):
@@ -1487,39 +1590,37 @@ class BurundiPaySubscriptionWebhookView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        # Fail-closed : un webhook sans secret est un webhook ouvert.
-        # settings.py interdit le démarrage dans ce cas hors stub local ; ce
-        # garde-fou couvre le cas d'un secret vidé à chaud (override, env hot-reload).
-        expected = (getattr(settings, 'BURUNDIPAY_WEBHOOK_SECRET', '') or '').strip()
-        if not expected:
-            logger.error('Webhook BurundiPay refusé : BURUNDIPAY_WEBHOOK_SECRET non configuré.')
-            return Response({'detail': 'Webhook non configuré.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        from . import burundipay as burundipay_client
+        from .models import BurundiPayReceipt
 
-        provided = (
-            request.headers.get('X-BurundiPay-Webhook-Secret')
-            or request.headers.get('X-Lumicash-Webhook-Secret')
-            or ''
-        ).strip()
-        # compare_digest : évite de fuiter le préfixe du secret par canal temporel.
-        if not hmac.compare_digest(provided, expected):
-            logger.warning(
-                'Webhook BurundiPay : secret invalide depuis %s (action=%s)',
-                request.META.get('REMOTE_ADDR') or 'inconnu',
-                str(request.data.get('external_id') or request.data.get('payment_id') or '?')[:64],
-            )
-            return Response({'detail': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+        ok, message, code = burundipay_client.verify_webhook(request)
+        if not ok:
+            if code == 503:
+                logger.error('Webhook BurundiPay refusé : secret non configuré.')
+            else:
+                logger.warning('Webhook BurundiPay refusé (%s).', message)
+            return Response({'detail': message}, status=code)
 
         payment_id = request.data.get('payment_id') or request.data.get('external_id')
         provider_ref = (request.data.get('provider_reference') or '').strip()
         event_status = (request.data.get('status') or '').strip().upper()
         external_raw = str(payment_id or '').strip()
 
+        if provider_ref:
+            prior = BurundiPayReceipt.objects.filter(provider_reference=provider_ref).first()
+            if prior:
+                if prior.external_id != external_raw:
+                    return Response(
+                        {'detail': 'Cette référence de paiement est déjà utilisée.'},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                return Response({'ok': True, 'duplicate': True, 'payment_status': prior.status})
+
         # Réservation hôtel
         if external_raw.startswith('res-'):
-            return self._apply_hotel_reservation(external_raw[4:], provider_ref, event_status, request.data)
-        # RDV hôpital
+            return self._apply_hotel_reservation(external_raw[4:], provider_ref, event_status, request.data, external_raw)
         if external_raw.startswith('apt-'):
-            return self._apply_hospital_appointment(external_raw[4:], provider_ref, event_status, request.data)
+            return self._apply_hospital_appointment(external_raw[4:], provider_ref, event_status, request.data, external_raw)
 
         payment = None
         if payment_id:
@@ -1542,18 +1643,29 @@ class BurundiPaySubscriptionWebhookView(APIView):
                     activate_subscription_from_payment(payment)
             else:
                 payment.save(update_fields=['raw_response', 'provider_reference', 'updated_at'])
+            self._remember_receipt(provider_ref, external_raw, 'SUCCESS')
             return Response({'ok': True, 'payment_status': 'SUCCESS'})
 
         if event_status in ('FAILED', 'CANCELLED', 'EXPIRED'):
             payment.status = 'FAILED' if event_status == 'FAILED' else event_status
             payment.error_message = request.data.get('message') or event_status
             payment.save(update_fields=['status', 'error_message', 'raw_response', 'provider_reference', 'updated_at'])
+            self._remember_receipt(provider_ref, external_raw, payment.status)
             return Response({'ok': True, 'payment_status': payment.status})
 
         payment.save(update_fields=['raw_response', 'provider_reference', 'updated_at'])
         return Response({'ok': True, 'payment_status': payment.status, 'note': 'Statut ignoré'})
 
-    def _apply_hotel_reservation(self, reservation_id, provider_ref, event_status, payload):
+    def _remember_receipt(self, provider_ref, external_id, status_label):
+        from .models import BurundiPayReceipt
+        if not provider_ref:
+            return
+        BurundiPayReceipt.objects.get_or_create(
+            provider_reference=provider_ref[:120],
+            defaults={'external_id': (external_id or '')[:160], 'status': (status_label or '')[:40]},
+        )
+
+    def _apply_hotel_reservation(self, reservation_id, provider_ref, event_status, payload, external_id):
         from hotel.models import Reservation
         res = Reservation.objects.filter(id=reservation_id).first()
         if not res:
@@ -1570,6 +1682,7 @@ class BurundiPaySubscriptionWebhookView(APIView):
                 'payment_status', 'paid_at', 'payment_method', 'payment_note',
                 'payment_provider_reference', 'updated_at',
             ])
+            self._remember_receipt(provider_ref, external_id, res.payment_status)
             return Response({'ok': True, 'kind': 'reservation', 'payment_status': res.payment_status})
         if event_status in ('FAILED', 'CANCELLED', 'EXPIRED'):
             res.payment_status = 'FAILED'
@@ -1577,11 +1690,12 @@ class BurundiPaySubscriptionWebhookView(APIView):
             res.save(update_fields=[
                 'payment_status', 'payment_note', 'payment_provider_reference', 'updated_at',
             ])
+            self._remember_receipt(provider_ref, external_id, res.payment_status)
             return Response({'ok': True, 'kind': 'reservation', 'payment_status': res.payment_status})
         res.save(update_fields=['payment_provider_reference', 'updated_at'])
         return Response({'ok': True, 'kind': 'reservation', 'payment_status': res.payment_status})
 
-    def _apply_hospital_appointment(self, appointment_id, provider_ref, event_status, payload):
+    def _apply_hospital_appointment(self, appointment_id, provider_ref, event_status, payload, external_id):
         from hospital.models import Appointment
         apt = Appointment.objects.filter(id=appointment_id).first()
         if not apt:
@@ -1598,6 +1712,7 @@ class BurundiPaySubscriptionWebhookView(APIView):
                 'payment_status', 'paid_at', 'payment_method', 'payment_note',
                 'payment_provider_reference', 'updated_at',
             ])
+            self._remember_receipt(provider_ref, external_id, apt.payment_status)
             return Response({'ok': True, 'kind': 'appointment', 'payment_status': apt.payment_status})
         if event_status in ('FAILED', 'CANCELLED', 'EXPIRED'):
             apt.payment_status = 'FAILED'
@@ -1605,6 +1720,7 @@ class BurundiPaySubscriptionWebhookView(APIView):
             apt.save(update_fields=[
                 'payment_status', 'payment_note', 'payment_provider_reference', 'updated_at',
             ])
+            self._remember_receipt(provider_ref, external_id, apt.payment_status)
             return Response({'ok': True, 'kind': 'appointment', 'payment_status': apt.payment_status})
         apt.save(update_fields=['payment_provider_reference', 'updated_at'])
         return Response({'ok': True, 'kind': 'appointment', 'payment_status': apt.payment_status})

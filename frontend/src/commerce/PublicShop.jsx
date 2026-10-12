@@ -305,8 +305,8 @@ export default function PublicShop() {
             order={success}
             onOrderUpdate={setSuccess}
             onDone={() => setSuccess(null)}
-            confirmPayment={(oid) => commerceService.confirmPayment(oid)}
-            retryPayment={(oid, phone) => commerceService.payOrder(oid, phone)}
+            confirmPayment={(oid, token) => commerceService.confirmPayment(oid, token)}
+            retryPayment={(oid, phone, token) => commerceService.payOrder(oid, phone, token)}
             paidHint="Paiement validé. La boutique pourra accepter votre commande ; vous pourrez ensuite retirer vos articles en magasin."
             doneLabel="Continuer vos achats"
           />
@@ -678,53 +678,53 @@ export default function PublicShop() {
 
       {confirmOpen && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg space-y-4 my-8">
-            <h3 className="font-bold text-lg">Confirmer l&apos;envoi de la commande</h3>
+          <div className="bg-surface rounded-2xl p-6 w-full max-w-lg space-y-4 my-8 border-2 border-accent shadow-md text-ink">
+            <h3 className="font-extrabold text-lg text-ink">Confirmer l&apos;envoi de la commande</h3>
             <dl className="text-sm space-y-1">
-              <div className="flex justify-between"><dt className="text-slate-500">Boutique</dt><dd className="font-medium">{shop?.name}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Retrait</dt><dd className="font-medium">En magasin</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Total</dt><dd className="font-bold">{money(subtotal)}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Boutique</dt><dd className="font-medium">{shop?.name}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Retrait</dt><dd className="font-medium">En magasin</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Total</dt><dd className="font-bold">{money(subtotal)}</dd></div>
             </dl>
-            <ul className="text-sm border rounded-xl divide-y max-h-40 overflow-y-auto">
+            <ul className="text-sm border-2 border-accent rounded-xl divide-y max-h-40 overflow-y-auto">
               {lines.map((l) => (
                 <li key={l.product_id} className="px-3 py-2 flex justify-between gap-2">
                   <span>
                     {l.name} × {l.quantity}
-                    <span className="block text-xs text-slate-400">{money(l.unit_price)}</span>
+                    <span className="block text-xs text-ink-muted">{money(l.unit_price)}</span>
                   </span>
                   <span className="font-medium">{money(l.line_total)}</span>
                 </li>
               ))}
             </ul>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Nom complet *</span>
-              <input required className="w-full border rounded-lg px-3 py-2" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Jean Ndayishimiye" />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Nom complet *</span>
+              <input required className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Jean Ndayishimiye" />
             </label>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Email</span>
-              <input type="email" className="w-full border rounded-lg px-3 py-2" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Email</span>
+              <input type="email" className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} />
             </label>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Téléphone *</span>
-              <input required className="w-full border rounded-lg px-3 py-2" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Téléphone *</span>
+              <input required className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={guestPhone} onChange={(e) => setGuestPhone(e.target.value)} />
             </label>
             <BurundiPayPayerField
               value={payerBurundiPay}
               onChange={setPayerBurundiPay}
               amountLabel={money(subtotal)}
             />
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Notes</span>
-              <textarea className="w-full border rounded-lg px-3 py-2" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Indications pour le retrait…" />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Notes</span>
+              <textarea className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Indications pour le retrait…" />
             </label>
-            <label className="flex items-start gap-2 text-sm">
+            <label className="flex items-start gap-2 text-sm text-ink">
               <input type="checkbox" className="mt-1" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} />
               <span>J&apos;ai vérifié les produits, les quantités et le montant total.</span>
             </label>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-alert font-medium">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 border rounded-xl">Annuler</button>
-              <button type="button" disabled={!confirmChecked || busy} onClick={sendOrder} className="px-4 py-2 bg-primary text-white rounded-xl font-semibold disabled:opacity-50">
+              <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 border-2 border-border rounded-xl font-semibold">Annuler</button>
+              <button type="button" disabled={!confirmChecked || busy} onClick={sendOrder} className="px-4 py-2 bg-primary text-surface rounded-xl font-bold border-2 border-accent disabled:opacity-50">
                 {busy ? 'Envoi…' : 'Confirmer et envoyer'}
               </button>
             </div>

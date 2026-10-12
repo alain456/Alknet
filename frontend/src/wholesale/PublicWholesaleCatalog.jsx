@@ -308,8 +308,8 @@ export default function PublicWholesaleCatalog() {
         order={success}
         onOrderUpdate={setSuccess}
         onDone={() => setSuccess(null)}
-        confirmPayment={(id) => wholesaleService.confirmOrderPayment(id)}
-        retryPayment={(id, phone) => wholesaleService.payOrder(id, phone)}
+        confirmPayment={(id, token) => wholesaleService.confirmOrderPayment(id, token)}
+        retryPayment={(id, phone, token) => wholesaleService.payOrder(id, phone, token)}
         paidHint="Paiement validé. Le grossiste pourra accepter votre commande ; vous pourrez ensuite récupérer les produits."
       />
     );
@@ -689,48 +689,48 @@ export default function PublicWholesaleCatalog() {
 
       {confirmOpen && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg space-y-4 my-8">
-            <h3 className="font-bold text-lg">Confirmer l&apos;envoi de la commande</h3>
+          <div className="bg-surface rounded-2xl p-6 w-full max-w-lg space-y-4 my-8 border-2 border-accent shadow-md text-ink">
+            <h3 className="font-extrabold text-lg text-ink">Confirmer l&apos;envoi de la commande</h3>
             <dl className="text-sm space-y-1">
-              <div className="flex justify-between"><dt className="text-slate-500">Pharmacie de gros</dt><dd className="font-medium">{pharmacy?.name}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Total</dt><dd className="font-bold">{money(subtotal)}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Pharmacie de gros</dt><dd className="font-medium">{pharmacy?.name}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Total</dt><dd className="font-bold">{money(subtotal)}</dd></div>
             </dl>
-            <ul className="text-sm border rounded-xl divide-y max-h-40 overflow-y-auto">
+            <ul className="text-sm border-2 border-accent rounded-xl divide-y max-h-40 overflow-y-auto">
               {lines.map((l) => (
                 <li key={l.product_id} className="px-3 py-2 flex justify-between gap-2">
                   <span>
                     {l.name} × {l.quantity}
-                    <span className="block text-xs text-slate-400">{l.packaging} · {money(l.unit_price)}</span>
+                    <span className="block text-xs text-ink-muted">{l.packaging} · {money(l.unit_price)}</span>
                   </span>
                   <span className="font-medium">{money(l.line_total)}</span>
                 </li>
               ))}
             </ul>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Nom de la pharmacie de détail *</span>
-              <input required className="w-full border rounded-lg px-3 py-2" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Pharmacie Sainte-Marie" />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Nom de la pharmacie de détail *</span>
+              <input required className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Pharmacie Sainte-Marie" />
             </label>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Email professionnel *</span>
-              <input type="email" required className="w-full border rounded-lg px-3 py-2" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Email professionnel *</span>
+              <input type="email" required className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={buyerEmail} onChange={(e) => setBuyerEmail(e.target.value)} />
             </label>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Téléphone professionnel</span>
-              <input className="w-full border rounded-lg px-3 py-2" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} />
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Téléphone professionnel</span>
+              <input className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={buyerPhone} onChange={(e) => setBuyerPhone(e.target.value)} />
             </label>
             <BurundiPayPayerField
               value={payerBurundiPay}
               onChange={setPayerBurundiPay}
               amountLabel={money(subtotal)}
             />
-            <label className="flex items-start gap-2 text-sm">
+            <label className="flex items-start gap-2 text-sm text-ink">
               <input type="checkbox" className="mt-1" checked={confirmChecked} onChange={(e) => setConfirmChecked(e.target.checked)} />
               <span>J&apos;ai vérifié les produits, les quantités et le montant total.</span>
             </label>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p className="text-sm text-alert font-medium">{error}</p>}
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 border rounded-xl">Annuler</button>
-              <button type="button" disabled={!confirmChecked || busy} onClick={sendOrder} className="px-4 py-2 bg-primary text-white rounded-xl font-semibold disabled:opacity-50">
+              <button type="button" onClick={() => setConfirmOpen(false)} className="px-4 py-2 border-2 border-border rounded-xl font-semibold">Annuler</button>
+              <button type="button" disabled={!confirmChecked || busy} onClick={sendOrder} className="px-4 py-2 bg-primary text-surface rounded-xl font-bold border-2 border-accent disabled:opacity-50">
                 {busy ? 'Envoi…' : 'Confirmer et envoyer'}
               </button>
             </div>

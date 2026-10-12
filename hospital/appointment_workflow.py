@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
+from accounts.outbound_mail import send_isoko_mail
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -202,6 +202,11 @@ def transition_appointment(appointment, new_status, *, actor=None, comment='', e
         previous_status=previous,
         new_status=new_status,
     )
+    if new_status == 'COMPLETED':
+        # Une consultation terminée est un acte facturable : sans ce branchement la
+        # comptabilite ne voyait passer l'argent que si quelqu'un y cliquait.
+        from .accounting import ensure_invoice_for_appointment
+        ensure_invoice_for_appointment(appointment, actor=actor)
     return appointment
 
 
@@ -243,10 +248,21 @@ def get_patient_display_name(appointment):
     return appointment.patient.get_full_name() or appointment.patient.email
 
 
+PLACEHOLDER_EMAIL_DOMAIN = '@invite.invalid'
+
+
 def get_patient_contact_email(appointment):
-    if appointment.patient_contact_email and appointment.patient_contact_email.strip():
-        return appointment.patient_contact_email.strip()
-    return appointment.patient.email
+    contact = (appointment.patient_contact_email or '').strip()
+    if contact:
+        return contact
+    account = (getattr(appointment.patient, 'email', '') or '').strip()
+    # Une réservation sans email crée un compte porteur d'une adresse de
+    # substitution en .invalid (réservé RFC 2606) : elle n'existe pas, on ne
+    # doit donc pas essayer d'y écrire. Le journal de notification signalera
+    # l'absence d'adresse au lieu d'envoyer vers un trou noir.
+    if account.lower().endswith(PLACEHOLDER_EMAIL_DOMAIN):
+        return ''
+    return account
 
 
 def smtp_error_message(exc):
@@ -287,13 +303,7 @@ def send_appointment_email(appointment, subject, message, notification_type='EMA
         )
         return False, err
     try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[recipient],
-            fail_silently=False,
-        )
+        send_isoko_mail(subject, message, [recipient])
         log_appointment_notification(
             appointment, channel='EMAIL', notification_type=notification_type,
             recipient=appointment.patient, destination=recipient, status='SENT',
@@ -313,13 +323,7 @@ def send_user_email(user, subject, message, appointment=None, notification_type=
     if not user or not getattr(user, 'email', None):
         return False, 'Email du destinataire manquant'
     try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@isokohub.bi'),
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
+        send_isoko_mail(subject, message, [user.email])
         if appointment:
             log_appointment_notification(
                 appointment, channel='EMAIL', notification_type=notification_type,

@@ -11,6 +11,7 @@ import wholesaleService, {
   ORDER_STATUS_LABELS as WHOLESALE_ORDER_LABELS,
 } from '../wholesale/wholesaleService';
 import hotelService from '../hotel/hotelService';
+import { getBusinessRecordCategoryKey } from '../auth/roleAccess';
 
 const HOTEL_STATUS_LABELS = {
   DRAFT: 'Brouillon',
@@ -30,75 +31,6 @@ function normalizeList(data) {
   return [];
 }
 
-function categoryName(business) {
-  return (
-    business?.primary_category_name
-    || business?.category_name
-    || business?.category?.name
-    || business?.primary_category_detail?.name
-    || ''
-  );
-}
-
-function categorySlug(business) {
-  return (
-    business?.primary_category_slug
-    || business?.category_slug
-    || business?.primary_category_detail?.slug
-    || business?.category?.slug
-    || ''
-  ).toLowerCase();
-}
-
-function isWholesalePharmacy(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = categorySlug(business);
-  return name.includes('pharmacie de gros')
-    || (name.includes('pharmac') && name.includes('gros'))
-    || slug.includes('gros')
-    || slug.includes('wholesale');
-}
-
-function isRetailPharmacy(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = categorySlug(business);
-  if (isWholesalePharmacy(business)) return false;
-  return name.includes('pharmacie de détail')
-    || name.includes('pharmacie de detail')
-    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
-    || name.trim() === 'pharmacie'
-    || slug.includes('detail')
-    || slug.includes('retail')
-    || slug.includes('officine');
-}
-
-function isHospitalBusiness(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = categorySlug(business);
-  if (isWholesalePharmacy(business)) return false;
-  const terms = ['sant', 'hôpital', 'hopital', 'hospital', 'clinique', 'cabinet', 'médical', 'medical', 'health'];
-  return terms.some((t) => name.includes(t) || slug.includes(t));
-}
-
-function isCommerceBusiness(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = categorySlug(business);
-  const keywords = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
-  return keywords.some((k) => name.includes(k) || slug.includes(k));
-}
-
-function isHotelBusiness(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = categorySlug(business);
-  return name.includes('hôtel')
-    || name.includes('hotel')
-    || name.includes('hôtellerie')
-    || name.includes('hotellerie')
-    || slug.includes('hotel')
-    || slug.includes('hotellerie');
-}
-
-/** Priorité : chemin URL (fiable) puis catégorie métier. */
 function detectSector(business, pathname = '') {
   const path = String(pathname || '');
   if (path.includes('/hospitals/')) return 'hospital';
@@ -106,12 +38,10 @@ function detectSector(business, pathname = '') {
   if (path.includes('/pharmacy')) return 'retail';
   if (path.includes('/catalog')) return 'wholesale';
   if (path.includes('/shop')) return 'commerce';
-  if (isWholesalePharmacy(business)) return 'wholesale';
-  if (isRetailPharmacy(business)) return 'retail';
-  if (isHospitalBusiness(business)) return 'hospital';
-  if (isHotelBusiness(business)) return 'hotel';
-  if (isCommerceBusiness(business)) return 'commerce';
-  return 'generic';
+  const key = getBusinessRecordCategoryKey(business);
+  if (key === 'retail_pharmacy') return 'retail';
+  if (key === 'business') return 'generic';
+  return key;
 }
 
 function profileBackPath(businessId, sector) {

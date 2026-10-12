@@ -131,10 +131,13 @@ export default function LocationSelector({
 
   const provincesList = Object.keys(locationsData);
   const currentProvinceData = locationsData[province] || { communes: [], zones: {}, quartiers: {}, avenues: {} };
-  const communesList = currentProvinceData.communes || [];
-  const zonesList = (currentProvinceData.zones && currentProvinceData.zones[commune]) || [];
-  const quartiersList = (currentProvinceData.quartiers && currentProvinceData.quartiers[zone]) || [];
-  const avenuesList = (currentProvinceData.avenues && currentProvinceData.avenues[quartier]) || [];
+  const withSaved = (list, current) => (
+    current && !list.includes(current) ? [current, ...list] : list
+  );
+  const communesList = withSaved(currentProvinceData.communes || [], commune);
+  const zonesList = withSaved((currentProvinceData.zones && currentProvinceData.zones[commune]) || [], zone);
+  const quartiersList = withSaved((currentProvinceData.quartiers && currentProvinceData.quartiers[zone]) || [], quartier);
+  const avenuesList = withSaved((currentProvinceData.avenues && currentProvinceData.avenues[quartier]) || [], avenue);
 
   const handleProvinceChange = (e) => {
     const newProv = e.target.value;

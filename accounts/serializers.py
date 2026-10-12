@@ -25,7 +25,7 @@ class UserSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'phone_number', 'role',
             'is_email_verified', 'is_active', 'staff_category', 'system_access_level',
             'business_info', 'avatar', 'created_at', 'platform_permissions',
-            'platform_role_code', 'platform_role_name', 'platform_roles',
+            'platform_role_code', 'platform_role_name', 'platform_roles', 'email_otp_enabled',
         )
         read_only_fields = ('id', 'role', 'is_email_verified', 'created_at')
 
@@ -86,7 +86,11 @@ class UserSerializer(serializers.ModelSerializer):
             # Hôtel : permissions PMS du rôle « Propriétaire » (Rôles & Permissions)
             cat_name = (owned.primary_category.name if owned.primary_category_id else '') or ''
             cat_slug = (owned.primary_category.slug if owned.primary_category_id else '') or ''
-            if any(k in cat_name.lower() or k in cat_slug.lower() for k in ('hôtel', 'hotel', 'hôtellerie', 'hotellerie')):
+            cat_module = (owned.primary_category.module if owned.primary_category_id else '') or ''
+            if cat_module == 'hotel' or (
+                not cat_module
+                and any(k in cat_name.lower() or k in cat_slug.lower() for k in ('hôtel', 'hotel', 'hôtellerie', 'hotellerie'))
+            ):
                 try:
                     from hotel.role_defaults import get_hotel_owner_role
                     owner_role = get_hotel_owner_role(owned)
@@ -107,6 +111,7 @@ class UserSerializer(serializers.ModelSerializer):
                 'system_access_level': system_access_level,
                 'category_name': cat_name,
                 'category_slug': cat_slug,
+                'category_module': cat_module,
             }
         emp = obj.employments.first() if hasattr(obj, 'employments') else None
         if emp and emp.business:
@@ -120,6 +125,7 @@ class UserSerializer(serializers.ModelSerializer):
                 'permissions': emp.role.permissions if emp.role else [],
                 'category_name': emp.business.primary_category.name if emp.business.primary_category_id else '',
                 'category_slug': emp.business.primary_category.slug if emp.business.primary_category_id else '',
+                'category_module': emp.business.primary_category.module if emp.business.primary_category_id else '',
             }
         if hasattr(obj, 'doctor_profile') and obj.doctor_profile and obj.doctor_profile.hospital:
             h = obj.doctor_profile.hospital
@@ -133,6 +139,34 @@ class UserSerializer(serializers.ModelSerializer):
         return None
 
 
+def _validate_login_email(value, instance=None):
+    from .email_identity import get_user_by_login_email, normalize_login_email
+    email = normalize_login_email(value)
+    if not email or '@' not in email:
+        raise serializers.ValidationError('Email obligatoire.')
+    existing = get_user_by_login_email(email)
+    if existing and (not instance or existing.pk != instance.pk):
+        raise serializers.ValidationError('Un compte existe déjà avec cet email.')
+    return email
+
+
+def _assign_business_role(user, business, business_rel):
+    """Refuse de remplacer le propriétaire déjà en place."""
+    from businesses.models import BusinessEmployee
+    if business_rel == 'OWNER':
+        if business.owner_id and business.owner_id != user.id:
+            raise serializers.ValidationError({
+                'business_relationship': (
+                    'Cette entreprise a déjà un propriétaire. '
+                    'Retirez-le avant d’en désigner un autre.'
+                ),
+            })
+        business.owner = user
+        business.save(update_fields=['owner'])
+        return
+    BusinessEmployee.objects.get_or_create(user=user, business=business)
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
     # The role is no longer accepted from the client, it is forced to CUSTOMER
@@ -140,6 +174,9 @@ class RegisterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('email', 'password', 'first_name', 'last_name', 'phone_number')
+
+    def validate_email(self, value):
+        return _validate_login_email(value)
 
     def create(self, validated_data):
         validated_data['role'] = 'CUSTOMER'
@@ -168,30 +205,37 @@ class AdminUserCreateSerializer(serializers.ModelSerializer):
     business_id = serializers.UUIDField(required=False, allow_null=True, write_only=True)
     business_relationship = serializers.CharField(required=False, default='EMPLOYEE', write_only=True)
     avatar = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    send_verification_email = serializers.BooleanField(required=False, default=True, write_only=True)
 
     class Meta:
         model = User
         fields = (
             'email', 'password', 'first_name', 'last_name', 'phone_number', 'role',
-            'business_id', 'business_relationship', 'avatar',
+            'business_id', 'business_relationship', 'avatar', 'send_verification_email',
         )
 
+    def validate_email(self, value):
+        return _validate_login_email(value)
+
     def create(self, validated_data):
+        from django.db import transaction
+
         avatar = validated_data.pop('avatar', '')
         business_id = validated_data.pop('business_id', None)
         business_rel = validated_data.pop('business_relationship', 'EMPLOYEE')
-        user = create_user(**validated_data)
-        if avatar:
-            _save_user_avatar(user, avatar)
-        if business_id:
-            from businesses.models import Business, BusinessEmployee
-            business = Business.objects.filter(id=business_id).first()
-            if business:
-                if business_rel == 'OWNER':
-                    business.owner = user
-                    business.save()
-                else:
-                    BusinessEmployee.objects.create(user=user, business=business)
+        send_mail = validated_data.pop('send_verification_email', True)
+        with transaction.atomic():
+            user = create_user(**validated_data)
+            if avatar:
+                _save_user_avatar(user, avatar)
+            if business_id:
+                from businesses.models import Business
+                business = Business.objects.filter(id=business_id).first()
+                if business:
+                    _assign_business_role(user, business, business_rel)
+        if send_mail and not user.is_email_verified:
+            from .auth_emails import send_verification_email
+            send_verification_email(user)
         return user
 
 class AdminUserUpdateSerializer(serializers.ModelSerializer):
@@ -209,14 +253,7 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
         )
 
     def validate_email(self, value):
-        from .email_identity import normalize_login_email, get_user_by_login_email
-        email = normalize_login_email(value)
-        if not email or '@' not in email:
-            raise serializers.ValidationError('Email obligatoire.')
-        existing = get_user_by_login_email(email)
-        if existing and (not self.instance or existing.pk != self.instance.pk):
-            raise serializers.ValidationError('Un compte utilise déjà cette adresse email.')
-        return email
+        return _validate_login_email(value, instance=self.instance)
 
     def update(self, instance, validated_data):
         password = validated_data.pop('password', None)
@@ -235,16 +272,17 @@ class AdminUserUpdateSerializer(serializers.ModelSerializer):
 
         if business_id != 'NOT_PROVIDED':
             from businesses.models import Business, BusinessEmployee
+            business = Business.objects.filter(id=business_id).first() if business_id else None
+            if business and business_rel == 'OWNER' and business.owner_id and business.owner_id != instance.id:
+                raise serializers.ValidationError({
+                    'business_relationship': (
+                        'Cette entreprise a déjà un propriétaire. '
+                        'Retirez-le avant d’en désigner un autre.'
+                    ),
+                })
             BusinessEmployee.objects.filter(user=instance).delete()
-
-            if business_id:
-                business = Business.objects.filter(id=business_id).first()
-                if business:
-                    if business_rel == 'OWNER':
-                        business.owner = instance
-                        business.save()
-                    else:
-                        BusinessEmployee.objects.create(user=instance, business=business)
+            if business:
+                _assign_business_role(instance, business, business_rel)
 
         return instance
 

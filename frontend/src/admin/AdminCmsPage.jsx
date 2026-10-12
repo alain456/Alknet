@@ -111,6 +111,7 @@ export default function AdminCmsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [socialDraft, setSocialDraft] = useState({ network: 'facebook', url: '' });
 
   const [footerForm, setFooterForm] = useState(emptyFooter);
   const [editingFooterId, setEditingFooterId] = useState(null);
@@ -119,9 +120,30 @@ export default function AdminCmsPage() {
   const [pageForm, setPageForm] = useState(emptyPage);
   const [editingPageSlug, setEditingPageSlug] = useState(null);
   const contactHeroFileRef = useRef(null);
+  const partnerLogoFileRef = useRef(null);
   const [heroUploading, setHeroUploading] = useState(false);
+  const [heroSlidesUploading, setHeroSlidesUploading] = useState(false);
+  const [partnerLogoUploading, setPartnerLogoUploading] = useState(false);
 
   const authOpts = useMemo(() => ({ auth: true }), []);
+
+  const handlePartnerLogoUpload = async (file) => {
+    if (!file || !file.type?.startsWith('image/')) {
+      setError('Veuillez choisir un fichier image.');
+      return;
+    }
+    setPartnerLogoUploading(true);
+    setError('');
+    try {
+      const dataUrl = await compressImageFile(file, { maxWidth: 480, quality: 0.82 });
+      setPartnerForm((prev) => ({ ...prev, logo: dataUrl }));
+    } catch (err) {
+      setError(err.message || 'Impossible de lire l’image.');
+    } finally {
+      setPartnerLogoUploading(false);
+      if (partnerLogoFileRef.current) partnerLogoFileRef.current.value = '';
+    }
+  };
 
   const handleContactHeroUpload = async (file) => {
     if (!file || !file.type?.startsWith('image/')) {
@@ -305,6 +327,25 @@ export default function AdminCmsPage() {
     setTimeout(() => setMessage(''), 2500);
   };
 
+  const persistSocialLinks = async (links) => {
+    const cleaned = (Array.isArray(links) ? links : [])
+      .map((item) => ({
+        network: String(item?.network || item?.name || 'website').trim(),
+        url: String(item?.url || item?.link || item?.href || '').trim(),
+      }))
+      .filter((item) => /^https?:\/\//i.test(item.url));
+    setError('');
+    const updated = await api.patch(
+      'cms/admin/settings/',
+      { footer_social_links: cleaned },
+      authOpts,
+    );
+    setSettings((prev) => ({ ...prev, ...updated, footer_social_links: updated.footer_social_links || cleaned }));
+    clearSiteContentCache();
+    invalidateApiCache('cms');
+    return cleaned;
+  };
+
   const saveSettings = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -315,12 +356,18 @@ export default function AdminCmsPage() {
         try {
           social = JSON.parse(social || '[]');
         } catch {
-          setError('JSON des réseaux sociaux invalide.');
+          setError('La liste des réseaux sociaux est illisible. Ajoutez-les avec le bouton, sans JSON.');
           setSaving(false);
           return;
         }
       }
       if (!Array.isArray(social)) social = [];
+      social = social
+        .map((item) => ({
+          network: String(item?.network || item?.name || 'website').trim(),
+          url: String(item?.url || item?.link || item?.href || '').trim(),
+        }))
+        .filter((item) => item.url);
       const updated = await api.patch(
         'cms/admin/settings/',
         { ...settings, footer_social_links: social },
@@ -533,25 +580,6 @@ export default function AdminCmsPage() {
               <textarea rows={2} className={inputClass} value={settings.footer_tagline || ''} onChange={(e) => setSettings({ ...settings, footer_tagline: e.target.value })} />
             </Field>
             <div className="grid md:grid-cols-2 gap-4">
-              <Field label="Titre newsletter">
-                <input className={inputClass} value={settings.footer_newsletter_title || ''} onChange={(e) => setSettings({ ...settings, footer_newsletter_title: e.target.value })} />
-              </Field>
-              <Field label="Bouton newsletter">
-                <input className={inputClass} value={settings.footer_newsletter_button || ''} onChange={(e) => setSettings({ ...settings, footer_newsletter_button: e.target.value })} />
-              </Field>
-              <Field label="Placeholder email">
-                <input className={inputClass} value={settings.footer_newsletter_placeholder || ''} onChange={(e) => setSettings({ ...settings, footer_newsletter_placeholder: e.target.value })} />
-              </Field>
-              <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 pt-6">
-                <input
-                  type="checkbox"
-                  checked={settings.footer_show_newsletter !== false}
-                  onChange={(e) => setSettings({ ...settings, footer_show_newsletter: e.target.checked })}
-                />
-                Afficher la newsletter
-              </label>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
               <Field label="Titre colonne contact">
                 <input className={inputClass} value={settings.footer_contact_title || ''} onChange={(e) => setSettings({ ...settings, footer_contact_title: e.target.value })} />
               </Field>
@@ -565,27 +593,70 @@ export default function AdminCmsPage() {
                 <input className={inputClass} value={settings.footer_contact_phone || ''} onChange={(e) => setSettings({ ...settings, footer_contact_phone: e.target.value })} placeholder="+257 …" />
               </Field>
             </div>
-            <Field label="Réseaux sociaux (JSON)">
-              <textarea
-                rows={4}
-                className={inputClass + ' font-mono text-xs'}
-                value={typeof settings.footer_social_links === 'string'
-                  ? settings.footer_social_links
-                  : JSON.stringify(settings.footer_social_links || [], null, 2)}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  try {
-                    const parsed = JSON.parse(raw || '[]');
-                    setSettings({ ...settings, footer_social_links: parsed });
-                  } catch {
-                    setSettings({ ...settings, footer_social_links: raw });
-                  }
-                }}
-                placeholder={'[\n  {"network":"facebook","url":"https://facebook.com/…"},\n  {"network":"instagram","url":"https://instagram.com/…"}\n]'}
-              />
-              <span className="text-[11px] text-gray-500">
-                Réseaux : facebook, instagram, youtube, linkedin, twitter
-              </span>
+            <Field label="Réseaux sociaux">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  className={inputClass}
+                  value={socialDraft.network}
+                  onChange={(e) => setSocialDraft({ ...socialDraft, network: e.target.value })}
+                >
+                  {['facebook', 'instagram', 'youtube', 'linkedin', 'x', 'twitter', 'whatsapp', 'tiktok', 'website'].map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+                <input
+                  className={inputClass}
+                  value={socialDraft.url}
+                  onChange={(e) => setSocialDraft({ ...socialDraft, url: e.target.value })}
+                  placeholder="https://facebook.com/isokohub"
+                />
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold shrink-0"
+                  onClick={async () => {
+                    const url = socialDraft.url.trim();
+                    if (!/^https?:\/\//i.test(url)) {
+                      setError('Indiquez une adresse qui commence par http:// ou https://');
+                      return;
+                    }
+                    const current = Array.isArray(settings.footer_social_links) ? settings.footer_social_links : [];
+                    try {
+                      await persistSocialLinks([...current, { network: socialDraft.network, url }]);
+                      setSocialDraft({ network: 'facebook', url: '' });
+                      flash('Réseau social publié sur le site.');
+                    } catch (err) {
+                      setError(err.message || 'Impossible d’enregistrer le réseau.');
+                    }
+                  }}
+                >
+                  Ajouter
+                </button>
+              </div>
+              <ul className="mt-3 space-y-2">
+                {(Array.isArray(settings.footer_social_links) ? settings.footer_social_links : []).map((item, index) => (
+                  <li key={`${item.url || item.link}-${index}`} className="flex items-center justify-between gap-3 text-sm border rounded-xl px-3 py-2">
+                    <span className="min-w-0">
+                      <span className="font-semibold capitalize">{item.network || item.name}</span>
+                      <span className="block text-xs text-gray-500 truncate">{item.url || item.link}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs text-red-600 font-semibold shrink-0"
+                      onClick={async () => {
+                        try {
+                          await persistSocialLinks(settings.footer_social_links.filter((_, i) => i !== index));
+                          flash('Réseau retiré du site.');
+                        } catch (err) {
+                          setError(err.message || 'Impossible de retirer le réseau.');
+                        }
+                      }}
+                    >
+                      Retirer
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-gray-500 mt-2">L’ajout est publié tout de suite dans le pied de page (Follow us).</p>
             </Field>
           </div>
 
@@ -727,6 +798,71 @@ export default function AdminCmsPage() {
           <Field label="Sous-titre Hero">
             <textarea rows={3} className={inputClass} value={settings.hero_subtitle || ''} onChange={(e) => setSettings({ ...settings, hero_subtitle: e.target.value })} />
           </Field>
+          <div>
+            <p className="text-sm font-bold text-ink mb-1">Images derrière le hero</p>
+            <p className="text-[11px] text-gray-500 mb-2">Elles remplissent toute la zone bleue, derrière le titre, les boutons et la recherche. Huit au maximum.</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(Array.isArray(settings.hero_slides) ? settings.hero_slides : []).map((src, index) => (
+                <div key={`${index}-${String(src).slice(0, 24)}`} className="relative w-24 h-16 rounded-lg overflow-hidden border border-border bg-primary">
+                  <img src={src} alt="" className="w-full h-full object-contain" />
+                  <button
+                    type="button"
+                    disabled={heroSlidesUploading}
+                    onClick={async () => {
+                      const next = (settings.hero_slides || []).filter((_, i) => i !== index);
+                      setHeroSlidesUploading(true);
+                      setError('');
+                      try {
+                        const updated = await api.patch('cms/admin/settings/', { hero_slides: next }, authOpts);
+                        setSettings((prev) => ({ ...prev, ...updated, hero_slides: updated.hero_slides || next }));
+                        clearSiteContentCache();
+                        invalidateApiCache('cms');
+                        flash('Image retirée du hero.');
+                      } catch (err) {
+                        setError(err.message || 'Retrait impossible');
+                      } finally {
+                        setHeroSlidesUploading(false);
+                      }
+                    }}
+                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-alert text-white text-xs font-bold"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            {(settings.hero_slides || []).length < 8 && (
+              <label className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs font-bold text-ink cursor-pointer">
+                {heroSlidesUploading ? 'Publication…' : 'Ajouter une image'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={heroSlidesUploading}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    setHeroSlidesUploading(true);
+                    setError('');
+                    try {
+                      const dataUrl = await compressImageFile(file, { maxWidth: 1600, quality: 0.78 });
+                      const next = [...(settings.hero_slides || []), dataUrl].slice(0, 8);
+                      const updated = await api.patch('cms/admin/settings/', { hero_slides: next }, authOpts);
+                      setSettings((prev) => ({ ...prev, ...updated, hero_slides: updated.hero_slides || next }));
+                      clearSiteContentCache();
+                      invalidateApiCache('cms');
+                      flash('Image du hero publiée.');
+                    } catch (err) {
+                      setError(err.message || 'Échec de l’image');
+                    } finally {
+                      setHeroSlidesUploading(false);
+                    }
+                  }}
+                />
+              </label>
+            )}
+          </div>
           <div className="grid md:grid-cols-2 gap-4">
             <Field label="CTA primaire — label">
               <input className={inputClass} value={settings.hero_cta_primary_label || ''} onChange={(e) => setSettings({ ...settings, hero_cta_primary_label: e.target.value })} />
@@ -884,8 +1020,41 @@ export default function AdminCmsPage() {
             <Field label="Nom">
               <input required className={inputClass} value={partnerForm.name} onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })} />
             </Field>
-            <Field label="Logo (URL ou base64)">
-              <textarea rows={2} className={inputClass} value={partnerForm.logo} onChange={(e) => setPartnerForm({ ...partnerForm, logo: e.target.value })} />
+            <Field label="Logo">
+              <input
+                ref={partnerLogoFileRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => handlePartnerLogoUpload(e.target.files?.[0])}
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={partnerLogoUploading}
+                  onClick={() => partnerLogoFileRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/5 disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  {partnerLogoUploading ? 'Chargement…' : 'Uploader une image'}
+                </button>
+                {partnerForm.logo ? (
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:underline"
+                    onClick={() => setPartnerForm({ ...partnerForm, logo: '' })}
+                  >
+                    Retirer
+                  </button>
+                ) : null}
+              </div>
+              {partnerForm.logo ? (
+                <img src={partnerForm.logo} alt="Aperçu logo" className="mt-3 h-16 w-16 object-contain rounded-lg border bg-white" />
+              ) : (
+                <p className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                  <ImageIcon className="w-3.5 h-3.5" /> PNG, JPG ou WebP
+                </p>
+              )}
             </Field>
             <Field label="Site web">
               <input type="url" className={inputClass} value={partnerForm.website_url} onChange={(e) => setPartnerForm({ ...partnerForm, website_url: e.target.value })} placeholder="https://" />
@@ -997,7 +1166,9 @@ export default function AdminCmsPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-gray-600">
-              Messages reçus depuis <strong>/pages/contact</strong>
+              Même boîte que le menu Support. Préférez{' '}
+              <a href="/admin/support" className="text-primary font-semibold hover:underline">Messages contact</a>
+              {' '}pour répondre.
               {unreadCount > 0 ? ` · ${unreadCount} non lu(s)` : ''}.
             </p>
             {unreadCount > 0 && (

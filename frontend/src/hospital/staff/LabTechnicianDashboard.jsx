@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   FlaskConical, User, Stethoscope, Calendar, Search, CheckCircle, Clock,
-  AlertCircle, Shield, FileText, Activity, Plus, Loader2,
+  AlertCircle, Shield, FileText, Activity, Plus, Loader2, History,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import hospitalService from '../hospitalService';
@@ -14,6 +14,16 @@ const STATUS_CHOICES = [
   { value: 'VALIDATED', label: 'Validé', color: 'bg-green-100 text-green-700' },
   { value: 'COMMUNICATED', label: 'Communiqué (patient notifié)', color: 'bg-teal-100 text-teal-700' },
 ];
+
+const ACTION_LABELS = {
+  CREATED_FROM_PRESCRIPTION: 'Demande créée depuis une prescription',
+  CREATED_MANUAL: 'Demande créée manuellement',
+  STATUS_CHANGE: 'Changement de statut',
+  DOCUMENT_UPLOADED: 'Compte-rendu joint',
+  INVOICE_CREATED: 'Facture examen créée',
+};
+
+const statusLabel = (code) => STATUS_CHOICES.find((s) => s.value === code)?.label || code || '';
 
 const NEXT_STEP = {
   REQUESTED: { status: 'SAMPLE_COLLECTED', label: 'Enregistrer le prélèvement' },
@@ -36,6 +46,8 @@ export default function LabTechnicianDashboard() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [historyQuery, setHistoryQuery] = useState('');
+  const [historyExamId, setHistoryExamId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedResult, setSelectedResult] = useState(null);
   const [viewMode, setViewMode] = useState('list');
@@ -342,6 +354,60 @@ export default function LabTechnicianDashboard() {
     });
   };
 
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '—';
+    return new Date(dateString).toLocaleString('fr-FR', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const openHistory = (examId = null) => {
+    setHistoryExamId(examId);
+    setHistoryQuery('');
+    setViewMode('history');
+    setActionError('');
+  };
+
+  const historyItems = labResults.flatMap((result) => {
+    const events = Array.isArray(result.events) ? result.events : [];
+    if (events.length === 0) {
+      return [{
+        id: `created-${result.id}`,
+        action: result.prescription ? 'CREATED_FROM_PRESCRIPTION' : 'CREATED_MANUAL',
+        from_status: '',
+        to_status: result.status || 'REQUESTED',
+        note: '',
+        actor_email: result.ordered_by_name || null,
+        created_at: result.created_at || result.test_date,
+        patient_name: result.patient_name,
+        test_name: result.test_name,
+        resultId: result.id,
+      }];
+    }
+    return events.map((ev) => ({
+      ...ev,
+      patient_name: result.patient_name,
+      test_name: result.test_name,
+      resultId: result.id,
+    }));
+  }).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+  const visibleHistory = historyItems.filter((item) => {
+    if (historyExamId && String(item.resultId) !== String(historyExamId)) return false;
+    const q = historyQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [
+      item.patient_name,
+      item.test_name,
+      item.action,
+      ACTION_LABELS[item.action],
+      item.actor_email,
+      item.note,
+      statusLabel(item.from_status),
+      statusLabel(item.to_status),
+    ].filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
+
   if (loading) return <div className="p-8">Chargement...</div>;
 
   return (
@@ -365,6 +431,13 @@ export default function LabTechnicianDashboard() {
               className="px-3 py-2 text-sm font-semibold border border-slate-200 rounded-lg hover:bg-slate-50"
             >
               Actualiser
+            </button>
+            <button
+              type="button"
+              onClick={() => openHistory()}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-semibold border border-slate-200 rounded-lg hover:bg-slate-50"
+            >
+              <History className="w-4 h-4" /> Historique
             </button>
             <button
               type="button"
@@ -485,6 +558,14 @@ export default function LabTechnicianDashboard() {
                                   >
                                     <FileText className="w-4 h-4" />
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openHistory(result.id)}
+                                    className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                                    title="Historique de cet examen"
+                                  >
+                                    <History className="w-4 h-4" />
+                                  </button>
                                   {next && (
                                     <button
                                       type="button"
@@ -506,6 +587,82 @@ export default function LabTechnicianDashboard() {
                 </div>
               </div>
             </>
+          )}
+
+          {viewMode === 'history' && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
+              <div className="flex justify-between items-center gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <History className="text-teal-600" />
+                    Historique laboratoire
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {historyExamId
+                      ? 'Étapes de cet examen'
+                      : 'Toutes les actions : création, prélèvement, analyse, validation, notification'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setViewMode('list'); setHistoryExamId(null); }}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Retour
+                </button>
+              </div>
+
+              <div className="relative max-w-md">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  value={historyQuery}
+                  onChange={(e) => setHistoryQuery(e.target.value)}
+                  placeholder="Patient, examen, acteur, statut…"
+                  className="w-full pl-9 pr-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-teal-600"
+                />
+              </div>
+
+              {visibleHistory.length === 0 ? (
+                <p className="text-sm text-gray-500 py-6 text-center">Aucun événement dans l’historique.</p>
+              ) : (
+                <ol className="space-y-3">
+                  {visibleHistory.map((item) => (
+                    <li key={item.id} className="border-l-2 border-teal-400 pl-4 py-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {ACTION_LABELS[item.action] || item.action}
+                        </p>
+                        <p className="text-xs text-gray-400">{formatDateTime(item.created_at)}</p>
+                      </div>
+                      <p className="text-sm text-gray-700 mt-0.5">
+                        {item.patient_name || 'Patient'} · {item.test_name || 'Examen'}
+                      </p>
+                      {(item.from_status || item.to_status) && (
+                        <p className="text-xs text-teal-800 mt-1">
+                          {item.from_status ? `${statusLabel(item.from_status)} → ` : ''}
+                          {statusLabel(item.to_status)}
+                        </p>
+                      )}
+                      {item.note && <p className="text-xs text-gray-600 mt-1">{item.note}</p>}
+                      {item.actor_email && (
+                        <p className="text-[11px] text-gray-400 mt-1">{item.actor_email}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const row = labResults.find((r) => String(r.id) === String(item.resultId));
+                          if (row) handleViewResult(row);
+                        }}
+                        className="mt-1 text-xs font-semibold text-teal-700 hover:underline"
+                      >
+                        Ouvrir l’examen
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           )}
 
           {viewMode === 'detail' && selectedResult && (

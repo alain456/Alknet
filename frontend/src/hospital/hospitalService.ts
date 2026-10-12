@@ -222,11 +222,11 @@ export const hospitalService = {
   createAppointment: (data: AppointmentPayload, auth = false) =>
     api.post('hospital/appointments/', data, { auth }),
 
-  payAppointment: (id: string, payerPhone: string, auth = false) =>
-    api.post(`hospital/appointments/${id}/pay/`, { payer_phone: payerPhone }, { auth }),
+  payAppointment: (id: string, payerPhone: string, auth = false, paymentToken = '') =>
+    api.post(`hospital/appointments/${id}/pay/`, { payer_phone: payerPhone, payment_token: paymentToken }, { auth }),
 
-  confirmAppointmentPayment: (id: string, auth = false) =>
-    api.post(`hospital/appointments/${id}/confirm-payment/`, {}, { auth }),
+  confirmAppointmentPayment: (id: string, auth = false, paymentToken = '') =>
+    api.post(`hospital/appointments/${id}/confirm-payment/`, { payment_token: paymentToken }, { auth }),
 
   markAppointmentPaid: (id: string, data: Record<string, unknown> = {}) =>
     api.post(`hospital/appointments/${id}/mark-paid/`, data, { auth: true }),

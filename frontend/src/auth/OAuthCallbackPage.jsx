@@ -5,20 +5,19 @@ import { useAuth } from '../context/AuthContext';
 export default function OAuthCallbackPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { getRedirectPath, loginWithTokens } = useAuth();
+  const { getRedirectPath, loginWithOAuthCode } = useAuth();
   const [error, setError] = useState('');
 
   useEffect(() => {
     const oauthError = searchParams.get('error');
-    const access = searchParams.get('access');
-    const refresh = searchParams.get('refresh');
+    const code = searchParams.get('code');
     const next = searchParams.get('next') || '';
 
     if (oauthError) {
       setError(oauthError);
       return;
     }
-    if (!access) {
+    if (!code) {
       setError('Connexion sociale incomplète. Réessayez.');
       return;
     }
@@ -26,7 +25,7 @@ export default function OAuthCallbackPage() {
     let cancelled = false;
     (async () => {
       try {
-        const profile = await loginWithTokens({ access, refresh });
+        const profile = await loginWithOAuthCode(code);
         if (cancelled) return;
         const dest = (next.startsWith('/') && !next.startsWith('//'))
           ? next
@@ -40,7 +39,7 @@ export default function OAuthCallbackPage() {
     })();
 
     return () => { cancelled = true; };
-  }, [searchParams, navigate, getRedirectPath, loginWithTokens]);
+  }, [searchParams, navigate, getRedirectPath, loginWithOAuthCode]);
 
   if (error) {
     return (

@@ -7,3 +7,7 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # Tous les jours à 06:05 (fuseau du serveur)
 5 6 * * * cd /app && python manage.py notify_hotel_departures >> /var/log/isoko-hotel-departures.log 2>&1
+
+# Sauvegarde métier hebdomadaire (dimanche 03:20)
+20 3 * * 0 cd /app && python manage.py backup_saas_data >> /var/log/isoko-backup.log 2>&1
+40 4 * * * cd /app && python manage.py reconcile_burundipay >> /var/log/isoko-burundipay.log 2>&1

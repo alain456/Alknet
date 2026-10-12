@@ -5,7 +5,7 @@ import {
   Settings, Menu, X, LogOut, Stethoscope, Bell, HeartPulse, UserCheck, Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { canAccessZone, ZONE_ACCESS, getStaffNavItems, getStaffHomePath, isReceptionist, isComptable } from '../auth/roleAccess';
+import { canAccessZone, ZONE_ACCESS, getStaffNavItems, getStaffHomePath, isReceptionist, isLabTechnician, isComptable } from '../auth/roleAccess';
 import hospitalService from '../hospital/hospitalService';
 import ThemeToggle from '../shared/components/ThemeToggle';
 
@@ -28,9 +28,9 @@ export default function HospitalStaffLayout() {
 
   // Détection du rôle/espace actuel à partir de l'URL
   const isReception = location.pathname.includes('/receptionist');
+  const isLab = location.pathname.includes('/lab-technician');
   const isDoctor = location.pathname.includes('/doctor');
   const isNurse = location.pathname.includes('/nurse');
-  const isLab = location.pathname.includes('/lab-technician');
   const isCashier = location.pathname.includes('/cashier');
 
   let spaceTitle = "Espace Médecin";
@@ -109,6 +109,9 @@ export default function HospitalStaffLayout() {
 
   if (user && isReceptionist(user) && !isReception) {
     return <Navigate to={getStaffHomePath(user)} replace />;
+  }
+  if (user && isLabTechnician(user) && !isLab) {
+    return <Navigate to="/hospital/staff/lab-technician" replace />;
   }
 
   if (user && !canAccessZone(user, ZONE_ACCESS.hospitalStaff)) {

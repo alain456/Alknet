@@ -2,33 +2,21 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import api, {
   storageKeys,
   AUTH_EVENTS,
-  setToken as storeToken,
-  setRefreshToken,
   clearAuthStorage,
-  getToken,
-  getRefreshToken,
+  hasSessionHint,
+  refreshAccessToken,
 } from '../shared/api';
 import { getHomePathForUser } from '../auth/roleAccess';
 
 const AuthContext = createContext(null);
 
-/** Migration des anciennes clés AlkNet vers Isoko Hub */
-function migrateLegacyStorage() {
-  const legacyMap = [
-    ['alknet_token', storageKeys.token],
-    ['alknet_refresh_token', storageKeys.refresh],
-    ['alknet_user', storageKeys.user],
-  ];
-  legacyMap.forEach(([oldKey, newKey]) => {
-    const val = localStorage.getItem(oldKey);
-    if (val && !localStorage.getItem(newKey)) {
-      localStorage.setItem(newKey, val);
-    }
-    localStorage.removeItem(oldKey);
+function purgeLegacyTokens() {
+  ['alknet_token', 'alknet_refresh_token', 'alknet_user', storageKeys.token, storageKeys.refresh].forEach((key) => {
+    localStorage.removeItem(key);
   });
 }
 
-migrateLegacyStorage();
+purgeLegacyTokens();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
@@ -41,12 +29,12 @@ export function AuthProvider({ children }) {
       return null;
     }
   });
-  const [token, setToken] = useState(() => getToken());
-  const [isLoading, setIsLoading] = useState(false);
+  const [token, setToken] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    storeToken(token);
-  }, [token]);
+    purgeLegacyTokens();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -59,15 +47,13 @@ export function AuthProvider({ children }) {
   // Synchronise onglets : si un autre onglet change de compte, on aligne token + user
   useEffect(() => {
     const onStorage = (event) => {
-      if (!event.key) return;
-      if (event.key === storageKeys.token) {
-        setToken(event.newValue);
-      }
       if (event.key === storageKeys.user) {
         try {
           setUser(event.newValue ? JSON.parse(event.newValue) : null);
+          setToken(event.newValue ? 'session' : null);
         } catch {
           setUser(null);
+          setToken(null);
         }
       }
     };
@@ -77,9 +63,8 @@ export function AuthProvider({ children }) {
 
   // Sync React state après refresh / logout déclenchés par api.ts
   useEffect(() => {
-    const onTokenRefreshed = (event) => {
-      const access = event?.detail?.access;
-      if (access) setToken(access);
+    const onTokenRefreshed = () => {
+      setToken('session');
     };
     const onLogout = () => {
       setUser(null);
@@ -93,24 +78,40 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // Au chargement : resynchronise le profil avec le JWT (évite user local ≠ token)
+  // Au chargement : rafraîchit un JWT expiré avant /profile/ (évite un 401 visible)
   useEffect(() => {
-    const access = getToken();
-    if (!access) return undefined;
+    // Visiteur non connecté : aucune requête. Sans ce garde, chaque premier
+    // rendu partait sur /profile/ puis /refresh/, deux 401 pour rien.
+    if (!hasSessionHint()) {
+      setUser(null);
+      setToken(null);
+      setIsLoading(false);
+      return undefined;
+    }
+
     let cancelled = false;
     (async () => {
       try {
+        const session = await refreshAccessToken();
+        if (cancelled) return;
+        if (!session) {
+          setUser(null);
+          setToken(null);
+          return;
+        }
         const profile = await api.get('accounts/profile/', { auth: true });
         if (cancelled) return;
-        // Aligner le state React si le refresh a mis à jour localStorage
-        const latest = getToken();
-        if (latest) setToken(latest);
-        if (profile) setUser(profile);
+        if (profile) {
+          setUser(profile);
+          setToken('session');
+        }
       } catch {
-        if (!cancelled && !getToken()) {
+        if (!cancelled) {
           setUser(null);
           setToken(null);
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -120,8 +121,11 @@ export function AuthProvider({ children }) {
     setIsLoading(true);
     try {
       const data = await api.post('accounts/login/', { email, password });
-      setToken(data.access);
-      if (data.refresh) setRefreshToken(data.refresh);
+      if (data?.two_factor_required) {
+        setIsLoading(false);
+        return data;
+      }
+      setToken('session');
       setUser(data.user);
       setIsLoading(false);
       return data.user;
@@ -131,13 +135,15 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const loginWithTokens = async ({ access, refresh }) => {
-    setToken(access);
-    storeToken(access);
-    if (refresh) setRefreshToken(refresh);
-    const profile = await api.get('accounts/profile/', { auth: true });
-    setUser(profile);
-    return profile;
+  const establishSession = async (user) => {
+    setToken('session');
+    if (user) setUser(user);
+    return user;
+  };
+
+  const loginWithOAuthCode = async (code) => {
+    const data = await api.post('accounts/oauth/exchange/', { code });
+    return establishSession(data.user);
   };
 
   const refreshProfile = async () => {
@@ -150,18 +156,7 @@ export function AuthProvider({ children }) {
     if (typeof userOrRole === 'object' && userOrRole !== null) {
       return getHomePathForUser(userOrRole);
     }
-    switch (userOrRole) {
-      case 'SUPER_ADMIN':
-      case 'PLATFORM_FINANCE':
-      case 'PLATFORM_MODERATION':
-      case 'PLATFORM_SUPPORT':
-      case 'PLATFORM_CONTENT':
-        return '/admin';
-      case 'BUSINESS_OWNER': return '/hospital/admin';
-      case 'PROFESSIONAL': return '/hospital/staff/doctor';
-      case 'CUSTOMER': return '/dashboard';
-      default: return '/dashboard';
-    }
+    return '/dashboard';
   };
 
   const register = async (formData) => {
@@ -182,43 +177,30 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    api.post('accounts/logout/', {}, { auth: true }).catch(() => {});
     setUser(null);
     setToken(null);
     clearAuthStorage();
   };
 
-  const refreshAccessToken = async () => {
-    const refresh = getRefreshToken();
-    if (!refresh) return null;
-    try {
-      const data = await api.post('accounts/refresh/', { refresh }, { skipRefresh: true });
-      setToken(data.access);
-      if (data.refresh) setRefreshToken(data.refresh);
-      return data.access;
-    } catch {
-      logout();
-      return null;
-    }
+  const refreshSession = async () => {
+    const ok = await refreshAccessToken();
+    if (ok) setToken('session');
+    else logout();
+    return ok;
   };
 
   const authFetch = async (url, options = {}) => {
-    // Toujours lire localStorage (pas le state React, souvent périmé après refresh)
-    const currentToken = getToken();
     const relativeUrl = url.startsWith('http://localhost:8000')
       ? url.replace('http://localhost:8000', '')
       : url;
-    const headers = {
-      ...options.headers,
-      ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
-    };
-    let response = await fetch(relativeUrl, { ...options, headers });
+    const headers = { ...options.headers };
+    delete headers.Authorization;
+    let response = await fetch(relativeUrl, { ...options, headers, credentials: 'same-origin' });
     if (response.status === 401) {
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        response = await fetch(relativeUrl, {
-          ...options,
-          headers: { ...options.headers, Authorization: `Bearer ${newToken}` },
-        });
+      const ok = await refreshAccessToken();
+      if (ok) {
+        response = await fetch(relativeUrl, { ...options, headers, credentials: 'same-origin' });
       }
     }
     return response;
@@ -231,11 +213,12 @@ export function AuthProvider({ children }) {
       isAuthenticated: !!token && !!user,
       isLoading,
       login,
-      loginWithTokens,
+      establishSession,
+      loginWithOAuthCode,
       register,
       logout,
       authFetch,
-      refreshAccessToken,
+      refreshAccessToken: refreshSession,
       refreshProfile,
       getRedirectPath,
       updateUser: (next) => setUser((prev) => ({ ...prev, ...next })),
@@ -257,7 +240,8 @@ export function useAuth() {
         isAuthenticated: false,
         isLoading: false,
         login: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
-        loginWithTokens: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
+        establishSession: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
+        loginWithOAuthCode: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
         register: async () => { throw new Error('AuthProvider manquant — rechargez la page.'); },
         logout: () => {},
         authFetch: async () => new Response(null, { status: 401 }),

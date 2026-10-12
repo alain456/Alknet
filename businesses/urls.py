@@ -1,7 +1,9 @@
 from django.urls import path
+from .client_search import PublicSearchSuggestView, PublicSearchView
+from accounts.views import BusinessDataExportView
 from .views import (
     BusinessListView, BusinessDetailView, MyBusinessListView, AdminBusinessListView, AdminBusinessDetailView,
-    BusinessEmployeeListCreateView, BusinessEmployeeDetailView, AdminModerationListView, AdminModerationDeskView,
+    BusinessEmployeeListCreateView, BusinessEmployeeDetailView, EmployeeInvitationAcceptView, AdminModerationListView, AdminModerationDeskView,
     AdminModerationApproveView, AdminModerationRejectView, AdminCSVImportView, PublicBusinessRegistrationView,
     BusinessRoleListCreateView, BusinessRoleDetailView, SeedReceptionistRoleView,
     MyBusinessSubscriptionView, MyBusinessAuditLogsView, AdminBusinessSubscriptionView, AdminSubscriptionListView,
@@ -11,12 +13,15 @@ from .views import (
 )
 
 urlpatterns = [
+    path('search/suggest/', PublicSearchSuggestView.as_view(), name='public-search-suggest'),
+    path('search/', PublicSearchView.as_view(), name='public-search'),
     path('register/', PublicBusinessRegistrationView.as_view(), name='business-register-public'),
     path('', BusinessListView.as_view(), name='business-list-public'),
     path('<uuid:pk>/', BusinessDetailView.as_view(), name='business-detail-public'),
     path('me/', MyBusinessListView.as_view(), name='my-business-list-create'),
     path('me/subscription/', MyBusinessSubscriptionView.as_view(), name='my-business-subscription'),
     path('me/audit-logs/', MyBusinessAuditLogsView.as_view(), name='my-business-audit-logs'),
+    path('me/data-export/', BusinessDataExportView.as_view(), name='my-business-data-export'),
     path('me/subscription/pay/', MySubscriptionBurundiPayPayView.as_view(), name='my-business-subscription-pay'),
     path('me/subscription/confirm/', MySubscriptionBurundiPayConfirmView.as_view(), name='my-business-subscription-confirm'),
     path('payments/burundipay/webhook/', BurundiPaySubscriptionWebhookView.as_view(), name='burundipay-subscription-webhook'),
@@ -26,6 +31,7 @@ urlpatterns = [
     path('my-business/roles/seed-receptionist/', SeedReceptionistRoleView.as_view(), name='my-business-roles-seed-receptionist'),
     path('my-business/roles/<uuid:pk>/', BusinessRoleDetailView.as_view(), name='my-business-roles-detail'),
     path('my-business/employees/', BusinessEmployeeListCreateView.as_view(), name='my-business-employees'),
+    path('my-business/employees/invitations/accept/', EmployeeInvitationAcceptView.as_view(), name='employee-invitation-accept'),
     path('my-business/employees/<uuid:pk>/', BusinessEmployeeDetailView.as_view(), name='my-business-employee-detail'),
     path('admin/list/', AdminBusinessListView.as_view(), name='admin_business_list'),
     path('admin/subscriptions/', AdminSubscriptionListView.as_view(), name='admin_subscriptions_list'),

@@ -54,10 +54,133 @@ from accounts.serializers import AuditLogSerializer
 
 User = get_user_model()
 
+
+# ---------------------------------------------------------------------------
+# ISOLATION MULTI-TENANT — helper d'écriture
+# ---------------------------------------------------------------------------
+
+def user_hospital_business_ids(user):
+    """Ids Business des hôpitaux dont l'utilisateur est propriétaire ou employé actif."""
+    if not user or not getattr(user, 'is_authenticated', False):
+        return set()
+    owned = Business.objects.filter(owner=user).values_list('id', flat=True)
+    employed = Business.objects.filter(
+        employees__user=user, employees__is_active=True,
+    ).values_list('id', flat=True)
+    return set(owned) | set(employed)
+
+
+def is_platform_admin(user):
+    return bool(
+        user
+        and getattr(user, 'is_authenticated', False)
+        and (user.is_superuser or getattr(user, 'role', None) == 'SUPER_ADMIN')
+    )
+
+
+def object_tenant_business_id(obj):
+    """Business porteur de l'objet, que le modèle l'appelle `hospital` ou `business`."""
+    for attr in ('hospital_id', 'business_id'):
+        value = getattr(obj, attr, None)
+        if value:
+            return value
+    return None
+
+
+class IsHospitalTenantWrite(permissions.BasePermission):
+    """Lecture publique ; écriture réservée au tenant (propriétaire / employés) de l'hôpital.
+
+    `has_object_permission` couvre PATCH/PUT/DELETE et les @action détail.
+    Les @action detail=False (bulk_create, apply_template…) valident
+    l'hôpital du corps de requête via `assert_tenant_writable`.
+    """
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return is_platform_admin(request.user) or bool(user_hospital_business_ids(request.user))
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        if is_platform_admin(request.user):
+            return True
+        return object_tenant_business_id(obj) in user_hospital_business_ids(request.user)
+
+
+class HospitalTenantWriteMixin:
+    """Scope le queryset et valide le tenant cible sur les écritures.
+
+    `tenant_field` : nom de la FK vers Business sur le modèle ('hospital' / 'business').
+    """
+
+    tenant_field = 'hospital'
+
+    def _is_write_request(self):
+        return self.request.method not in permissions.SAFE_METHODS and self.request.method != 'OPTIONS'
+
+    def scope_queryset_to_tenant(self, queryset):
+        """Réduit le queryset au tenant de l'appelant sur les requêtes d'écriture.
+
+        À appeler explicitement dans les ``get_queryset`` qui surchargent
+        ``super().get_queryset()``.
+        """
+        if not self._is_write_request():
+            return queryset
+        if is_platform_admin(self.request.user):
+            return queryset
+        allowed = user_hospital_business_ids(self.request.user)
+        if not allowed:
+            return queryset.none()
+        return queryset.filter(**{f'{self.tenant_field}__in': allowed})
+
+    def get_queryset(self):
+        return self.scope_queryset_to_tenant(super().get_queryset())
+
+    def assert_tenant_writable(self, business_id):
+        """Lève PermissionDenied si l'appelant n'est pas le tenant de business_id."""
+        if is_platform_admin(self.request.user):
+            return
+        if business_id not in user_hospital_business_ids(self.request.user):
+            raise PermissionDenied(
+                "Vous n'avez pas accès à cet établissement."
+            )
+
+    def assert_body_tenant_writable(self, payload, field=None):
+        """Valide la FK tenant présente dans le corps d'une requête de création."""
+        field = field or self.tenant_field
+        raw = payload.get(field)
+        if raw in (None, ''):
+            return None
+        business_id = getattr(raw, 'id', raw)
+        self.assert_tenant_writable(business_id)
+        return raw
+
+    def perform_create(self, serializer):
+        """Empêche de rattacher un objet à un établissement tiers."""
+        validated = serializer.validated_data or {}
+        if self.tenant_field in validated:
+            target = validated[self.tenant_field]
+            self.assert_tenant_writable(getattr(target, 'id', target))
+        serializer.save()
+
+
+class IsHospitalCatalogWrite(permissions.BasePermission):
+    """Référentiel partagé (spécialités…) : lecture publique, écriture super admin."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return is_platform_admin(request.user)
+
+
 class SpecialtyViewSet(viewsets.ModelViewSet):
+    """Référentiel global de spécialités — lecture publique, écriture plateforme."""
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalCatalogWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name']
 
@@ -66,7 +189,7 @@ class SpecialtyViewSet(viewsets.ModelViewSet):
 # 01.1 — PROFIL HÔPITAL + GÉOLOCALISATION
 # ---------------------------------------------------------------------------
 
-class HospitalProfileViewSet(viewsets.ModelViewSet):
+class HospitalProfileViewSet(HospitalTenantWriteMixin, viewsets.ModelViewSet):
     """
     CRUD pour les fiches hôpital.
     Actions supplémentaires :
@@ -76,9 +199,10 @@ class HospitalProfileViewSet(viewsets.ModelViewSet):
     """
     queryset = HospitalProfile.objects.select_related('business').all()
     serializer_class = HospitalProfileSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalTenantWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ['business__name', 'acronym', 'level', 'hospital_type']
+    tenant_field = 'business'
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -120,7 +244,7 @@ class HospitalProfileViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(telemedicine_unit_available=telemedicine.lower() in ['true', '1'])
         if province:
             queryset = queryset.filter(business__province__icontains=province)
-        return queryset
+        return self.scope_queryset_to_tenant(queryset)
 
     @action(detail=False, methods=['get'], url_path='nearby')
     def nearby(self, request):
@@ -420,12 +544,13 @@ class HospitalProfileViewSet(viewsets.ModelViewSet):
         return Response({'results': serializer.data, 'count': queryset.count()})
 
 
-class DoctorProfileViewSet(viewsets.ModelViewSet):
+class DoctorProfileViewSet(HospitalTenantWriteMixin, viewsets.ModelViewSet):
     queryset = DoctorProfile.objects.all()
     serializer_class = DoctorProfileSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalTenantWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ['user__first_name', 'user__last_name', 'bio', 'medical_license_number']
+    tenant_field = 'hospital'
 
     # Rôles opérationnels jamais visibles côté client (annuaire / profil hôpital)
     NON_PUBLIC_ACCESS_LEVELS = (
@@ -575,7 +700,14 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         if public_only or not user.is_authenticated:
             queryset = self._filter_public_directory(queryset)
 
-        return queryset
+        return self.scope_queryset_to_tenant(queryset)
+
+    def _require_tenant_hospital(self, hospital_id):
+        """Hôpital cible de l'écriture : doit appartenir au tenant de l'appelant."""
+        if hospital_id in (None, ''):
+            return None
+        self.assert_tenant_writable(hospital_id)
+        return hospital_id
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -585,6 +717,9 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         Optionnel : service_ids (liste des services à attribuer), role_id (Rôle BusinessRole à attribuer)
         """
         data = request.data
+        # L'hôpital cible vient du corps : il doit être celui de l'appelant,
+        # sinon n'importe quel compte authentifié se rattache à un hôpital tiers.
+        self._require_tenant_hospital(data.get('hospital'))
         if 'email' in data and 'password' in data:
             # Création de l'utilisateur
             user, created = User.objects.get_or_create(
@@ -644,6 +779,7 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
         partial = kwargs.pop('partial', True)
         instance = self.get_object()
         data = request.data.copy()
+        self._require_tenant_hospital(data.get('hospital'))
 
         # Injection automatique de l'ID utilisateur si absent
         if 'user' not in data:
@@ -713,7 +849,16 @@ class DoctorProfileViewSet(viewsets.ModelViewSet):
                 {'error': 'service_ids doit être une liste'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        foreign = MedicalService.objects.filter(
+            id__in=service_ids,
+        ).exclude(hospital_id=doctor.hospital_id).values_list('id', flat=True)
+        if foreign.exists():
+            return Response(
+                {'error': 'Services introuvables pour cet hôpital.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         doctor.services.set(service_ids)
         serializer = self.get_serializer(doctor)
         return Response(serializer.data)
@@ -1019,6 +1164,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        if isinstance(response.data, dict) and response.data.get('id'):
+            token = Appointment.objects.filter(id=response.data['id']).values_list('payment_token', flat=True).first()
+            if token:
+                response.data['payment_token'] = token
+        return response
+
     def get_serializer_class(self):
         if getattr(self, 'action', None) in ('list', 'queue'):
             return AppointmentListSerializer
@@ -1032,14 +1185,22 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Paiement public post-réservation (patient non connecté)
-        if getattr(self, 'action', None) in ('pay', 'confirm_payment', 'retrieve'):
-            if not user.is_authenticated:
-                if self.action in ('pay', 'confirm_payment'):
-                    return Appointment.objects.select_related(
-                        'patient', 'doctor', 'doctor__user', 'slot', 'service', 'hospital',
-                    )
-                return Appointment.objects.none()
+        # Paiement juste après réservation : le RDV doit être trouvé même si
+        # le compte connecté est super admin ou n'est pas « patient » au sens métier.
+        if getattr(self, 'action', None) in ('pay', 'confirm_payment'):
+            from businesses.payment_access import (
+                extract_payment_token, filter_by_payment_access, member_business_ids,
+                owner_clause, tenant_clause, token_clause,
+            )
+            base = Appointment.objects.select_related(
+                'patient', 'doctor', 'doctor__user', 'slot', 'service', 'hospital',
+            )
+            return filter_by_payment_access(
+                base,
+                owner_clause(user, 'patient'),
+                tenant_clause(user, member_business_ids(user), 'hospital'),
+                token_clause(extract_payment_token(self.request)),
+            )
 
         if not user.is_authenticated:
             return Appointment.objects.none()
@@ -1193,6 +1354,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             except AppointmentSlot.DoesNotExist:
                 raise ValidationError({'slot': 'Créneau de rendez-vous non trouvé.'})
 
+        is_placeholder_email = False
         if user and user.is_authenticated and not is_patient_booking:
             patient_user = user
         elif user and user.is_authenticated:
@@ -1205,8 +1367,16 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             name = contact_name or 'Patient'
             phone = contact_phone
 
-            if not email:
-                raise ValidationError({'patient_email': 'Email requis pour la réservation.'})
+            # Invité sans email : `email` est le USERNAME_FIELD de CustomUser
+            # (unique, non vide), on ne peut donc pas créer de compte « à blanc ».
+            # On génère une adresse de substitution dans le domaine .invalid
+            # (réservé par la RFC 2606, jamais résolu) et on laisse
+            # `patient_contact_email` vide en dessous : la notification est
+            # alors journalisée en FAILED au lieu d'être envoyée à une adresse
+            # qui n'existe pas.
+            is_placeholder_email = not email
+            if is_placeholder_email:
+                email = f'sans-email-{uuid.uuid4().hex[:12]}@invite.invalid'
 
             parts = name.strip().split()
             first_name = parts[0] if parts else 'Patient'
@@ -1227,8 +1397,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 patient_user.save(update_fields=['phone_number'])
 
         if not contact_name:
-            contact_name = patient_user.get_full_name() or patient_user.email
-        if not contact_email:
+            contact_name = patient_user.get_full_name() or 'Patient'
+        # Pour un invité sans email on conserve volontairement une adresse
+        # vide : c'est elle qui pilote la notification. La mettre à
+        # `patient_user.email` enverrait l'accusé de réception à l'adresse
+        # de substitution `@invite.invalid`.
+        if not contact_email and not is_placeholder_email:
             contact_email = patient_user.email
         if not contact_phone:
             contact_phone = getattr(patient_user, 'phone_number', '') or ''
@@ -1363,8 +1537,11 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         appointment = self.get_object()
         payer_phone = (request.data.get('payer_phone') or request.data.get('phone') or '').strip()
-        if not payer_phone:
-            return Response({'error': 'payer_phone (BurundiPay) requis.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not burundipay_client.is_valid_payer_phone(payer_phone):
+            return Response(
+                {'error': 'Numéro BurundiPay invalide. Saisissez 8 chiffres (ex. 79xxxxxx).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         result = initiate_appointment_payment(appointment, payer_phone)
         appointment.refresh_from_db()
@@ -1378,6 +1555,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             'currency': result.get('currency', appointment.consultation_fee_currency),
             'merchant_account': result.get('merchant_account') or appointment.payment_merchant_account,
             'provider_reference': result.get('provider_reference') or appointment.payment_provider_reference,
+            'payment_token': appointment.payment_token,
             'appointment': data,
         }, status=status.HTTP_200_OK if result.get('ok') else status.HTTP_400_BAD_REQUEST)
 
@@ -1393,6 +1571,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return Response({
             'ok': result.get('ok'),
             'message': result.get('message') or '',
+            'payment_token': appointment.payment_token,
             'appointment': data,
         }, status=status.HTTP_200_OK if result.get('ok') else status.HTTP_400_BAD_REQUEST)
 
@@ -2282,12 +2461,13 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return Response(AppointmentSerializer(appointment).data)
 
 
-class ServiceCategoryViewSet(viewsets.ModelViewSet):
+class ServiceCategoryViewSet(HospitalTenantWriteMixin, viewsets.ModelViewSet):
     queryset = ServiceCategory.objects.all()
     serializer_class = ServiceCategorySerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalTenantWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'description']
+    tenant_field = 'hospital'
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -2297,12 +2477,13 @@ class ServiceCategoryViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class MedicalServiceViewSet(viewsets.ModelViewSet):
+class MedicalServiceViewSet(HospitalTenantWriteMixin, viewsets.ModelViewSet):
     queryset = MedicalService.objects.all()
     serializer_class = MedicalServiceSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalTenantWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'description']
+    tenant_field = 'hospital'
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related('hospital', 'prestation_category', 'head_doctor')
@@ -2319,13 +2500,14 @@ class MedicalServiceViewSet(viewsets.ModelViewSet):
         return queryset
 
 
-class HospitalExamViewSet(viewsets.ModelViewSet):
+class HospitalExamViewSet(HospitalTenantWriteMixin, viewsets.ModelViewSet):
     """Catalogue d'examens + tarifs (admin hôpital / lecture publique)."""
     queryset = HospitalExam.objects.all()
     serializer_class = HospitalExamSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalTenantWrite]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'description', 'category']
+    tenant_field = 'hospital'
 
     def get_queryset(self):
         qs = super().get_queryset().select_related('hospital')
@@ -2341,19 +2523,21 @@ class HospitalExamViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        hospital = serializer.validated_data.get('hospital')
+        hospital = (serializer.validated_data or {}).get('hospital')
         if hospital is None:
             tenant = get_user_tenant_business(self.request.user)
             if tenant:
+                self.assert_tenant_writable(tenant.id)
                 serializer.save(hospital=tenant)
                 return
-        serializer.save()
+        super().perform_create(serializer)
 
 
-class DoctorScheduleViewSet(viewsets.ModelViewSet):
+class DoctorScheduleViewSet(HospitalTenantWriteMixin, viewsets.ModelViewSet):
     queryset = DoctorSchedule.objects.all()
     serializer_class = DoctorScheduleSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [IsHospitalTenantWrite]
+    tenant_field = 'hospital'
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -2437,6 +2621,13 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        self.assert_tenant_writable(hospital.id)
+        if doctor.hospital_id != hospital.id:
+            return Response(
+                {'error': 'Ce médecin n\'est pas rattaché à cet hôpital.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         created_schedules = []
         for schedule_data in schedules_data:
             schedule = DoctorSchedule.objects.create(
@@ -2484,6 +2675,8 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
             hospital = Business.objects.get(id=hospital_id)
         except Business.DoesNotExist:
             return Response({'error': 'Hôpital introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+        self.assert_tenant_writable(hospital.id)
 
         doctors = DoctorProfile.objects.filter(hospital=hospital, is_active=True)
         if doctor_ids:
@@ -2837,6 +3030,13 @@ class LabResultViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Fichier document requis.'}, status=400)
         if uploaded.size > 8 * 1024 * 1024:
             return Response({'error': 'Fichier trop volumineux (max. 8 Mo).'}, status=400)
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        from config.uploads import validate_binary_upload
+        try:
+            validate_binary_upload(uploaded)
+        except DjangoValidationError as exc:
+            message = exc.messages[0] if getattr(exc, 'messages', None) else str(exc)
+            return Response({'error': message}, status=400)
         lab_result.document = uploaded
         lab_result.document_url = lab_result.document.url
         lab_result.save(update_fields=['document', 'document_url', 'updated_at'])

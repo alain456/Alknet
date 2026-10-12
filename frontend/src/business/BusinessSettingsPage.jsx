@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Building2, MapPin, Phone, Globe, Save, Star, Upload, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { getBusinessCategoryKey } from '../auth/roleAccess';
+import { getBusinessCategoryKey, categoryKeyFromLabels } from '../auth/roleAccess';
 import SectorSpecificFields from '../shared/components/SectorSpecificFields';
 import LocationSelector from '../shared/components/LocationSelector';
 import { readImageAsDataUrl } from '../shared/imageUpload';
@@ -10,6 +10,7 @@ import { normalizeWebsiteUrl } from '../shared/websiteUrl';
 import WholesaleOperationalSettings from './WholesaleOperationalSettings';
 import RetailOperationalSettings from './RetailOperationalSettings';
 import HospitalOperationalSettings from './HospitalOperationalSettings';
+import SchoolMessageSettings from '../education/SchoolMessageSettings';
 
 export default function BusinessSettingsPage() {
   const [categories, setCategories] = useState([]);
@@ -25,7 +26,9 @@ export default function BusinessSettingsPage() {
     extra_attributes: {},
     province: 'Bujumbura Mairie',
     commune: 'Mukaza',
+    zone: '',
     quartier: '',
+    avenue: '',
     latitude: '',
     longitude: '',
     address: '',
@@ -45,12 +48,8 @@ export default function BusinessSettingsPage() {
     const fromUser = getBusinessCategoryKey(user);
     if (fromUser && fromUser !== 'business') return fromUser;
     const cat = categories.find((c) => String(c.id) === String(formData.primary_category));
-    const name = (cat?.name || formData.primary_category_name || '').toLowerCase();
-    if (name.includes('pharmac') && name.includes('gros')) return 'wholesale';
-    if (name.includes('pharmac')) return 'retail_pharmacy';
-    if (name.includes('hôpital') || name.includes('hopital') || name.includes('sant') || name.includes('clinique')) return 'hospital';
-    if (name.includes('hôtel') || name.includes('hotel')) return 'hotel';
-    return fromUser || 'business';
+    const fromForm = categoryKeyFromLabels(cat?.name || formData.primary_category_name || '', cat?.slug || '');
+    return fromForm !== 'business' ? fromForm : (fromUser || 'business');
   }, [user, categories, formData.primary_category, formData.primary_category_name]);
 
   useEffect(() => {
@@ -75,7 +74,9 @@ export default function BusinessSettingsPage() {
               extra_attributes: b.extra_attributes || {},
               province: b.province || 'Bujumbura Mairie',
               commune: b.commune || 'Mukaza',
+              zone: b.zone || '',
               quartier: b.quartier || '',
+              avenue: b.avenue || '',
               latitude: b.latitude || '',
               longitude: b.longitude || '',
               address: b.address || '',
@@ -126,6 +127,14 @@ export default function BusinessSettingsPage() {
     try {
       const payload = { ...formData, website: normalizeWebsiteUrl(formData.website) };
       delete payload.primary_category_name;
+      ['latitude', 'longitude'].forEach((key) => {
+        const raw = payload[key];
+        if (raw === '' || raw === null || raw === undefined) payload[key] = null;
+        else {
+          const num = Number(raw);
+          payload[key] = Number.isFinite(num) ? num : null;
+        }
+      });
       if (!payload.logo && hasExistingLogo) {
         delete payload.logo;
       }
@@ -136,7 +145,11 @@ export default function BusinessSettingsPage() {
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.detail || err.error || 'Enregistrement impossible');
+        const fieldErrors = Object.entries(err)
+          .filter(([key]) => key !== 'detail')
+          .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
+          .join(' · ');
+        throw new Error(err.detail || fieldErrors || err.error || 'Enregistrement impossible');
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -252,6 +265,11 @@ export default function BusinessSettingsPage() {
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description</label>
+                {sectorKey === 'education' ? (
+                  <p className="text-sm text-ink-muted">
+                    La présentation, les langues, l&apos;agrément et les particularités se règlent dans Fiche Établissement.
+                  </p>
+                ) : (
                 <textarea
                   name="description"
                   rows="3"
@@ -259,6 +277,7 @@ export default function BusinessSettingsPage() {
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-green-700 outline-none transition resize-none"
                 />
+                )}
               </div>
 
               <div className="md:col-span-2">
@@ -282,8 +301,8 @@ export default function BusinessSettingsPage() {
               </div>
 
               <SectorSpecificFields
-                primaryCategory={formData.primary_category}
-                categories={categories}
+                primaryCategory={sectorKey === 'education' ? '' : formData.primary_category}
+                categories={sectorKey === 'education' ? [] : categories}
                 attributes={formData.extra_attributes}
                 onChange={(extra_attributes) => setFormData((prev) => ({ ...prev, extra_attributes }))}
               />
@@ -298,9 +317,11 @@ export default function BusinessSettingsPage() {
             <LocationSelector
               province={formData.province}
               commune={formData.commune}
+              zone={formData.zone}
               quartier={formData.quartier}
-              latitude={formData.latitude}
-              longitude={formData.longitude}
+              avenue={formData.avenue}
+              latitude={formData.latitude ?? ''}
+              longitude={formData.longitude ?? ''}
               address={formData.address}
               onChange={(loc) => setFormData((prev) => ({ ...prev, ...loc }))}
             />
@@ -346,6 +367,15 @@ export default function BusinessSettingsPage() {
           {sectorKey === 'wholesale' && <WholesaleOperationalSettings />}
           {sectorKey === 'retail_pharmacy' && <RetailOperationalSettings />}
           {sectorKey === 'hospital' && <HospitalOperationalSettings />}
+        </div>
+      )}
+
+      {sectorKey === 'education' && (
+        user?.business_info?.category_slug === 'ecole'
+        || categories.find((c) => String(c.id) === String(formData.primary_category))?.slug === 'ecole'
+      ) && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 md:p-8">
+          <SchoolMessageSettings />
         </div>
       )}
     </div>

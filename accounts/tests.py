@@ -46,8 +46,9 @@ class AccountsAuthTests(TestCase):
             'password': 'SecurePass123!',
         }, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
+        self.assertNotIn('access', response.data)
+        self.assertNotIn('refresh', response.data)
+        self.assertTrue(response.cookies['isoko_access']['httponly'])
         self.assertIn('user', response.data)
         self.assertEqual(response.data['user']['email'], 'login@test.bi')
 
@@ -96,12 +97,111 @@ class AccountsAuthTests(TestCase):
         }, format='json')
         self.assertEqual(login.status_code, status.HTTP_200_OK)
 
+    def test_register_rejects_existing_email_without_logging_it(self):
+        from accounts.models import AuditLog
+
+        User.objects.create_user(
+            email='patient@test.bi', password='SecurePass123!', role='CUSTOMER',
+        )
+        response = self.client.post(self.register_url, {
+            'email': 'Patient@test.bi',
+            'password': 'SecurePass123!',
+            'first_name': 'Jean',
+            'last_name': 'Ndayishimiye',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('existe déjà', str(response.data.get('email')))
+        failed = AuditLog.objects.filter(action='USER_REGISTER_FAILED').latest('created_at')
+        self.assertEqual(failed.user_email, 'ANONYMOUS')
+        self.assertNotIn('patient@test.bi', str(failed.details).lower())
+
+    def test_register_returns_specific_password_error(self):
+        response = self.client.post(self.register_url, {
+            'email': 'short@test.bi',
+            'password': 'abc',
+            'first_name': 'A',
+            'last_name': 'B',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('trop court', str(response.data.get('password')).lower())
+
+    def test_admin_create_can_send_verification_and_refuses_owner_takeover(self):
+        from rest_framework import serializers as drf_serializers
+        from businesses.models import Business
+        from accounts.serializers import AdminUserCreateSerializer
+
+        owner = User.objects.create_user(
+            email='owner@test.bi', password='SecurePass123!', role='BUSINESS_OWNER',
+        )
+        business = Business.objects.create(owner=owner, name='École test')
+        takeover = AdminUserCreateSerializer(data={
+            'email': 'new-owner@test.bi',
+            'password': 'SecurePass123!',
+            'role': 'PROFESSIONAL',
+            'business_id': str(business.id),
+            'business_relationship': 'OWNER',
+            'send_verification_email': False,
+        })
+        self.assertTrue(takeover.is_valid(), takeover.errors)
+        with self.assertRaises(drf_serializers.ValidationError):
+            takeover.save()
+        business.refresh_from_db()
+        self.assertEqual(business.owner_id, owner.id)
+        self.assertFalse(User.objects.filter(email='new-owner@test.bi').exists())
+
+        created = AdminUserCreateSerializer(data={
+            'email': 'staff@test.bi',
+            'password': 'SecurePass123!',
+            'role': 'PROFESSIONAL',
+            'send_verification_email': True,
+        })
+        self.assertTrue(created.is_valid(), created.errors)
+        user = created.save()
+        self.assertFalse(user.is_email_verified)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(user.email, mail.outbox[0].to)
+
     def test_oauth_providers_status_endpoint(self):
         response = self.client.get('/api/v1/accounts/oauth/providers/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         for key in ('google', 'facebook', 'github'):
             self.assertIn(key, response.data)
             self.assertIn('configured', response.data[key])
+
+    def test_login_locks_after_five_failures(self):
+        User.objects.create_user(
+            email='lock@test.bi', password='SecurePass123!', role='CUSTOMER',
+        )
+        for _ in range(5):
+            denied = self.client.post(self.login_url, {
+                'email': 'lock@test.bi',
+                'password': 'wrong-password',
+            }, format='json')
+            self.assertEqual(denied.status_code, status.HTTP_401_UNAUTHORIZED)
+        locked = self.client.post(self.login_url, {
+            'email': 'lock@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(locked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_login_lock_uses_configured_threshold(self):
+        from site_content.models import SiteSettings
+        SiteSettings.objects.create(login_max_failures=2, login_lock_minutes=30)
+        User.objects.create_user(
+            email='lock2@test.bi', password='SecurePass123!', role='CUSTOMER',
+        )
+        for _ in range(2):
+            denied = self.client.post(self.login_url, {
+                'email': 'lock2@test.bi',
+                'password': 'wrong-password',
+            }, format='json')
+            self.assertEqual(denied.status_code, status.HTTP_401_UNAUTHORIZED)
+        locked = self.client.post(self.login_url, {
+            'email': 'lock2@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(locked.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('30', str(locked.data))
 
 
 class JwtRefreshBlacklistTests(TestCase):
@@ -116,21 +216,84 @@ class JwtRefreshBlacklistTests(TestCase):
             'email': 'jwt@test.bi',
             'password': 'SecurePass123!',
         }, format='json')
-        old_refresh = login.data['refresh']
+        old_refresh = login.cookies['isoko_refresh'].value
         first = self.client.post('/api/v1/accounts/refresh/', {
             'refresh': old_refresh,
         }, format='json')
         self.assertEqual(first.status_code, status.HTTP_200_OK)
-        self.assertIn('refresh', first.data)
+        self.assertNotEqual(first.cookies['isoko_refresh'].value, old_refresh)
         # Ancien refresh ne doit plus être réutilisable
         second = self.client.post('/api/v1/accounts/refresh/', {
             'refresh': old_refresh,
         }, format='json')
         self.assertEqual(second.status_code, status.HTTP_401_UNAUTHORIZED)
+        # Nettoyage des cookies de session sur refresh invalide
+        self.assertIn('isoko_access', second.cookies)
+        self.assertIn('isoko_refresh', second.cookies)
+        self.assertIn('isoko_session', second.cookies)
+        self.assertIn(second.cookies['isoko_access']['max-age'], (0, -1))
+        self.assertIn(second.cookies['isoko_refresh']['max-age'], (0, -1))
+        self.assertIn(second.cookies['isoko_session']['max-age'], (0, -1))
+
+
+class SessionHintCookieTests(TestCase):
+    """Le cookie `isoko_session` permet au front de ne pas sonder à vide.
+
+    Sans lui, un visiteur non connecté déclenchait /profile/ puis /refresh/ en
+    401 à chaque chargement : du bruit console et deux requêtes sur le chemin
+    critique du premier rendu.
+    """
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            email='hint@test.bi', password='SecurePass123!', role='CUSTOMER',
+        )
+
+    def test_login_sets_readable_hint_alongside_httponly_tokens(self):
+        response = self.client.post('/api/v1/accounts/login/', {
+            'email': 'hint@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+
+        hint = response.cookies['isoko_session']
+        # Lisible par le JS (c'est le but), mais sans secret dedans.
+        self.assertFalse(hint['httponly'])
+        self.assertEqual(hint.value, '1')
+        # Les jetons, eux, restent protégés.
+        self.assertTrue(response.cookies['isoko_access']['httponly'])
+        self.assertTrue(response.cookies['isoko_refresh']['httponly'])
+
+    def test_logout_clears_the_hint(self):
+        self.client.post('/api/v1/accounts/login/', {
+            'email': 'hint@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        response = self.client.post('/api/v1/accounts/logout/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertIn(response.cookies['isoko_session']['max-age'], (0, -1))
+
+    def test_refresh_keeps_the_hint_alive(self):
+        login = self.client.post('/api/v1/accounts/login/', {
+            'email': 'hint@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        response = self.client.post('/api/v1/accounts/refresh/', {
+            'refresh': login.cookies['isoko_refresh'].value,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertEqual(response.cookies['isoko_session'].value, '1')
+        self.assertGreater(response.cookies['isoko_session']['max-age'], 0)
+
+    def test_anonymous_refresh_still_answers_401(self):
+        # Le garde est côté front : l'API doit rester ouverte et honnête.
+        response = self.client.post('/api/v1/accounts/refresh/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('isoko_session', response.cookies)
 
 
 class StrictLoginEmailTests(TestCase):
-    """m@gmail.com et ma@gmail.com ne doivent JAMAIS être confondus."""
 
     def setUp(self):
         self.client = APIClient()

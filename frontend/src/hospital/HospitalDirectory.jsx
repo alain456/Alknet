@@ -3,7 +3,24 @@ import { Search, MapPin, Filter, HeartPulse, Phone, Clock, Stethoscope, Shield }
 import { Link } from 'react-router-dom';
 import api from '../shared/api';
 
-const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical'];
+const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical', 'pharmac', 'laboratoire'];
+
+function isSanteBusiness(b) {
+  const labels = [
+    b.primary_category_name,
+    b.category_name,
+    b.primary_category_parent_name,
+    ...(b.categories_detail || []).flatMap((c) => [c?.name, c?.parent_name]),
+  ].filter(Boolean).map((name) => String(name).toLowerCase());
+  return labels.some((label) => HEALTH_TERMS.some((term) => label.includes(term)));
+}
+
+function pharmacyPath(category) {
+  const name = String(category || '').toLowerCase();
+  if (!name.includes('pharmac')) return '';
+  if (name.includes('gros')) return 'catalog';
+  return 'pharmacy';
+}
 
 export default function HospitalDirectory() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,21 +34,14 @@ export default function HospitalDirectory() {
       try {
         const allBusinesses = await api.get('businesses/');
         const list = Array.isArray(allBusinesses) ? allBusinesses : [];
-        const hospitalData = list.filter((b) => {
-          const catName = (b.primary_category_name || b.category_name || '').toLowerCase();
-          const busName = (b.name || '').toLowerCase();
-          const subCats = (b.categories_detail || []).map((c) => (c.name || '').toLowerCase());
-          const inPrimary = HEALTH_TERMS.some((h) => catName.includes(h));
-          const inName = HEALTH_TERMS.some((h) => busName.includes(h));
-          const inSub = subCats.some((sub) => HEALTH_TERMS.some((h) => sub && sub.includes(h)));
-          return inPrimary || inName || inSub;
-        });
+        const hospitalData = list.filter(isSanteBusiness);
 
         setHospitals(hospitalData.map((h) => ({
           id: h.id,
           name: h.name,
           logo: h.logo || null,
-          category: { name: h.primary_category_name || h.category_name || 'Hôpital' },
+          category: { name: h.primary_category_name || h.category_name || 'Santé' },
+          pharmacyPath: pharmacyPath(h.primary_category_name || h.category_name),
           address: h.address || h.province || h.commune || 'Burundi',
           city: h.commune || h.province || 'Burundi',
           description: h.description || h.short_description || 'Établissement de santé.',
@@ -75,8 +85,8 @@ export default function HospitalDirectory() {
     <div className="min-h-screen bg-gray-50">
       <div className="bg-teal-700 text-white border-b border-teal-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <h1 className="text-4xl font-bold text-white mb-3">Santé & Hôpitaux</h1>
-          <p className="text-teal-100 text-lg">Établissements de santé enregistrés sur Isoko Hub</p>
+          <h1 className="text-4xl font-bold text-white mb-3">Santé</h1>
+          <p className="text-teal-100 text-lg">Hôpitaux, cliniques, laboratoires et pharmacies enregistrés sur Isoko Hub</p>
         </div>
       </div>
 
@@ -218,14 +228,16 @@ export default function HospitalDirectory() {
                     )}
 
                     <div className="flex justify-end gap-2 border-t border-gray-100 pt-4 mt-4 flex-wrap">
-                      <Link
-                        to={`/hospitals/${hospital.id}/historique`}
+                      <Link to={`/hospitals/${hospital.id}/historique`}
                         className="border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium py-2 px-4 rounded-lg transition inline-flex items-center gap-2"
                       >
                         Historique
                       </Link>
-                      <Link to={`/hospitals/${hospital.id}`} className="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-6 rounded-lg transition flex items-center gap-2">
-                        Voir le profil et Médecins
+                      <Link
+                        to={hospital.pharmacyPath ? `/businesses/${hospital.id}/${hospital.pharmacyPath}` : `/hospitals/${hospital.id}`}
+                        className="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-6 rounded-lg transition flex items-center gap-2"
+                      >
+                        {hospital.pharmacyPath ? 'Voir la pharmacie' : 'Voir le profil et Médecins'}
                       </Link>
                     </div>
                   </div>

@@ -1,38 +1,45 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import SocialLogins from '../shared/components/SocialLogins';
 import PasswordInput from '../shared/components/PasswordInput';
+import api from '../shared/api';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [challenge, setChallenge] = useState('');
+  const [otp, setOtp] = useState('');
+  const [info, setInfo] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, getRedirectPath } = useAuth();
+  const { login, getRedirectPath, establishSession } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo = location.state?.from;
   const infoMessage = location.state?.message;
+  const form = useForm({ defaultValues: { email: '', password: '' } });
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onLogin = form.handleSubmit(async ({ email, password }) => {
     setError('');
     setIsLoading(true);
-
     try {
-      const loggedUser = await login(email, password);
+      const result = await login(email.trim(), password);
       setIsLoading(false);
+      if (result?.two_factor_required) {
+        setChallenge(result.challenge);
+        setInfo('Un code à 6 chiffres a été envoyé à votre e-mail.');
+        return;
+      }
       if (returnTo && typeof returnTo === 'string' && returnTo.startsWith('/')) {
         navigate(returnTo);
         return;
       }
-      navigate(getRedirectPath(loggedUser));
+      navigate(getRedirectPath(result));
     } catch (err) {
       setIsLoading(false);
       setError(err.message || 'Unable to sign in. Please check your credentials.');
     }
-  };
+  });
 
   return (
     <div className="w-full text-ink">
@@ -47,34 +54,69 @@ export default function LoginPage() {
         </div>
       )}
 
-      {error && (
+      {info && (
+        <div className="mb-6 p-4 bg-primary/10 border-2 border-accent rounded-xl text-sm text-ink font-medium">{info}</div>
+      )}
+
+      {challenge ? (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setError('');
+            setIsLoading(true);
+            try {
+              const data = await api.post('accounts/login/verify/', { challenge, code: otp });
+              const loggedUser = await establishSession(data.user);
+              if (returnTo && typeof returnTo === 'string' && returnTo.startsWith('/')) navigate(returnTo);
+              else navigate(getRedirectPath(loggedUser));
+            } catch (err) {
+              setError(err.message || 'Code refusé');
+            } finally {
+              setIsLoading(false);
+            }
+          }}
+          className="space-y-5"
+        >
+          <label className="block text-sm font-bold text-ink mb-1.5">Code e-mail</label>
+          <input
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            className="w-full px-4 py-3 border-2 border-accent rounded-xl bg-surface text-ink outline-none"
+            placeholder="6 chiffres"
+          />
+          {error && (
+            <p className="text-sm text-alert font-medium">{error}</p>
+          )}
+          <button type="submit" disabled={isLoading} className="w-full bg-primary text-surface font-bold py-3 rounded-xl">
+            Confirmer
+          </button>
+        </form>
+      ) : (
+      <form onSubmit={onLogin} className="space-y-5">
+        {error && (
         <div className="mb-6 p-4 bg-alert/10 border-2 border-alert rounded-xl text-sm sm:text-base text-ink font-medium">
           {error}
         </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-5">
+        )}
         <div>
           <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Email</label>
           <input
             type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value.trim())}
             autoComplete="username"
             className="w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition"
             placeholder="Enter your email"
+            {...form.register('email', { required: true })}
           />
         </div>
 
         <div>
           <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Password</label>
           <PasswordInput
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             className="px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium transition"
+            {...form.register('password', { required: true })}
           />
         </div>
 
@@ -101,6 +143,7 @@ export default function LoginPage() {
           ) : 'Sign in'}
         </button>
       </form>
+      )}
 
       <SocialLogins nextPath={typeof returnTo === 'string' ? returnTo : undefined} />
 

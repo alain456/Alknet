@@ -7,40 +7,7 @@ import {
   Check, Sparkles, User, Package, History
 } from 'lucide-react';
 import { websiteHref } from '../websiteUrl';
-
-function isWholesalePharmacy(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  return name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'));
-}
-
-function isRetailPharmacy(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  return !isWholesalePharmacy(business) && (
-    name.includes('pharmacie de détail')
-    || name.includes('pharmacie de detail')
-    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
-    || name.trim() === 'pharmacie'
-  );
-}
-
-function isCommerceShop(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
-  const keys = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
-  return keys.some((k) => name.includes(k) || slug.includes(k));
-}
-
-function isHotelBusiness(business) {
-  const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
-  return (
-    name.includes('hôtel')
-    || name.includes('hotel')
-    || name.includes('hôtellerie')
-    || name.includes('hotellerie')
-    || slug.includes('hotel')
-  );
-}
+import { getBusinessRecordCategoryKey } from '../../auth/roleAccess';
 
 export default function BusinessDetailsModal({
   isOpen, onClose, business, categories = [], showModerationStatus = false,
@@ -48,10 +15,11 @@ export default function BusinessDetailsModal({
   const navigate = useNavigate();
   if (!isOpen || !business) return null;
 
-  const wholesale = isWholesalePharmacy(business);
-  const retail = isRetailPharmacy(business);
-  const commerce = isCommerceShop(business);
-  const hotel = isHotelBusiness(business);
+  const categoryKey = getBusinessRecordCategoryKey(business);
+  const wholesale = categoryKey === 'wholesale';
+  const retail = categoryKey === 'retail_pharmacy';
+  const commerce = categoryKey === 'commerce';
+  const hotel = categoryKey === 'hotel';
 
   // Resolve category names
   const primaryCategoryName = business.primary_category_name || 

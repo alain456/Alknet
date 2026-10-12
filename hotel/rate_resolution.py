@@ -66,7 +66,7 @@ def notify_hotel_ops(hotel, title: str, message: str, *, need_rates=False, need_
         return {'ok': False, 'sent': False, 'in_app': 0, 'emails': [], 'error': 'Aucun destinataire ops.'}
 
     hotel_name = hotel.name or 'Hôtel'
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@isokohub.bi'
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'info.isokohub@gmail.com'
     emails_sent = []
     for user in leads:
         email = (getattr(user, 'email', None) or '').strip()

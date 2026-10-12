@@ -126,8 +126,8 @@ export default function BusinessSubscriptionPage() {
           </h1>
         </div>
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          Paiement entreprise → compte marchand plateforme (BurundiPay).  
-          Ce n&apos;est pas le paiement des commandes clients.
+          Paiement entreprise via BurundiPay, sans prélèvement automatique par carte.
+          À la fin de l&apos;essai, l&apos;accès reste ouvert pendant la période de grâce, puis il est suspendu tant que le paiement n&apos;est pas confirmé.
         </p>
       </header>
 

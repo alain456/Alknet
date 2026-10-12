@@ -5,13 +5,15 @@ import {
   LayoutDashboard, Menu, X, Bell, LogOut, FileText,
   Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck, FolderPlus,
   Package, Warehouse, ShoppingCart, History, User, FlaskConical, Crown, AlertTriangle,
-  BedDouble, Wrench, CreditCard, Plus, Mail, MessageSquare
+  BedDouble, Wrench, CreditCard, Plus, Mail, MessageSquare, Wallet, BookOpen, GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   canAccessZone,
   ZONE_ACCESS,
   getBusinessCategoryKey,
+  getBusinessRecordCategoryKey,
+  labelsFromBusiness,
   getHomePathForUser,
   canAccessCategoryPath,
   ROLES,
@@ -43,7 +45,10 @@ export default function BusinessLayout() {
     }
 
     if (user && !canAccessZone(user, ZONE_ACCESS.businessAdmin) && !isRetailClientPath) {
-      return;
+      const educationStaffShell = user.role === ROLES.PROFESSIONAL
+        && getBusinessCategoryKey(user) === 'education'
+        && (location.pathname.startsWith('/education/accounting') || location.pathname.startsWith('/education/staff'));
+      if (!educationStaffShell) return;
     }
 
     if (isRetailClientPath && user?.role === 'CUSTOMER') {
@@ -135,7 +140,12 @@ export default function BusinessLayout() {
   }, [token, hospitalSpace, business?.id, authFetch]);
 
   if (user && !canAccessZone(user, ZONE_ACCESS.businessAdmin) && !isRetailClientPath) {
-    return <Navigate to={getRedirectPath(user)} replace />;
+    const educationStaffShell = user.role === ROLES.PROFESSIONAL
+      && getBusinessCategoryKey(user) === 'education'
+      && (location.pathname.startsWith('/education/accounting') || location.pathname.startsWith('/education/staff'));
+    if (!educationStaffShell) {
+      return <Navigate to={getRedirectPath(user)} replace />;
+    }
   }
 
   const handleLogout = () => {
@@ -146,35 +156,13 @@ export default function BusinessLayout() {
   const categoryKey = (() => {
     const fromUser = getBusinessCategoryKey(user);
     if (fromUser !== 'business') return fromUser;
-    const name = (business?.primary_category_name || business?.category_name || '').toLowerCase();
-    if (name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'))) return 'wholesale';
-    if (
-      name.includes('pharmacie de détail')
-      || name.includes('pharmacie de detail')
-      || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
-      || name.trim() === 'pharmacie'
-    ) return 'retail_pharmacy';
-    if (
-      name.includes('sant')
-      || name.includes('hôpital')
-      || name.includes('hopital')
-      || name.includes('hospital')
-      || name.includes('clinique')
-      || name.includes('cabinet')
-    ) return 'hospital';
-    if (
-      name.includes('hôtel')
-      || name.includes('hotel')
-      || name.includes('hôtellerie')
-      || name.includes('hotellerie')
-    ) return 'hotel';
+    const fromBusiness = getBusinessRecordCategoryKey(business);
+    if (fromBusiness !== 'business') return fromBusiness;
     if (location.pathname.startsWith('/retail-pharmacy')) return 'retail_pharmacy';
     if (location.pathname.startsWith('/wholesale-pharmacy/client')) return 'retail_pharmacy';
     if (location.pathname.startsWith('/wholesale-pharmacy')) return 'wholesale';
     if (location.pathname.startsWith('/hospital')) return 'hospital';
     if (location.pathname.startsWith('/hotel')) return 'hotel';
-    const commerceKeywords = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
-    if (commerceKeywords.some((k) => name.includes(k))) return 'commerce';
     if (location.pathname.startsWith('/commerce')) return 'commerce';
     return 'business';
   })();
@@ -184,6 +172,7 @@ export default function BusinessLayout() {
   const isWholesale = categoryKey === 'wholesale';
   const isRetailPharmacy = categoryKey === 'retail_pharmacy';
   const isCommerce = categoryKey === 'commerce';
+  const isEducation = categoryKey === 'education';
 
   const hotelNavGroups = [
     {
@@ -361,6 +350,7 @@ export default function BusinessLayout() {
       items: [
         { name: 'Commandes reçues', icon: ShoppingCart, path: '/wholesale-pharmacy/orders' },
         { name: 'Pharmacies clientes', icon: Users, path: '/wholesale-pharmacy/clients' },
+        { name: 'Caisse', icon: Wallet, path: '/wholesale-pharmacy/cashier' },
         { name: 'Historique', icon: History, path: '/wholesale-pharmacy/history' },
       ]
     },
@@ -421,6 +411,7 @@ export default function BusinessLayout() {
       items: [
         { name: 'Commandes reçues', icon: ShoppingCart, path: '/retail-pharmacy/orders' },
         { name: 'Patients', icon: Users, path: '/retail-pharmacy/patients' },
+        { name: 'Caisse', icon: Wallet, path: '/retail-pharmacy/cashier' },
         { name: 'Historique', icon: History, path: '/retail-pharmacy/history' },
       ]
     },
@@ -539,6 +530,54 @@ export default function BusinessLayout() {
     && business?.subscription?.expiry_warning
   );
 
+  // Éducation n'a ni réservations, ni services marchands : la fiche de
+  // l'établissement et les formations sont gérées dans le module Éducation.
+  // Le menu générique exposait « Réservations », qui ouvre des rendez-vous
+  // hospitaliers.
+  const isSchoolAdmin = labelsFromBusiness(business).slug === 'ecole'
+    || user?.business_info?.category_slug === 'ecole';
+  const schoolPerms = user?.business_info?.permissions || [];
+  const isSchoolAccountant = isSchoolAdmin
+    && user?.role !== ROLES.BUSINESS_OWNER
+    && (
+      (user?.business_info?.role_name || '').toLowerCase().includes('comptable')
+      || (
+        schoolPerms.includes('education.fees.manage')
+        && !schoolPerms.includes('education.admissions.manage')
+        && !schoolPerms.includes('*')
+        && !schoolPerms.includes('education.manage')
+      )
+    );
+  const educationNavGroups = isSchoolAccountant
+    ? [{
+      title: 'Comptabilité',
+      items: [
+        { name: 'Frais d’inscription', icon: Wallet, path: '/education/accounting' },
+      ],
+    }]
+    : [
+    {
+      title: 'Principal',
+      items: [
+        { name: 'Tableau de bord', icon: LayoutDashboard, path: '/education/dashboard' },
+        ...(!isSchoolAdmin ? [{ name: 'Formations', icon: BookOpen, path: '/education/staff' }] : []),
+        { name: 'Admissions', icon: GraduationCap, path: '/education/dashboard/admissions' },
+        ...(isSchoolAdmin
+          ? [{ name: 'Frais d’inscription', icon: Wallet, path: '/education/accounting' }]
+          : [{ name: 'Employés', icon: Users, path: '/business/employees' }]),
+        { name: 'Rôles & Permissions', icon: Shield, path: '/business/roles' },
+      ],
+    },
+    {
+      title: 'Système',
+      items: [
+        { name: "Journal d'Audit", icon: FileText, path: '/business/audit' },
+        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
+        { name: 'Abonnement', icon: Crown, path: '/business/subscription' },
+      ],
+    },
+  ];
+
   const activeNavGroups = (() => {
     const groups = isRetailClientPath
       ? patientNavGroups
@@ -552,7 +591,9 @@ export default function BusinessLayout() {
               ? filterHotelNavForUser(hotelNavGroups)
               : isCommerce
                 ? commerceNavGroups
-                : genericNavGroups;
+                : isEducation
+                  ? educationNavGroups
+                  : genericNavGroups;
     if (!subscriptionBlocked) return groups;
     // Seul le propriétaire gère l'abonnement plateforme
     if (isHotel && user?.role !== ROLES.BUSINESS_OWNER) {
@@ -577,7 +618,9 @@ export default function BusinessLayout() {
           ? 'Espace Hôtel'
           : isCommerce
             ? 'Espace Commerce'
-            : 'Espace Business';
+            : isEducation
+              ? 'Espace Éducation'
+              : 'Espace Business';
 
   const homeLink = isRetailClientPath
     ? '/retail-pharmacy/client/dashboard'
@@ -591,7 +634,9 @@ export default function BusinessLayout() {
             ? '/hotel/dashboard'
             : isCommerce
               ? '/commerce/dashboard'
-              : '/business';
+              : isEducation
+                ? (isSchoolAccountant ? '/education/accounting' : '/education/dashboard')
+                : '/business';
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
@@ -683,7 +728,7 @@ export default function BusinessLayout() {
           <div className="flex items-center justify-between">
             <Link to={homeLink} className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-teal-700 to-teal-500 flex items-center justify-center text-white font-black shadow-md shadow-teal-600/20 shrink-0">
-                {isHospital ? <HeartPulse className="w-5 h-5" /> : isWholesale || isRetailPharmacy ? <Package className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
+                {isHospital ? <HeartPulse className="w-5 h-5" /> : isEducation ? <GraduationCap className="w-5 h-5" /> : isWholesale || isRetailPharmacy ? <Package className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
               </div>
               <div className="min-w-0 flex-1">
                 <span className="font-bold text-sm text-gray-900 dark:text-white truncate block">

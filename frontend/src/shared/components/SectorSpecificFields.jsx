@@ -15,13 +15,25 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
   const categorySlug = (catObj.slug || '').toLowerCase();
   const parentName = (catObj.parent_name || '').toLowerCase();
 
-  const isHealth = categoryName.includes('santé') || categoryName.includes('pharmacie') || categoryName.includes('hopital') || categoryName.includes('hôpital') || categoryName.includes('clinique') || categorySlug.includes('sante') || categorySlug.includes('pharmacie') || parentName.includes('santé');
-  
-  const isHotel = categoryName.includes('hôtel') || categoryName.includes('hotel') || categoryName.includes('hôtellerie') || categorySlug.includes('hotel') || parentName.includes('hôtellerie');
-  
+  // Le champ `module` de la catégorie, quand il est renseigné, est la source de
+  // vérité. Les tests par nom restent en complément (et non en remplacement) :
+  // une catégorie « business » peut malgré tout relever d'un formulaire santé
+  // par son parent — « Laboratoire » sous « Santé », par exemple.
+  const module = String(catObj.module || '').toLowerCase();
+  const HEALTH_MODULES = ['hospital', 'retail_pharmacy', 'wholesale'];
+
+  const isHealth = HEALTH_MODULES.includes(module)
+    || categoryName.includes('santé') || categoryName.includes('pharmacie') || categoryName.includes('hopital') || categoryName.includes('hôpital') || categoryName.includes('clinique') || categorySlug.includes('sante') || categorySlug.includes('pharmacie') || parentName.includes('santé');
+
+  const isHotel = module === 'hotel'
+    || categoryName.includes('hôtel') || categoryName.includes('hotel') || categoryName.includes('hôtellerie') || categorySlug.includes('hotel') || parentName.includes('hôtellerie');
+
+  // Pas de clé de module pour la restauration : « Restaurant » et « Traiteur »
+  // restent en `business`, ce qui est un choix produit, pas un oubli.
   const isRestaurant = categoryName.includes('restaurant') || categoryName.includes('restauration') || categoryName.includes('bar') || categoryName.includes('café') || categoryName.includes('traiteur') || categorySlug.includes('restaurant') || parentName.includes('restauration');
 
-  const isCommerce = categoryName.includes('commerce')
+  const isCommerce = module === 'commerce'
+    || categoryName.includes('commerce')
     || categoryName.includes('boutique')
     || categoryName.includes('supermarché')
     || categoryName.includes('supermarche')
@@ -235,6 +247,7 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
           </div>
         </div>
       )}
+
     </div>
   );
 }

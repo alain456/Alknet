@@ -44,7 +44,7 @@ class SiteSettings(models.Model):
         max_length=80, blank=True, default="S'abonner",
     )
     footer_show_newsletter = models.BooleanField(default=True)
-    footer_contact_email = models.EmailField(blank=True, default="support@isokohub.com")
+    footer_contact_email = models.EmailField(blank=True, default="info.isokohub@gmail.com")
     footer_contact_phone = models.CharField(max_length=50, blank=True, default="")
     footer_contact_title = models.CharField(
         max_length=80, blank=True, default="Contact information",
@@ -94,6 +94,11 @@ class SiteSettings(models.Model):
     hero_cta_primary_url = models.CharField(max_length=255, default="/register-business")
     hero_cta_secondary_label = models.CharField(max_length=120, default="Explore Services")
     hero_cta_secondary_url = models.CharField(max_length=255, default="/services")
+    hero_slides = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Images du fond du hero d'accueil, gérées par le super admin. Huit maximum.",
+    )
     search_placeholder = models.CharField(
         max_length=255,
         default="Profession, Business, Restaurant, Product...",
@@ -142,6 +147,14 @@ class SiteSettings(models.Model):
     password_min_length = models.PositiveSmallIntegerField(
         default=8,
         help_text="Longueur minimale des mots de passe (modifiable par Super Admin)",
+    )
+    login_max_failures = models.PositiveSmallIntegerField(
+        default=5,
+        help_text="Nombre d'échecs de connexion avant blocage du compte",
+    )
+    login_lock_minutes = models.PositiveIntegerField(
+        default=15,
+        help_text="Durée du blocage du compte, en minutes",
     )
 
     updated_at = models.DateTimeField(auto_now=True)

@@ -1,27 +1,28 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import { api, ApiError } from '../shared/api';
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('');
+  const form = useForm({ defaultValues: { email: '' } });
+  const email = form.watch('email');
   const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = form.handleSubmit(async ({ email: value }) => {
     setError('');
     setIsLoading(true);
     try {
-      await api.post('accounts/password-reset/', { email: email.trim() });
+      await api.post('accounts/password-reset/', { email: value.trim() });
       setIsSent(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Impossible d\'envoyer le lien. Réessayez.');
     } finally {
       setIsLoading(false);
     }
-  };
+  });
 
   const handleResend = async () => {
     setError('');
@@ -71,16 +72,14 @@ export default function ForgotPasswordPage() {
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={onSubmit} className="space-y-5">
           <div>
             <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Email</label>
             <input
               type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition"
               placeholder="Enter your email"
+              {...form.register('email', { required: true })}
             />
           </div>
 

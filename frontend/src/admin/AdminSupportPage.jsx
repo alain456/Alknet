@@ -9,9 +9,6 @@ export default function AdminSupportPage() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [selected, setSelected] = useState(null);
   const [replyDraft, setReplyDraft] = useState('');
-  const [users, setUsers] = useState([]);
-  const [subs, setSubs] = useState([]);
-  const [logs, setLogs] = useState([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(true);
@@ -76,18 +73,10 @@ export default function AdminSupportPage() {
       setLoading(true);
       setError('');
       try {
-        const [msgList, userData, subData, logData] = await Promise.all([
+        const [msgList] = await Promise.all([
           loadInbox(),
-          api.get('accounts/admin/users/?scope=business', authOpts).catch(() => []),
-          api.get('businesses/admin/subscriptions/', authOpts).catch(() => ({ results: [] })),
-          api.get('accounts/admin/audit-logs/?scope=business', authOpts).catch(() => []),
         ]);
         if (cancelled) return;
-        const userList = Array.isArray(userData) ? userData : (userData?.results || []);
-        setUsers(userList.slice(0, 8));
-        setSubs((subData?.results || []).slice(0, 8));
-        const logList = Array.isArray(logData) ? logData : (logData?.results || []);
-        setLogs(logList.slice(0, 8));
         if (msgList.length) {
           const first = msgList.find((m) => !m.is_read) || msgList[0];
           if (!cancelled) await openMessage(first, msgList);
@@ -310,56 +299,6 @@ export default function AdminSupportPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
-
-      {!loading && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-bold text-gray-900">Aperçu comptes entreprises</h2>
-          <div className="grid lg:grid-cols-3 gap-4">
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-gray-900">Utilisateurs</h3>
-                <Link to="/admin/users?scope=business" className="text-xs font-semibold text-teal-700">Tout voir</Link>
-              </div>
-              <ul className="text-sm divide-y">
-                {users.map((row) => (
-                  <li key={row.id} className="py-2">
-                    <p className="font-semibold text-gray-900">{row.email}</p>
-                    <p className="text-xs text-gray-500">{row.role}</p>
-                  </li>
-                ))}
-                {users.length === 0 && <li className="py-2 text-xs text-gray-500">Aucun</li>}
-              </ul>
-            </section>
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2">
-              <h3 className="font-bold text-gray-900">Abonnements</h3>
-              <ul className="text-sm divide-y">
-                {subs.map((row) => (
-                  <li key={row.business_id} className="py-2">
-                    <p className="font-semibold text-gray-900">{row.business_name}</p>
-                    <p className="text-xs text-gray-500">{row.status_display || row.status}</p>
-                  </li>
-                ))}
-                {subs.length === 0 && <li className="py-2 text-xs text-gray-500">Aucun</li>}
-              </ul>
-            </section>
-            <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-gray-900">Audit entreprises</h3>
-                <Link to="/admin/audit-logs?scope=business" className="text-xs font-semibold text-teal-700">Tout voir</Link>
-              </div>
-              <ul className="text-sm divide-y">
-                {logs.map((row) => (
-                  <li key={row.id} className="py-2">
-                    <p className="font-semibold text-gray-900">{row.action}</p>
-                    <p className="text-xs text-gray-500">{row.user_email || '—'}</p>
-                  </li>
-                ))}
-                {logs.length === 0 && <li className="py-2 text-xs text-gray-500">Aucun</li>}
-              </ul>
-            </section>
           </div>
         </div>
       )}

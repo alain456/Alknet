@@ -329,14 +329,34 @@ def login_or_register_social(*, provider: str, profile: dict, request=None) -> d
     return tokens
 
 
-def frontend_oauth_redirect(*, access: str, refresh: str, next_path: str, error: str | None = None) -> str:
+def frontend_oauth_redirect(*, next_path: str, error: str | None = None, code: str | None = None) -> str:
     base = f'{frontend_public_url()}/auth/oauth/callback'
     if error:
         qs = urllib.parse.urlencode({'error': error, 'next': _safe_next(next_path)})
         return f'{base}?{qs}'
     qs = urllib.parse.urlencode({
-        'access': access,
-        'refresh': refresh,
+        'code': code or '',
         'next': _safe_next(next_path),
     })
     return f'{base}?{qs}'
+
+
+def stash_browser_login(access: str, refresh: str, user_id) -> str:
+    """Code à usage unique échangé par le navigateur. Les jetons ne passent pas dans l'URL."""
+    from django.core.cache import cache
+    code = secrets.token_urlsafe(32)
+    cache.set(
+        f'oauth-login:{code}',
+        {'access': access, 'refresh': refresh, 'user_id': str(user_id)},
+        timeout=120,
+    )
+    return code
+
+
+def pop_browser_login(code: str) -> dict | None:
+    from django.core.cache import cache
+    key = f'oauth-login:{(code or '').strip()}'
+    payload = cache.get(key)
+    if payload:
+        cache.delete(key)
+    return payload

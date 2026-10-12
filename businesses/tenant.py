@@ -39,6 +39,16 @@ def get_user_tenant_business(user):
     return None
 
 
+def assert_tenant(user, business):
+    """Lève PermissionDenied si l'utilisateur n'appartient pas à cet établissement."""
+    from rest_framework.exceptions import PermissionDenied
+    from .payment_access import member_business_ids
+
+    business_id = getattr(business, 'id', None)
+    if not business_id or business_id not in member_business_ids(user):
+        raise PermissionDenied('Accès hors établissement.')
+
+
 def user_is_business_tenant_member(user):
     """True si l'utilisateur appartient à une entreprise (pas Super Admin plateforme)."""
     return get_user_tenant_business(user) is not None

@@ -1,17 +1,39 @@
-from rest_framework import generics, status
+from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+
+from permissions.custom_permissions import PlatformMethodPermission
+
 from .models import Province, Commune, Zone, Quartier, Avenue
 from .serializers import (
-    ProvinceSerializer, CommuneSerializer, ZoneSerializer, 
+    ProvinceSerializer, CommuneSerializer, ZoneSerializer,
     QuartierSerializer, AvenueSerializer
 )
+
+
+class IsLocationCatalogWrite(PlatformMethodPermission):
+    """Référentiel géo public en lecture ; écriture réservée à la plateforme.
+
+    Ces données alimentent tous les formulaires d'adresse : les laisser
+    ouvertes à un anonyme permet de corrompre le référentiel national.
+    """
+
+    WRITE_PERMISSION = 'platform.catalog.update'
+
+    def has_permission(self, request, view):
+        if request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return True
+        from accounts.platform_access import user_has_platform_perm
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        return user_has_platform_perm(user, self.WRITE_PERMISSION)
+
 
 # Tree View for LocationSelector frontend
 class LocationTreeAPIView(APIView):
     authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         provinces = Province.objects.filter(is_active=True).prefetch_related('communes__zones__quartiers__avenues')
@@ -22,21 +44,18 @@ class LocationTreeAPIView(APIView):
 class ProvinceListCreateView(generics.ListCreateAPIView):
     queryset = Province.objects.all()
     serializer_class = ProvinceSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
 class ProvinceDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Province.objects.all()
     serializer_class = ProvinceSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
 # Communes CRUD
 class CommuneListCreateView(generics.ListCreateAPIView):
     queryset = Commune.objects.all()
     serializer_class = CommuneSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
     def get_queryset(self):
         queryset = Commune.objects.all()
@@ -48,15 +67,13 @@ class CommuneListCreateView(generics.ListCreateAPIView):
 class CommuneDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Commune.objects.all()
     serializer_class = CommuneSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
 # Zones CRUD
 class ZoneListCreateView(generics.ListCreateAPIView):
     queryset = Zone.objects.all()
     serializer_class = ZoneSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
     def get_queryset(self):
         queryset = Zone.objects.all()
@@ -68,15 +85,13 @@ class ZoneListCreateView(generics.ListCreateAPIView):
 class ZoneDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Zone.objects.all()
     serializer_class = ZoneSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
 # Quartiers CRUD
 class QuartierListCreateView(generics.ListCreateAPIView):
     queryset = Quartier.objects.all()
     serializer_class = QuartierSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
     def get_queryset(self):
         queryset = Quartier.objects.all()
@@ -88,15 +103,13 @@ class QuartierListCreateView(generics.ListCreateAPIView):
 class QuartierDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Quartier.objects.all()
     serializer_class = QuartierSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
 # Avenues CRUD
 class AvenueListCreateView(generics.ListCreateAPIView):
     queryset = Avenue.objects.all()
     serializer_class = AvenueSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
     def get_queryset(self):
         queryset = Avenue.objects.all()
@@ -108,8 +121,7 @@ class AvenueListCreateView(generics.ListCreateAPIView):
 class AvenueDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Avenue.objects.all()
     serializer_class = AvenueSerializer
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
 # Initial Burundi Data Seeder (Province -> Commune -> Zone -> Quartier -> Avenue)
 BURUNDI_INITIAL_SEED = {
@@ -177,8 +189,7 @@ BURUNDI_INITIAL_SEED = {
 }
 
 class SeedLocationsAPIView(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsLocationCatalogWrite]
 
     def post(self, request):
         created_provinces = 0
@@ -230,3 +241,35 @@ class SeedLocationsAPIView(APIView):
         return Response({
             'message': f"Initialisation réussie ! {created_provinces} provinces, {created_communes} communes, {created_zones} zones, {created_quartiers} quartiers, et {created_avenues} avenues créées."
         }, status=status.HTTP_200_OK)
+
+
+def map_tile(request, z, x, y):
+    """Sert une tuile OpenStreetMap depuis notre domaine.
+
+    Le navigateur n'autorise que les images du site (`img-src 'self'`).
+    Une image chargée depuis tile.openstreetmap.org est donc bloquée.
+    """
+    import urllib.error
+    import urllib.request
+
+    from django.http import HttpResponse, HttpResponseBadRequest
+
+    try:
+        zoom, col, row = int(z), int(x), int(y)
+    except (TypeError, ValueError):
+        return HttpResponseBadRequest('Tuile invalide.')
+    if not 0 <= zoom <= 19 or col < 0 or row < 0 or col >= 2 ** zoom or row >= 2 ** zoom:
+        return HttpResponseBadRequest('Tuile invalide.')
+    upstream = f'https://tile.openstreetmap.org/{zoom}/{col}/{row}.png'
+    request_up = urllib.request.Request(
+        upstream,
+        headers={'User-Agent': 'IsokoHub/1.0 (education map; contact info.isokohub@gmail.com)'},
+    )
+    try:
+        with urllib.request.urlopen(request_up, timeout=8) as upstream_response:
+            content = upstream_response.read()
+    except (urllib.error.URLError, TimeoutError):
+        return HttpResponse('Carte indisponible.', status=502, content_type='text/plain')
+    response = HttpResponse(content, content_type='image/png')
+    response['Cache-Control'] = 'public, max-age=86400'
+    return response

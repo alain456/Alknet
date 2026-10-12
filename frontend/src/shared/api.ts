@@ -31,8 +31,34 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+/** JWT expiré ou illisible (marge 15 s). */
+export function isAccessTokenExpired(token: string | null, skewMs = 15000): boolean {
+  if (!token) return true;
+  try {
+    const part = token.split('.')[1];
+    if (!part) return true;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(json) as { exp?: number };
+    if (!payload.exp) return true;
+    return payload.exp * 1000 <= Date.now() + skewMs;
+  } catch {
+    return true;
+  }
+}
+
 export function getRefreshToken(): string | null {
   return localStorage.getItem(REFRESH_KEY);
+}
+
+/**
+ * Le serveur pose un cookie `isoko_session` lisible (aucun jeton dedans)
+ * en même temps que les cookies httpOnly. Sans lui, impossible de savoir si
+ * une restauration de session est possible : `isoko_access` et `isoko_refresh`
+ * sont httpOnly par conception.
+ */
+export function hasSessionHint(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.split('; ').some((c) => c.startsWith('isoko_session='));
 }
 
 export function setToken(token: string | null): void {
@@ -67,30 +93,24 @@ function notifyAuthLogout(): void {
   window.dispatchEvent(new CustomEvent(AUTH_EVENTS.logout));
 }
 
-async function refreshAccessToken(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
-
+export async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
 
   refreshPromise = (async () => {
     try {
       const res = await fetch('/api/v1/accounts/refresh/', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh }),
+        body: '{}',
       });
       if (!res.ok) {
         clearAuthStorage();
         notifyAuthLogout();
         return null;
       }
-      const data = await res.json();
-      setToken(data.access);
-      // ROTATE_REFRESH_TOKENS : sauvegarder le nouveau refresh sinon le suivant échoue
-      if (data.refresh) setRefreshToken(data.refresh);
-      notifyTokenRefreshed(data.access as string);
-      return data.access as string;
+      notifyTokenRefreshed('session');
+      return 'session';
     } catch {
       clearAuthStorage();
       notifyAuthLogout();
@@ -212,13 +232,9 @@ export async function apiRequest<T = unknown>(
     }
 
     if (auth) {
-      const token = getToken() || (headers.Authorization || '').replace(/^Bearer\s+/i, '') || null;
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      } else if (!headers.Authorization) {
-        throw new ApiError('Session expirée. Veuillez vous reconnecter.', 401, {
-          detail: 'Aucun jeton d\'accès disponible.',
-        });
+      const bearer = getToken();
+      if (bearer && bearer.split('.').length === 3) {
+        headers['Authorization'] = `Bearer ${bearer}`;
       }
     }
 
@@ -227,6 +243,7 @@ export async function apiRequest<T = unknown>(
         ...rest,
         method,
         headers,
+        credentials: 'same-origin',
         body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
       });
 

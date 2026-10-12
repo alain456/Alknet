@@ -91,9 +91,12 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
   const contactPhone = settings?.footer_contact_phone || '';
   const contactTitle = settings?.footer_contact_title || 'Contact information';
   const followTitle = settings?.footer_follow_title || 'Follow us';
-  const socialLinks = Array.isArray(settings?.footer_social_links)
-    ? settings.footer_social_links.filter((s) => s?.url)
-    : [];
+  const socialLinks = (Array.isArray(settings?.footer_social_links) ? settings.footer_social_links : [])
+    .map((s) => ({
+      network: s?.network || s?.name || 'website',
+      url: s?.url || s?.link || s?.href || '',
+    }))
+    .filter((s) => s.url);
 
   const { navColumns, legalLinks } = useMemo(() => {
     const map = {};

@@ -3,7 +3,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from permissions.custom_permissions import PlatformMethodPermission
-from .models import Service
+from .models import Service, ServiceReview, refresh_service_rating
 from .serializers import ServiceSerializer, AdminServiceSerializer
 
 
@@ -81,3 +81,44 @@ class AdminServiceStatusView(APIView):
         service.status = new_status
         service.save(update_fields=['status', 'updated_at'])
         return Response(AdminServiceSerializer(service).data)
+
+
+class ServiceReviewView(APIView):
+    """Note 1 à 5. Une seule par client ; une nouvelle note remplace la précédente."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        service = Service.objects.filter(pk=pk, status='ACTIVE').select_related('business').first()
+        if not service:
+            return Response({'error': 'Service introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        if service.professional_id == request.user.id:
+            return Response({'error': 'Vous ne pouvez pas noter votre propre service.'}, status=400)
+        if service.business_id and service.business.owner_id == request.user.id:
+            return Response({'error': 'Vous ne pouvez pas noter le service de votre entreprise.'}, status=400)
+        try:
+            score = int(request.data.get('score'))
+        except (TypeError, ValueError):
+            return Response({'error': 'Choisissez une note de 1 à 5.'}, status=400)
+        if score < 1 or score > 5:
+            return Response({'error': 'Choisissez une note de 1 à 5.'}, status=400)
+        comment = (request.data.get('comment') or '').strip()[:500]
+        ServiceReview.objects.update_or_create(
+            service=service,
+            author=request.user,
+            defaults={'score': score, 'comment': comment},
+        )
+        refresh_service_rating(service)
+        return Response({
+            'service_id': str(service.id),
+            'score': score,
+            'rating': float(service.rating),
+            'reviews_count': service.reviews_count,
+        })
+
+
+class MyServiceReviewsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        rows = ServiceReview.objects.filter(author=request.user).values('service_id', 'score')
+        return Response({str(row['service_id']): row['score'] for row in rows})

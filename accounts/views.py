@@ -33,15 +33,42 @@ User = get_user_model()
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = ()
+
+    def get_throttles(self):
+        from .throttling import AuthEndpointThrottle
+        return [AuthEndpointThrottle()]
 
     def post(self, request, *args, **kwargs):
+        from .login_guard import assert_not_locked, record_failure, record_success
+        from .session_cookies import set_auth_cookies
         email = request.data.get('email', '')
+        try:
+            assert_not_locked(email)
+        except Exception as exc:
+            from rest_framework.exceptions import Throttled
+            if isinstance(exc, Throttled):
+                return Response({'detail': str(exc.detail)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            raise
         serializer = self.get_serializer(data=request.data)
 
         try:
             serializer.is_valid(raise_exception=True)
             user = serializer.user
-            res = Response(serializer.validated_data, status=status.HTTP_200_OK)
+            record_success(user.email)
+            if getattr(user, 'email_otp_enabled', False):
+                from .otp import start_email_otp
+                challenge = start_email_otp(user)
+                return Response({
+                    'two_factor_required': True,
+                    'challenge': str(challenge.id),
+                    'detail': 'Un code a été envoyé à votre adresse e-mail.',
+                }, status=status.HTTP_200_OK)
+            payload = dict(serializer.validated_data)
+            access = payload.pop('access', '')
+            refresh = payload.pop('refresh', '')
+            res = Response(payload, status=status.HTTP_200_OK)
+            set_auth_cookies(res, access, refresh)
             log_audit_event(
                 user=user,
                 user_email=user.email,
@@ -55,6 +82,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             return res
         except Exception as exc:
             user_obj = get_user_by_login_email(email) if email else None
+            if user_obj:
+                record_failure(email)
             log_audit_event(
                 user=user_obj,
                 user_email=normalize_login_email(email) or 'ANONYMOUS',
@@ -70,11 +99,25 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 class RegisterView(APIView):
     permission_classes = (AllowAny,)
+    throttle_classes = ()
+
+    def get_throttles(self):
+        from .throttling import AuthEndpointThrottle
+        return [AuthEndpointThrottle()]
 
     def post(self, request):
+        from django.db import IntegrityError
+
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.save()
+            try:
+                user = serializer.save()
+            except IntegrityError:
+                self._log_register_failure(['email'])
+                return Response(
+                    {'email': ['Un compte existe déjà avec cet email.']},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             # Email de vérification (best-effort — n'empêche pas l'inscription)
             email_result = send_verification_email(user)
             user_data = UserSerializer(user).data
@@ -87,19 +130,22 @@ class RegisterView(APIView):
                 resource=f"User #{user.id}",
                 request=request,
                 status='SUCCESS',
-                details={'email': user.email, 'verification_email': email_result.get('status')}
+                details={'verification_email': email_result.get('status')}
             )
             return Response(user_data, status=status.HTTP_201_CREATED)
-        
+
+        self._log_register_failure(list(serializer.errors.keys()), request)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def _log_register_failure(self, fields, request=None):
+        # Pas d'adresse tentée : le journal ne doit pas servir à énumérer les emails.
         log_audit_event(
-            user_email=request.data.get('email', 'ANONYMOUS'),
             action='USER_REGISTER_FAILED',
             resource='Registration Endpoint',
-            request=request,
+            request=request or self.request,
             status='FAILED',
-            details={'errors': serializer.errors}
+            details={'fields': sorted(str(field) for field in fields)},
         )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class VerifyEmailView(APIView):
@@ -197,11 +243,14 @@ class ProfileView(APIView):
 
     def patch(self, request):
         user = request.user
-        allowed = ('first_name', 'last_name', 'phone_number')
+        allowed = ('first_name', 'last_name', 'phone_number', 'email_otp_enabled')
         changed = []
         for field in allowed:
             if field in request.data:
-                setattr(user, field, request.data.get(field) or '')
+                value = request.data.get(field)
+                if field == 'email_otp_enabled':
+                    value = bool(value)
+                setattr(user, field, value if field == 'email_otp_enabled' else (value or ''))
                 changed.append(field)
         if changed:
             user.save(update_fields=changed)
@@ -436,7 +485,7 @@ class OAuthStartView(APIView):
         except ValueError as exc:
             # Renvoie vers le frontend avec message clair
             return redirect(frontend_oauth_redirect(
-                access='', refresh='', next_path='/login', error=str(exc),
+                next_path='/login', error=str(exc),
             ))
         return redirect(url)
 
@@ -448,28 +497,28 @@ class OAuthCallbackView(APIView):
         from django.shortcuts import redirect
         from .oauth import (
             PROVIDERS, decode_state, exchange_code, fetch_profile,
-            frontend_oauth_redirect, login_or_register_social,
+            frontend_oauth_redirect, login_or_register_social, stash_browser_login,
         )
 
         provider = (provider or '').lower()
         next_path = '/dashboard'
         if provider not in PROVIDERS:
             return redirect(frontend_oauth_redirect(
-                access='', refresh='', next_path='/login',
+                next_path='/login',
                 error='Fournisseur OAuth inconnu.',
             ))
 
         err = request.query_params.get('error') or request.query_params.get('error_description')
         if err:
             return redirect(frontend_oauth_redirect(
-                access='', refresh='', next_path='/login', error=str(err),
+                next_path='/login', error=str(err),
             ))
 
         code = request.query_params.get('code')
         state = request.query_params.get('state')
         if not code or not state:
             return redirect(frontend_oauth_redirect(
-                access='', refresh='', next_path='/login',
+                next_path='/login',
                 error='Réponse OAuth invalide (code/state manquants).',
             ))
 
@@ -481,14 +530,32 @@ class OAuthCallbackView(APIView):
             tokens = login_or_register_social(provider=provider, profile=profile, request=request)
         except Exception as exc:
             return redirect(frontend_oauth_redirect(
-                access='', refresh='', next_path='/login', error=str(exc),
+                next_path='/login', error=str(exc),
             ))
 
+        code_once = stash_browser_login(tokens['access'], tokens['refresh'], tokens['user']['id'])
         return redirect(frontend_oauth_redirect(
-            access=tokens['access'],
-            refresh=tokens['refresh'],
+            code=code_once,
             next_path=next_path,
         ))
+
+
+class OAuthExchangeView(APIView):
+    """Échange le code à usage unique contre des cookies HttpOnly. Aucun jeton dans le corps."""
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        from .oauth import pop_browser_login
+        from .session_cookies import set_auth_cookies
+        payload = pop_browser_login(request.data.get('code') or '')
+        if not payload:
+            return Response({'error': 'Code de connexion expiré ou déjà utilisé.'}, status=400)
+        user = User.objects.filter(id=payload.get('user_id')).first()
+        if not user or not user.is_active:
+            return Response({'error': 'Compte introuvable.'}, status=400)
+        response = Response({'user': UserSerializer(user).data})
+        set_auth_cookies(response, payload['access'], payload['refresh'])
+        return response
 
 
 class AdminPlatformRoleListView(APIView):
@@ -794,3 +861,127 @@ class AdminPlatformActorDetailView(APIView):
             details={'target_email': email, 'on_behalf': True},
         )
         return Response({'detail': f'Acteur « {email} » supprimé.', 'deleted': True})
+
+
+class LoginOtpVerifyView(APIView):
+    permission_classes = (AllowAny,)
+    throttle_classes = ()
+
+    def get_throttles(self):
+        from .throttling import AuthEndpointThrottle
+        return [AuthEndpointThrottle()]
+
+    def post(self, request):
+        from rest_framework.exceptions import Throttled
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from .login_guard import assert_not_locked, record_failure, record_success
+        from .otp import verify_email_otp
+        from .session_cookies import set_auth_cookies
+        from .models import LoginOtp
+        challenge_id = request.data.get('challenge')
+        row = LoginOtp.objects.filter(id=challenge_id).select_related('user').first() if challenge_id else None
+        email = row.user.email if row else ''
+        try:
+            assert_not_locked(email)
+        except Throttled as exc:
+            return Response({'detail': str(exc.detail)}, status=429)
+        user = verify_email_otp(challenge_id, request.data.get('code'))
+        if not user:
+            if email:
+                record_failure(email)
+            return Response({'error': 'Code invalide ou expiré.'}, status=400)
+        record_success(user.email)
+        refresh = RefreshToken.for_user(user)
+        response = Response({
+            'user': UserSerializer(user).data,
+        })
+        set_auth_cookies(response, str(refresh.access_token), str(refresh))
+        return response
+
+
+class LogoutView(APIView):
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        from .session_cookies import REFRESH_COOKIE, clear_auth_cookies
+        raw = (request.data.get('refresh') if hasattr(request.data, 'get') else None) or request.COOKIES.get(REFRESH_COOKIE)
+        if raw:
+            try:
+                from rest_framework_simplejwt.tokens import RefreshToken
+                token = RefreshToken(raw)
+                token.blacklist()
+            except Exception:
+                pass
+        response = Response({'ok': True})
+        clear_auth_cookies(response)
+        return response
+
+
+class CookieTokenRefreshView(APIView):
+    permission_classes = (AllowAny,)
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+        from .session_cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
+        payload = {'refresh': request.data.get('refresh') or request.COOKIES.get(REFRESH_COOKIE)}
+        serializer = TokenRefreshSerializer(data=payload)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception:
+            # Sans ce nettoyage, les cookies de session morte restent en place et
+            # le navigateur les renvoie à chaque chargement : le front ne peut pas
+            # distinguer « session expirée » de « pas de session ».
+            invalid_response = Response(
+                {'detail': 'Jeton de rafraîchissement invalide.'}, status=401,
+            )
+            clear_auth_cookies(invalid_response)
+            raw = payload.get('refresh') or ''
+            from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+            outstanding = OutstandingToken.objects.filter(token=raw).select_related('user').first()
+            if outstanding and BlacklistedToken.objects.filter(token=outstanding).exists():
+                from .services import log_audit_event
+                for other in OutstandingToken.objects.filter(user=outstanding.user):
+                    BlacklistedToken.objects.get_or_create(token=other)
+                log_audit_event(
+                    user=outstanding.user,
+                    action='REFRESH_REUSE',
+                    resource='auth',
+                    request=request,
+                    status='FAILED',
+                    details={'reason': 'Jeton de rafraîchissement déjà révoqué.'},
+                )
+            return invalid_response
+        response = Response({'authenticated': True})
+        set_auth_cookies(response, serializer.validated_data.get('access', ''), serializer.validated_data.get('refresh', payload['refresh']))
+        return response
+
+
+class PersonalDataExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .data_rights import export_personal_data
+        return Response(export_personal_data(request.user))
+
+
+class PersonalDataDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .data_rights import delete_personal_account
+        error = delete_personal_account(request.user, request.data.get('password') or '')
+        if error:
+            return Response({'error': error}, status=400)
+        return Response({'ok': True, 'detail': 'Compte désactivé et données d’identité effacées.'})
+
+
+class BusinessDataExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from businesses.tenant import get_user_tenant_business
+        from .data_rights import export_business_data
+        business = get_user_tenant_business(request.user)
+        if not business or business.owner_id != request.user.id:
+            return Response({'error': 'Seul le propriétaire peut exporter les données de l’établissement.'}, status=403)
+        return Response(export_business_data(business))

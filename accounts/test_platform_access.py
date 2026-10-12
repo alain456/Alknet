@@ -27,7 +27,7 @@ class PlatformRoleAccessTests(TestCase):
             'email': email, 'password': 'Pass123456!',
         }, format='json')
         self.assertEqual(login.status_code, status.HTTP_200_OK, login.data)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.cookies['isoko_access'].value}")
 
     def test_finance_reads_billing_and_cannot_change_grace(self):
         self._login('finance-platform@test.bi')

@@ -385,3 +385,26 @@ class CommerceProfile(models.Model):
 
     def __str__(self):
         return self.commercial_name or self.business.name
+
+
+class BurundiPayReceipt(models.Model):
+    """Une référence prestataire ne peut confirmer qu'un seul paiement."""
+    provider_reference = models.CharField(max_length=120, unique=True)
+    external_id = models.CharField(max_length=160, blank=True, default='')
+    status = models.CharField(max_length=40, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class EmployeeInvitation(models.Model):
+    """Preuve de possession avant de rattacher un compte déjà existant."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='employee_invitations')
+    email = models.EmailField()
+    token = models.CharField(max_length=64, unique=True)
+    position = models.CharField(max_length=100, blank=True, default='STAFF')
+    role = models.ForeignKey(
+        'BusinessRole', on_delete=models.SET_NULL, null=True, blank=True, related_name='invitations',
+    )
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)

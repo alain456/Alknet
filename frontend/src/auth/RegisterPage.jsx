@@ -1,44 +1,33 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
 import SocialLogins from '../shared/components/SocialLogins';
 import PasswordStrength from '../shared/components/PasswordStrength';
 import PasswordInput from '../shared/components/PasswordInput';
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    role: 'CUSTOMER'
+  const form = useForm({
+    defaultValues: { firstName: '', lastName: '', email: '', password: '' },
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { register } = useAuth();
+  const { register: registerAccount } = useAuth();
   const navigate = useNavigate();
+  const password = form.watch('password');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = form.handleSubmit(async (values) => {
     setError('');
     setIsLoading(true);
-
     try {
-      const newUser = await register(formData);
+      const newUser = await registerAccount({ ...values, role: 'CUSTOMER' });
       setIsLoading(false);
-
-      if (newUser.role === 'SUPER_ADMIN') {
-        navigate('/admin');
-      } else if (newUser.role === 'BUSINESS_OWNER') {
-        navigate('/business');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate(newUser?.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard');
     } catch (err) {
       setIsLoading(false);
       setError(err.message || 'Registration failed. Please check your information.');
     }
-  };
+  });
 
   const fieldClass =
     'w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition';
@@ -56,55 +45,32 @@ export default function RegisterPage() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={onSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">First Name</label>
-            <input
-              type="text"
-              required
-              value={formData.firstName}
-              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              className={fieldClass}
-              placeholder="John"
-            />
+            <input type="text" className={fieldClass} placeholder="John" {...form.register('firstName', { required: true })} />
           </div>
           <div>
             <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Last Name</label>
-            <input
-              type="text"
-              required
-              value={formData.lastName}
-              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              className={fieldClass}
-              placeholder="Doe"
-            />
+            <input type="text" className={fieldClass} placeholder="Doe" {...form.register('lastName', { required: true })} />
           </div>
         </div>
 
         <div>
           <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Email</label>
-          <input
-            type="email"
-            required
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className={fieldClass}
-            placeholder="john@example.com"
-          />
+          <input type="email" className={fieldClass} placeholder="john@example.com" {...form.register('email', { required: true })} />
         </div>
 
         <div>
           <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Password</label>
           <PasswordInput
-            required
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             autoComplete="new-password"
             className="px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium transition"
             placeholder="Create a strong password"
+            {...form.register('password', { required: true, minLength: 6 })}
           />
-          <PasswordStrength password={formData.password} />
+          <PasswordStrength password={password} />
         </div>
 
         <button

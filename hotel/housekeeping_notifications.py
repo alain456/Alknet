@@ -108,7 +108,7 @@ def notify_cleaning_required(hotel, room, task=None, stay=None, reason='checkout
             'task_id': task_id,
         }
 
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'noreply@isokohub.bi'
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'info.isokohub@gmail.com'
     emails_sent = []
     email_errors = []
     for user in leads:

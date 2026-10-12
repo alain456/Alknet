@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from businesses.models import Business
+from businesses.payment_access import issue_payment_token
 
 
 class HotelProfile(models.Model):
@@ -348,6 +349,12 @@ class Reservation(models.Model):
     )
     payment_method = models.CharField(max_length=40, blank=True, default='')
     payer_phone = models.CharField(max_length=40, blank=True, default='')
+    payment_token = models.CharField(
+        max_length=64,
+        editable=False,
+        db_index=True,
+        default=issue_payment_token,
+    )
     payment_provider_reference = models.CharField(max_length=120, blank=True, default='')
     payment_merchant_account = models.CharField(max_length=80, blank=True, default='')
     paid_at = models.DateTimeField(null=True, blank=True)

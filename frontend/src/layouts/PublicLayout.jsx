@@ -5,6 +5,7 @@ import { getHomePathForUser } from '../auth/roleAccess';
 import useSiteContent from '../shared/useSiteContent';
 import SiteFooter from '../shared/components/SiteFooter';
 import ThemeToggle from '../shared/components/ThemeToggle';
+import ConsentBanner from '../shared/components/ConsentBanner';
 
 export default function PublicLayout() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -19,7 +20,7 @@ export default function PublicLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
-      <header className="bg-primary shadow-md sticky top-0 z-50 text-surface">
+      <header className="ih-glass-nav bg-primary shadow-md sticky top-0 z-50 text-surface">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 shrink-0 max-w-[55%] sm:max-w-none">
             {settings?.platform_logo ? (
@@ -57,15 +58,15 @@ export default function PublicLayout() {
                 </Link>
                 <button
                   onClick={logout}
-                  className="bg-accent hover:opacity-95 text-surface font-bold py-2 px-3.5 rounded-lg border border-surface/20 shadow-sm transition cursor-pointer text-sm sm:text-base"
+                  className="bg-warm hover:opacity-95 text-white font-bold py-2 px-3.5 rounded-lg shadow-sm transition cursor-pointer text-sm sm:text-base"
                 >
                   Logout
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="text-surface font-semibold hover:text-accent py-2 transition text-sm sm:text-base">Login</Link>
-                <Link to="/register" className="bg-accent hover:opacity-95 text-surface font-bold py-2 px-4 rounded-lg border border-surface/20 shadow-sm transition text-sm sm:text-base">Sign Up</Link>
+                <Link to="/login" className="text-white font-semibold hover:text-white/80 py-2 transition text-sm sm:text-base">Login</Link>
+                <Link to="/register" className="bg-alert hover:opacity-95 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition text-sm sm:text-base">Sign Up</Link>
               </>
             )}
           </div>
@@ -77,6 +78,7 @@ export default function PublicLayout() {
       </main>
 
       <SiteFooter settings={settings} footerLinks={footerLinks} partners={partners} />
+      <ConsentBanner />
     </div>
   );
 }

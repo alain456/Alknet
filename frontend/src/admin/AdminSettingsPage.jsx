@@ -17,6 +17,8 @@ export default function AdminSettingsPage() {
     auto_approve_businesses: false,
     brand_name: 'Isoko Hub',
     password_min_length: '8',
+    login_max_failures: '5',
+    login_lock_minutes: '15',
   });
   const [governance, setGovernance] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,8 @@ export default function AdminSettingsPage() {
             auto_approve_businesses: Boolean(settings.auto_approve_businesses),
             brand_name: settings.brand_name || 'Isoko Hub',
             password_min_length: String(settings.password_min_length ?? 8),
+            login_max_failures: String(settings.login_max_failures ?? 5),
+            login_lock_minutes: String(settings.login_lock_minutes ?? 15),
             id: settings.id,
           });
         }
@@ -87,6 +91,8 @@ export default function AdminSettingsPage() {
         auto_approve_businesses: formData.auto_approve_businesses,
         brand_name: formData.brand_name,
         password_min_length: Number(formData.password_min_length),
+        login_max_failures: Number(formData.login_max_failures),
+        login_lock_minutes: Number(formData.login_lock_minutes),
       };
       const updated = await api.patch('cms/admin/settings/', payload, { auth: true });
       const settings = Array.isArray(updated) ? updated[0] : updated;
@@ -100,6 +106,8 @@ export default function AdminSettingsPage() {
           auto_approve_businesses: Boolean(settings.auto_approve_businesses),
           brand_name: settings.brand_name || prev.brand_name,
           password_min_length: String(settings.password_min_length ?? prev.password_min_length),
+          login_max_failures: String(settings.login_max_failures ?? prev.login_max_failures),
+          login_lock_minutes: String(settings.login_lock_minutes ?? prev.login_lock_minutes),
         }));
       }
       setMessage('Paramètres enregistrés.');
@@ -346,6 +354,38 @@ export default function AdminSettingsPage() {
                 />
                 <span className="text-xs text-ink-muted">
                   Ex. : 7 pour assouplir, 12 pour renforcer. Appliqué à l’inscription et à la création d’utilisateurs.
+                </span>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-gray-700">Échecs avant blocage</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  step="1"
+                  name="login_max_failures"
+                  value={formData.login_max_failures}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <span className="text-xs text-ink-muted">
+                  Mot de passe ou code e-mail refusés. Au-delà, le compte est bloqué.
+                </span>
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-gray-700">Durée du blocage (minutes)</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1440"
+                  step="1"
+                  name="login_lock_minutes"
+                  value={formData.login_lock_minutes}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+                <span className="text-xs text-ink-muted">
+                  De 1 minute à 24 heures. La connexion reprend seule à la fin de ce délai.
                 </span>
               </label>
             </div>

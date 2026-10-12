@@ -7,6 +7,8 @@ import DoctorCard from './DoctorCard';
 import { useParams, Link } from 'react-router-dom';
 import api from '../shared/api';
 import hospitalService from './hospitalService';
+import BurundiPayPayerField from '../shared/components/BurundiPayPayerField';
+import { isValidBurundiPayPhone, normalizeBurundiPayPhone } from '../shared/components/burundiPayPhone';
 import { useAuth } from '../context/AuthContext';
 import { websiteHref } from '../shared/websiteUrl';
 export default function HospitalProfile() {
@@ -206,8 +208,8 @@ export default function HospitalProfile() {
       ?? selectedDoctor?.fee
       ?? 0
     );
-    if (fee > 0 && !payerBurundiPay.trim()) {
-      alert('Indiquez votre numéro BurundiPay pour payer les frais de consultation.');
+    if (fee > 0 && !isValidBurundiPayPhone(payerBurundiPay)) {
+      alert('Numéro BurundiPay invalide : 8 chiffres requis (ex. 79xxxxxx).');
       return;
     }
     setSubmittingBooking(true);
@@ -225,16 +227,17 @@ export default function HospitalProfile() {
       let finalAppt = data;
       const amount = Number(data?.consultation_fee_amount ?? fee);
       if (amount > 0 && data?.payment_status !== 'PAID') {
-        if (!payerBurundiPay.trim()) {
-          alert('Numéro BurundiPay obligatoire pour payer la consultation.');
+        if (!isValidBurundiPayPhone(payerBurundiPay)) {
+          alert('Numéro BurundiPay invalide : 8 chiffres requis (ex. 79xxxxxx).');
           setConfirmedAppointment(data);
           setBookingStep(2);
           return;
         }
         const payRes = await hospitalService.payAppointment(
           data.id,
-          payerBurundiPay.trim(),
+          normalizeBurundiPayPhone(payerBurundiPay),
           !!token,
+          data.payment_token || '',
         );
         finalAppt = payRes.appointment || data;
         setPayMsg(payRes.message || '');
@@ -255,7 +258,11 @@ export default function HospitalProfile() {
     if (!confirmedAppointment?.id) return;
     setPaymentBusy(true);
     try {
-      const res = await hospitalService.confirmAppointmentPayment(confirmedAppointment.id, !!token);
+      const res = await hospitalService.confirmAppointmentPayment(
+        confirmedAppointment.id,
+        !!token,
+        confirmedAppointment.payment_token || '',
+      );
       if (!res.ok) throw new Error(res.message || 'Confirmation échouée');
       setConfirmedAppointment(res.appointment || confirmedAppointment);
       setPayMsg(res.message || 'Paiement confirmé.');
@@ -268,16 +275,17 @@ export default function HospitalProfile() {
 
   const retryPay = async () => {
     if (!confirmedAppointment?.id) return;
-    if (!payerBurundiPay.trim()) {
-      alert('Indiquez votre numéro BurundiPay.');
+    if (!isValidBurundiPayPhone(payerBurundiPay)) {
+      alert('Numéro BurundiPay invalide : 8 chiffres requis (ex. 79xxxxxx).');
       return;
     }
     setPaymentBusy(true);
     try {
       const res = await hospitalService.payAppointment(
         confirmedAppointment.id,
-        payerBurundiPay.trim(),
+        normalizeBurundiPayPhone(payerBurundiPay),
         !!token,
+        confirmedAppointment.payment_token || '',
       );
       setConfirmedAppointment(res.appointment || confirmedAppointment);
       setPayMsg(res.message || '');
@@ -741,35 +749,10 @@ export default function HospitalProfile() {
                 </div>
 
                 {(consultationFee > 0 || Number(selectedSlot?.consultation_fee || selectedDoctor?.consultation_fee || 0) > 0) && (
-                  <div className="rounded-xl border-2 border-accent overflow-hidden bg-surface">
-                    <div className="bg-primary/5 px-4 py-3 flex flex-col items-center justify-center gap-1 border-b-2 border-accent/40">
-                      <img
-                        src="/burundipay.png"
-                        alt="BurundiPay"
-                        className="h-14 w-auto object-contain"
-                      />
-                      <p className="text-[10px] font-semibold text-accent tracking-wide text-center">
-                        Riha, Ronka, Rungika amafaranga mu kanya isase
-                      </p>
-                    </div>
-                    <div className="p-4 space-y-3">
-                      <p className="text-xs text-ink-muted text-center font-medium">
-                        Paiement de la consultation via BurundiPay
-                      </p>
-                      <p className="text-xs text-ink-muted text-center font-medium">
-                        Numéro banque ou mobile money (BurundiPay)
-                      </p>
-                      <input
-                        type="tel"
-                        required
-                        aria-label="Numéro BurundiPay"
-                        placeholder="79xxxxxx"
-                        value={payerBurundiPay}
-                        onChange={(e) => setPayerBurundiPay(e.target.value)}
-                        className="w-full px-3 py-2.5 bg-surface border-2 border-accent rounded-xl text-sm text-ink outline-none focus:border-alert"
-                      />
-                    </div>
-                  </div>
+                  <BurundiPayPayerField
+                    value={payerBurundiPay}
+                    onChange={setPayerBurundiPay}
+                  />
                 )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t-2 border-alert/20">
@@ -832,12 +815,10 @@ export default function HospitalProfile() {
                     )}
                     {!['PAID', 'WAIVED'].includes(confirmedAppointment.payment_status) && (
                       <div className="mt-3 space-y-2">
-                        <input
-                          type="tel"
-                          placeholder="Numéro BurundiPay"
+                        <BurundiPayPayerField
                           value={payerBurundiPay}
-                          onChange={(e) => setPayerBurundiPay(e.target.value)}
-                          className="w-full px-3 py-2 border-2 border-accent rounded-lg text-sm bg-surface text-ink outline-none focus:border-alert"
+                          onChange={setPayerBurundiPay}
+                          hint="Corrigez le numéro si besoin, puis relancez le paiement."
                         />
                         <div className="flex flex-wrap gap-2">
                           {confirmedAppointment.payment_status === 'AWAITING_PIN' && (

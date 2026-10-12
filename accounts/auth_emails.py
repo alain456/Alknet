@@ -5,7 +5,7 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.core.mail import send_mail
+from accounts.outbound_mail import send_isoko_mail
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
@@ -70,13 +70,7 @@ def _send(recipient: str, subject: str, message: str) -> dict:
     if not recipient:
         return {'status': 'FAILED', 'error': 'Aucun destinataire'}
     try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
-            recipient_list=[recipient],
-            fail_silently=False,
-        )
+        send_isoko_mail(subject, message, [recipient])
         return {'status': 'SENT', 'recipient': recipient}
     except Exception as exc:
         logger.exception('Échec envoi email auth à %s', recipient)

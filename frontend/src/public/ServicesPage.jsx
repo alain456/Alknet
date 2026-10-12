@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, MapPin, Star, Filter, Clock, Briefcase, HeartPulse } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../shared/api';
 import useSiteContent from '../shared/useSiteContent';
+import { useAuth } from '../context/AuthContext';
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
@@ -21,6 +22,7 @@ function mapMarketplaceService(s) {
     currency: 'FBu',
     rating: Number(s.rating || 0),
     reviews: s.reviews_count || 0,
+    rawId: s.id,
     href: null,
   };
 }
@@ -46,11 +48,15 @@ function mapMedicalService(s) {
 
 export default function ServicesPage() {
   const { settings } = useSiteContent();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('relevance');
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [myScores, setMyScores] = useState({});
+  const [ratingError, setRatingError] = useState('');
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -73,6 +79,38 @@ export default function ServicesPage() {
     };
     fetchServices();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setMyScores({});
+      return undefined;
+    }
+    let cancelled = false;
+    api.get('services/reviews/mine/', { auth: true })
+      .then((data) => { if (!cancelled) setMyScores(data || {}); })
+      .catch(() => { if (!cancelled) setMyScores({}); });
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
+
+  const rateService = async (service, score) => {
+    if (service.source !== 'marketplace' || !service.rawId) return;
+    if (!isAuthenticated) {
+      navigate('/login', { state: { from: '/services', message: 'Connectez-vous pour noter ce service.' } });
+      return;
+    }
+    setRatingError('');
+    try {
+      const updated = await api.post(`services/${service.rawId}/reviews/`, { score }, { auth: true });
+      setMyScores((prev) => ({ ...prev, [service.rawId]: score }));
+      setServices((prev) => prev.map((row) => (
+        row.rawId === service.rawId
+          ? { ...row, rating: Number(updated.rating || 0), reviews: updated.reviews_count || 0 }
+          : row
+      )));
+    } catch (err) {
+      setRatingError(err.message || 'Note impossible');
+    }
+  };
 
   const categories = useMemo(() => {
     const names = new Set();
@@ -165,6 +203,9 @@ export default function ServicesPage() {
               </select>
             </div>
 
+            {!loading && ratingError && (
+              <p className="mb-4 text-sm text-red-700">{ratingError}</p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {loading ? (
                 [1, 2, 3, 4, 5, 6].map((i) => (
@@ -208,8 +249,27 @@ export default function ServicesPage() {
                           <p className="text-sm font-medium text-gray-900">{service.provider}</p>
                           <div className="flex items-center text-xs text-gray-500">
                             <Star className="w-3 h-3 text-accent fill-accent mr-1" />
-                            {service.rating > 0 ? service.rating : 'Nouveau'} ({service.reviews} avis)
+                            {service.rating > 0 ? Number(service.rating).toFixed(1) : 'Nouveau'} ({service.reviews} avis)
                           </div>
+                          {service.source === 'marketplace' && (
+                            <div className="flex items-center gap-0.5 mt-1">
+                              {[1, 2, 3, 4, 5].map((n) => {
+                                const mine = myScores[service.rawId] || 0;
+                                const on = n <= mine;
+                                return (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    aria-label={`Noter ${n} sur 5`}
+                                    onClick={() => rateService(service, n)}
+                                    className="p-0.5"
+                                  >
+                                    <Star className={`w-3.5 h-3.5 ${on ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}`} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">

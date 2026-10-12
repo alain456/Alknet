@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Filter, Building2, Phone, Clock, Eye, Package, History, Globe } from 'lucide-react';
+import { Search, MapPin, Filter, Building2, Phone, Clock, Eye, Package, History, Globe, GraduationCap } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
 import api from '../shared/api';
 import { websiteHref } from '../shared/websiteUrl';
+import { getBusinessRecordCategoryKey } from '../auth/roleAccess';
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -43,49 +44,27 @@ function businessMatchesCategory(business, selectedCategory) {
 }
 
 function isWholesalePharmacy(business) {
-  const name = categoryName(business).toLowerCase();
-  return name.includes('pharmacie de gros') || (name.includes('pharmac') && name.includes('gros'));
+  return getBusinessRecordCategoryKey(business) === 'wholesale';
 }
 
 function isRetailPharmacy(business) {
-  const name = categoryName(business).toLowerCase();
-  if (isWholesalePharmacy(business)) return false;
-  return name.includes('pharmacie de détail')
-    || name.includes('pharmacie de detail')
-    || (name.includes('pharmac') && (name.includes('détail') || name.includes('detail') || name.includes('officine')))
-    || name.trim() === 'pharmacie';
+  return getBusinessRecordCategoryKey(business) === 'retail_pharmacy';
 }
 
 function isHotelBusiness(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
-  return (
-    name.includes('hôtel')
-    || name.includes('hotel')
-    || name.includes('hôtellerie')
-    || name.includes('hotellerie')
-    || slug.includes('hotel')
-  );
+  return getBusinessRecordCategoryKey(business) === 'hotel';
 }
 
 function isHospitalBusiness(business) {
-  const name = categoryName(business).toLowerCase();
-  if (isWholesalePharmacy(business) || isHotelBusiness(business)) return false;
-  return (
-    name.includes('sant')
-    || name.includes('hôpital')
-    || name.includes('hopital')
-    || name.includes('hospital')
-    || name.includes('clinique')
-    || name.includes('cabinet')
-  );
+  return getBusinessRecordCategoryKey(business) === 'hospital';
 }
 
 function isCommerceBusiness(business) {
-  const name = categoryName(business).toLowerCase();
-  const slug = (business?.primary_category_slug || business?.category_slug || '').toLowerCase();
-  const keywords = ['commerce', 'boutique', 'mode', 'quincaillerie', 'supermarché', 'supermarche', 'électronique', 'electronique'];
-  return keywords.some((k) => name.includes(k) || slug.includes(k));
+  return getBusinessRecordCategoryKey(business) === 'commerce';
+}
+
+function isEducationBusiness(business) {
+  return getBusinessRecordCategoryKey(business) === 'education';
 }
 
 function locationLabel(business) {
@@ -383,6 +362,15 @@ export default function BusinessesPage() {
                       >
                         <Package className="w-4 h-4" />
                         Entrer — Catalogue
+                      </button>
+                    ) : isEducationBusiness(business) ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/education/establishment/${business.id}`)}
+                        className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-1.5"
+                      >
+                        <GraduationCap className="w-4 h-4" />
+                        Voir l&apos;établissement
                       </button>
                     ) : isHotelBusiness(business) ? (
                       <button

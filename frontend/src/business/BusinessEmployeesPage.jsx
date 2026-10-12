@@ -5,7 +5,7 @@ import {
   XCircle, Edit3, Sparkles, Package, Warehouse, ShoppingCart,
   BedDouble, ConciergeBell, Wrench, CreditCard,
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import DataGrid from '../admin/components/DataGrid';
 import { useAuth } from '../context/AuthContext';
 import { getBusinessCategoryKey } from '../auth/roleAccess';
@@ -41,6 +41,8 @@ export default function BusinessEmployeesPage() {
   const canAddStaff = !isHotel || canCreate('staff');
   const canEditStaff = !isHotel || canUpdate('staff');
   const canRemoveStaff = !isHotel || canDelete('staff');
+  const isSchool = user?.business_info?.category_slug === 'ecole';
+
   const isHospital = !isHotel && (categoryKey === 'hospital' || location.pathname.startsWith('/hospital'));
   const isCommerce = !isHotel && !isHospital && (categoryKey === 'commerce' || location.pathname.startsWith('/commerce'));
   /** Création de compte (email + mot de passe) comme Annuaire médecins hôpital */
@@ -459,6 +461,10 @@ export default function BusinessEmployeesPage() {
       ),
     },
   ];
+
+  if (isSchool) {
+    return <Navigate to="/business/roles" replace />;
+  }
 
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto">

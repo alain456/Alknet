@@ -64,6 +64,10 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
+    email_otp_enabled = models.BooleanField(
+        default=False,
+        help_text="Si actif, la connexion exige un code envoyé par e-mail.",
+    )
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -158,4 +162,25 @@ class PlatformRole(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class AuthLock(models.Model):
+    """Compteur d'échecs de connexion (mot de passe ou OTP) par e-mail."""
+    email = models.CharField(max_length=255, unique=True)
+    failures = models.PositiveSmallIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.email
+
+
+class LoginOtp(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='login_otps')
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
 

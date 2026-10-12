@@ -13,10 +13,13 @@ Compat : variables LUMICASH_* lues en fallback.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import ssl
+import time
 import uuid
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -26,6 +29,41 @@ from urllib.request import Request, urlopen
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+WEBHOOK_MAX_SKEW_SECONDS = 300
+
+
+def webhook_signature(secret: str, timestamp: str, body: bytes) -> str:
+    message = timestamp.encode('utf-8') + b'.' + (body or b'')
+    return hmac.new(secret.encode('utf-8'), message, hashlib.sha256).hexdigest()
+
+
+def verify_webhook(request) -> tuple[bool, str, int]:
+    """Secret en temps constant, horodatage anti-rejeu, signature HMAC du corps."""
+    from django.conf import settings
+
+    expected = (getattr(settings, 'BURUNDIPAY_WEBHOOK_SECRET', '') or '').strip()
+    if not expected:
+        return False, 'Webhook non configuré.', 503
+    provided = (
+        request.headers.get('X-BurundiPay-Webhook-Secret')
+        or request.headers.get('X-Lumicash-Webhook-Secret')
+        or ''
+    ).strip()
+    if len(provided) != len(expected) or not hmac.compare_digest(provided, expected):
+        return False, 'Unauthorized', 401
+    timestamp = (request.headers.get('X-BurundiPay-Timestamp') or '').strip()
+    signature = (request.headers.get('X-BurundiPay-Signature') or '').strip()
+    try:
+        ts_int = int(timestamp)
+    except ValueError:
+        return False, 'Horodatage manquant.', 401
+    if abs(int(time.time()) - ts_int) > WEBHOOK_MAX_SKEW_SECONDS:
+        return False, 'Horodatage expiré.', 401
+    expected_sig = webhook_signature(expected, timestamp, request.body or b'')
+    if len(signature) != len(expected_sig) or not hmac.compare_digest(signature, expected_sig):
+        return False, 'Signature invalide.', 401
+    return True, '', 200
 
 PAYMENT_METHOD = 'BURUNDIPAY'
 LEGACY_PAYMENT_METHODS = frozenset({'LUMICASH', 'BURUNDIPAY'})
@@ -49,8 +87,29 @@ def _env(*keys: str, default: str = '') -> str:
     return default
 
 
+_TRUTHY = ('1', 'true', 'True', 'yes', 'on')
+
+
 def is_stub_mode() -> bool:
-    return bool(getattr(settings, 'BURUNDIPAY_STUB', True))
+    """Mode simulation du paiement.
+
+    ``bool('0')`` vaut True : une valeur d'environnement ou un override
+    settings passé sous forme de chaîne réactiverait silencieusement le stub
+    en production. On normalise donc comme le fait config.settings.
+    """
+    value = getattr(settings, 'BURUNDIPAY_STUB', True)
+    if isinstance(value, str):
+        return value.strip() in _TRUTHY
+    return bool(value)
+
+
+def _stub_blocked_outside_dev() -> bool:
+    """Le stub est permis en DEBUG et pendant la suite Django (DEBUG y est forcé à False)."""
+    if settings.DEBUG or getattr(settings, 'IS_TESTING', False):
+        return False
+    return _env('BURUNDIPAY_ALLOW_STUB_IN_PROD', 'LUMICASH_ALLOW_STUB_IN_PROD', default='0') not in (
+        '1', 'true', 'True', 'yes',
+    )
 
 
 def merchant_account() -> str:
@@ -64,10 +123,18 @@ def normalize_phone(phone: str) -> str:
     raw = ''.join(ch for ch in (phone or '') if ch.isdigit() or ch == '+')
     digits = ''.join(ch for ch in raw if ch.isdigit())
     if digits.startswith('257') and len(digits) >= 11:
-        return digits
+        return digits[:11]
     if len(digits) == 8:
         return f'257{digits}'
     return digits or raw
+
+
+def is_valid_payer_phone(phone: str) -> bool:
+    """8 chiffres locaux (ex. 79xxxxxx) ou 257 suivi de 8 chiffres."""
+    digits = ''.join(ch for ch in (phone or '') if ch.isdigit())
+    if len(digits) == 8:
+        return True
+    return digits.startswith('257') and len(digits) == 11
 
 
 def is_burundipay_method(method: str | None) -> bool:
@@ -269,9 +336,7 @@ def initiate_collection(
         }
 
     if is_stub_mode():
-        if not settings.DEBUG and _env('BURUNDIPAY_ALLOW_STUB_IN_PROD', 'LUMICASH_ALLOW_STUB_IN_PROD', default='0') not in (
-            '1', 'true', 'True', 'yes',
-        ):
+        if _stub_blocked_outside_dev():
             return {
                 'ok': False,
                 'provider_reference': '',
@@ -471,9 +536,7 @@ def refund_collection(
         }
 
     if is_stub_mode():
-        if not settings.DEBUG and _env('BURUNDIPAY_ALLOW_STUB_IN_PROD', 'LUMICASH_ALLOW_STUB_IN_PROD', default='0') not in (
-            '1', 'true', 'True', 'yes',
-        ):
+        if _stub_blocked_outside_dev():
             return {
                 'ok': False,
                 'provider_reference': ref,

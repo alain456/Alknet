@@ -25,22 +25,48 @@ load_dotenv(BASE_DIR / '.env')
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-@va@2#7tz!m!b=0bedv^slp$a&$!ho1)4l@v6nspuzlc(djtou')
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG') == '1'
 
-_allowed = os.environ.get('ALLOWED_HOSTS', '*').strip()
-ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()] or ['*']
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = os.environ.get('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-dev-only-@va@2#7tz!m!b=0bedv^slp$a&$!ho1)4l@v6nspuzlc(djtou'
+    else:
+        raise ImproperlyConfigured(
+            'SECRET_KEY est obligatoire hors DEBUG. Générez-la avec '
+            '`python -c "from django.core.management.utils import get_random_secret_key as k; print(k())"`.'
+        )
+
+_allowed = os.environ.get('ALLOWED_HOSTS', '').strip()
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()]
+if not ALLOWED_HOSTS and not DEBUG:
+    raise ImproperlyConfigured(
+        'ALLOWED_HOSTS est obligatoire hors DEBUG (liste séparée par des virgules).'
+    )
+if not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# Le proxy Vite (conteneur frontend) appelle http://web:8000 avec Host: web:8000.
+if DEBUG:
+    for _docker_host in ('web', 'host.docker.internal'):
+        if _docker_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_docker_host)
 
 # Origines CORS (prod : liste explicite ; DEBUG : ouvert)
 _cors = os.environ.get('CORS_ALLOWED_ORIGINS', '').strip()
 if _cors:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors.split(',') if o.strip()]
     CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOW_CREDENTIALS = True
+elif DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = False
 else:
-    CORS_ALLOW_ALL_ORIGINS = DEBUG or os.environ.get('CORS_ALLOW_ALL', '1') == '1'
+    raise ImproperlyConfigured(
+        'CORS_ALLOWED_ORIGINS est obligatoire hors DEBUG '
+        '(liste d\'origines séparée par des virgules).'
+    )
 
 
 # Application definition
@@ -69,6 +95,7 @@ INSTALLED_APPS = [
     'analytics',
     'locations',
     'hospital',
+    'education.apps.EducationConfig',
     'hotel.apps.HotelConfig',
     'wholesale',
     'retail',
@@ -81,6 +108,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'config.security_headers.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -128,7 +156,9 @@ DATABASES = {
 
 # SQLite pour les tests unitaires (sans PostgreSQL)
 import sys
-if 'test' in sys.argv:
+# Django force DEBUG=False pendant les tests. Ce drapeau reste vrai pour le stub BurundiPay.
+IS_TESTING = 'test' in sys.argv
+if IS_TESTING:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -230,7 +260,7 @@ AUTH_USER_MODEL = 'accounts.CustomUser'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'accounts.authentication.CookieJWTAuthentication',
     ),
     # Limitation de débit — protège l'API à grande échelle
     # Soft* : pas de throttle en DEBUG (SPA locale multiplie les GET).
@@ -241,6 +271,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'anon': os.environ.get('THROTTLE_ANON', '120/min'),
         'user': os.environ.get('THROTTLE_USER', '600/min'),
+        'auth_login': '20/min',
     },
 }
 
@@ -329,6 +360,12 @@ if not BURUNDIPAY_WEBHOOK_SECRET and not (DEBUG and BURUNDIPAY_STUB) and not _RU
         'accepte un statut forgé de n\'importe qui. Générez une valeur aléatoire '
         'et configurez-la chez le prestataire comme en-tête X-BurundiPay-Webhook-Secret.'
     )
+
+# Même raisonnement pour le stub : le runner Django force DEBUG=False, donc
+# initiate_collection() refuse le stub et les tests de checkout invité échouent.
+# Autorisé uniquement pendant la suite de tests — la production garde son refus.
+if _RUNNING_TESTS and BURUNDIPAY_STUB:
+    os.environ.setdefault('BURUNDIPAY_ALLOW_STUB_IN_PROD', '1')
 
 # Allow large payloads (e.g. Base64 images)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB

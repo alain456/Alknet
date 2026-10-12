@@ -18,6 +18,18 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_login_max_failures(self, value):
+        value = int(value)
+        if value < 1 or value > 20:
+            raise serializers.ValidationError("Le nombre d'échecs doit être entre 1 et 20.")
+        return value
+
+    def validate_login_lock_minutes(self, value):
+        value = int(value)
+        if value < 1 or value > 1440:
+            raise serializers.ValidationError("La durée de blocage doit être entre 1 et 1440 minutes.")
+        return value
+
 
 class FooterLinkSerializer(serializers.ModelSerializer):
     class Meta:

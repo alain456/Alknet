@@ -184,8 +184,8 @@ export default function PublicHotelBook() {
         doneLabel={doneLabel}
         paidHint={`Paiement validé. L'hôtel pourra confirmer votre réservation.${emailNote}`}
         unpaidHint={`Validez le paiement BurundiPay. L'hôtel confirmera ensuite ; vous recevrez un email de confirmation ou de refus.${emailNote}`}
-        confirmPayment={(rid) => hotelService.publicConfirmReservationPayment(rid, { auth: !!isAuthenticated })}
-        retryPayment={(rid, phone) => hotelService.publicPayReservation(rid, phone || form.payer_phone, { auth: !!isAuthenticated })}
+        confirmPayment={(rid) => hotelService.publicConfirmReservationPayment(rid, { auth: !!isAuthenticated, paymentToken: ok.payment_token || '' })}
+        retryPayment={(rid, phone) => hotelService.publicPayReservation(rid, phone || form.payer_phone, { auth: !!isAuthenticated, paymentToken: ok.payment_token || '' })}
         onOrderUpdate={(next) => setOk((prev) => ({ ...prev, ...next }))}
         onDone={() => {
           // Client → historique personnel (pas l'admin hôtel)

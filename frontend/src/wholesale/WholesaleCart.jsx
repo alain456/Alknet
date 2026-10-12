@@ -97,8 +97,8 @@ export default function WholesaleCart() {
         order={success}
         onOrderUpdate={setSuccess}
         onDone={() => setSuccess(null)}
-        confirmPayment={(id) => wholesaleService.confirmOrderPayment(id)}
-        retryPayment={(id, phone) => wholesaleService.payOrder(id, phone)}
+        confirmPayment={(id, token) => wholesaleService.confirmOrderPayment(id, token)}
+        retryPayment={(id, phone, token) => wholesaleService.payOrder(id, phone, token)}
         doneLabel="Continuer"
         paidHint="Paiement validé. Le grossiste pourra accepter votre commande."
       />
@@ -306,29 +306,29 @@ export default function WholesaleCart() {
 
       {confirmCart && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg space-y-4 my-8">
-            <h3 className="font-bold text-lg">Confirmer l&apos;envoi de la commande</h3>
+          <div className="bg-surface rounded-2xl p-6 w-full max-w-lg space-y-4 my-8 border-2 border-accent shadow-md text-ink">
+            <h3 className="font-extrabold text-lg text-ink">Confirmer l&apos;envoi de la commande</h3>
             <dl className="text-sm space-y-1">
-              <div className="flex justify-between"><dt className="text-slate-500">Pharmacie de détail</dt><dd className="font-medium">{confirmCart.client_business_name}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Pharmacie de gros</dt><dd className="font-medium">{confirmCart.wholesale_business_name}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Total</dt><dd className="font-bold">{money(confirmCart.total_amount)}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Pharmacie de détail</dt><dd className="font-medium">{confirmCart.client_business_name}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Pharmacie de gros</dt><dd className="font-medium">{confirmCart.wholesale_business_name}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink-muted">Total</dt><dd className="font-bold">{money(confirmCart.total_amount)}</dd></div>
             </dl>
-            <ul className="text-sm border rounded-xl divide-y max-h-48 overflow-y-auto">
+            <ul className="text-sm border-2 border-accent rounded-xl divide-y max-h-48 overflow-y-auto">
               {(confirmCart.items || []).map((i) => (
                 <li key={i.id} className="px-3 py-2 flex justify-between gap-2">
                   <span>
                     {i.product_name_snapshot || i.product_detail?.name} × {i.quantity}
-                    <span className="block text-xs text-slate-400">{i.packaging_snapshot || i.product_detail?.packaging}</span>
+                    <span className="block text-xs text-ink-muted">{i.packaging_snapshot || i.product_detail?.packaging}</span>
                   </span>
                   <span className="font-medium">{money(i.line_total)}</span>
                 </li>
               ))}
             </ul>
-            <label className="text-sm block space-y-1">
-              <span className="text-slate-500">Email professionnel de réception</span>
+            <label className="text-xs font-bold text-ink block space-y-1">
+              <span>Email professionnel de réception</span>
               <input
                 type="email"
-                className="w-full border rounded-lg px-3 py-2"
+                className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert"
                 placeholder="email@pharmacie.bi"
                 value={confirmCart._email || ''}
                 onChange={(e) => setConfirmCart({ ...confirmCart, _email: e.target.value })}
@@ -339,8 +339,8 @@ export default function WholesaleCart() {
               onChange={setPayerBurundiPay}
               amountLabel={money(confirmCart.total_amount)}
             />
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <label className="flex items-start gap-2 text-sm">
+            {error && <p className="text-sm text-alert font-medium">{error}</p>}
+            <label className="flex items-start gap-2 text-sm text-ink">
               <input
                 type="checkbox"
                 className="mt-1"
@@ -350,14 +350,14 @@ export default function WholesaleCart() {
               <span>J&apos;ai vérifié les produits, les quantités et le montant total.</span>
             </label>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmCart(null)} className="px-4 py-2 border rounded-xl">
+              <button type="button" onClick={() => setConfirmCart(null)} className="px-4 py-2 border-2 border-border rounded-xl font-semibold">
                 Annuler
               </button>
               <button
                 type="button"
                 disabled={!confirmChecked || busy}
                 onClick={sendOrder}
-                className="px-4 py-2 bg-primary text-white rounded-xl font-semibold disabled:opacity-50"
+                className="px-4 py-2 bg-primary text-surface rounded-xl font-bold border-2 border-accent disabled:opacity-50"
               >
                 {busy ? 'Envoi…' : 'Confirmer et envoyer'}
               </button>

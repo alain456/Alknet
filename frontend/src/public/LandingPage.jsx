@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Briefcase, MapPin, Building2, Store, Stethoscope, Laptop, HardHat,
   Sprout, Car, GraduationCap, Heart, Gavel, ShoppingBag, ShieldCheck,
@@ -8,17 +8,31 @@ import { useNavigate, Link } from 'react-router-dom';
 import api from '../shared/api';
 import useSiteContent from '../shared/useSiteContent';
 
-const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical'];
+const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical', 'pharmac', 'laboratoire'];
+
+// L'Éducation a son propre annuaire public ; les autres catégories renvoient
+// vers la liste des entreprises. `module` est la source de vérité, le test par
+// nom ne sert que de filet pour une catégorie pas encore revisitée.
+const EDUCATION_TERMS = ['éducation', 'education', 'école', 'ecole', 'universit', 'formation', 'enseignement', 'scolarité', 'scolarite'];
+
+const categoryModuleKey = (c) => {
+  const module = String(c?.module || '').toLowerCase();
+  if (module) return module;
+  const name = String(c?.name || '').toLowerCase();
+  const slug = String(c?.slug || '').toLowerCase();
+  if (EDUCATION_TERMS.some((t) => name.includes(t) || slug.includes(t))) return 'education';
+  if (HEALTH_TERMS.some((t) => name.includes(t) || slug.includes(t))) return 'hospital';
+  return '';
+};
 
 const isHealthBusiness = (b) => {
-  const catName = (b.primary_category_name || b.category_name || '').toLowerCase();
-  const busName = (b.name || '').toLowerCase();
-  const subCats = (b.categories_detail || []).map((c) => (c.name || '').toLowerCase());
-  return (
-    HEALTH_TERMS.some((h) => catName.includes(h))
-    || HEALTH_TERMS.some((h) => busName.includes(h))
-    || subCats.some((sub) => HEALTH_TERMS.some((h) => sub && sub.includes(h)))
-  );
+  const labels = [
+    b.primary_category_name,
+    b.category_name,
+    b.primary_category_parent_name,
+    ...(b.categories_detail || []).flatMap((c) => [c?.name, c?.parent_name]),
+  ].filter(Boolean).map((name) => String(name).toLowerCase());
+  return labels.some((label) => HEALTH_TERMS.some((term) => label.includes(term)));
 };
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
@@ -51,6 +65,13 @@ export default function LandingPage() {
   const [categories, setCategories] = useState([]);
   const [professionals, setProfessionals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const heroSlides = Array.isArray(settings?.hero_slides) ? settings.hero_slides.filter(Boolean) : [];
+  const categoryRail = useRef(null);
+  const categoryTrack = useRef(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -58,7 +79,10 @@ export default function LandingPage() {
         const [bData, sData, cData, dData] = await Promise.all([
           api.get('businesses/').catch(() => []),
           api.get('services/').catch(() => []),
-          api.get('business-categories/?used=1&parents_only=1').catch(() => []),
+          // `modules=education` force l'affichage de la racine Éducation même
+          // sans entreprise rattachée : elle a sa propre vitrine publique, elle
+          // ne doit pas disparaître de l'accueil avant les premières inscriptions.
+          api.get('business-categories/?used=1&parents_only=1&modules=education').catch(() => []),
           api.get('hospital/doctors/?public=true').catch(() => []),
         ]);
 
@@ -74,6 +98,39 @@ export default function LandingPage() {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (heroSlides.length < 2) return undefined;
+    const timer = setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % heroSlides.length);
+    }, 5200);
+    return () => clearInterval(timer);
+  }, [heroSlides.length]);
+
+  const horizontalCategories = categories.length >= 3;
+
+  useEffect(() => {
+    if (!horizontalCategories) return undefined;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) return undefined;
+    const onScroll = () => {
+      const rail = categoryRail.current;
+      const track = categoryTrack.current;
+      if (!rail || !track) return;
+      const distance = rail.offsetHeight - window.innerHeight;
+      if (distance <= 0) return;
+      const scrolled = Math.min(Math.max(-rail.getBoundingClientRect().top, 0), distance);
+      const maxShift = Math.max(0, track.scrollWidth - window.innerWidth + 48);
+      track.style.transform = `translate3d(${-(scrolled / distance) * maxShift}px, 0, 0)`;
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [horizontalCategories, categories.length]);
 
   const { healthBusinesses, topBusinesses, popularServices } = useMemo(() => {
     const health = allBusinesses.filter(isHealthBusiness);
@@ -101,17 +158,59 @@ export default function LandingPage() {
     else navigate(url);
   };
 
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return undefined;
+    }
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await api.get(`businesses/search/suggest/?q=${encodeURIComponent(q)}`);
+        setSuggestions(Array.isArray(data) ? data : []);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
+
+  const submitSearch = (event) => {
+    event?.preventDefault();
+    const params = new URLSearchParams();
+    if (searchQuery.trim()) params.set('q', searchQuery.trim());
+    if (searchLocation.trim()) params.set('location', searchLocation.trim());
+    setSuggestions([]);
+    navigate(`/search?${params.toString()}`);
+  };
+
   return (
     <div className="w-full">
       <section className="bg-primary py-20 px-4 text-center text-surface relative overflow-hidden">
-        <div
-          className="absolute inset-0 opacity-30 pointer-events-none"
-          style={{
-            background:
-              'radial-gradient(ellipse at 20% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)',
-          }}
-        />
-        <div className="max-w-4xl mx-auto relative">
+        {heroSlides.length > 0 ? (
+          <div className="absolute inset-0">
+            {heroSlides.map((src, i) => (
+              <img
+                key={`${i}-${String(src).slice(0, 24)}`}
+                src={src}
+                alt=""
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+                  i === heroIndex % heroSlides.length ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            ))}
+            <div className="absolute inset-0 bg-black/40" />
+          </div>
+        ) : (
+          <div
+            className="absolute inset-0 opacity-30 pointer-events-none"
+            style={{
+              background:
+                'radial-gradient(ellipse at 20% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)',
+            }}
+          />
+        )}
+        <div className="max-w-4xl mx-auto relative z-10">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-surface mb-6 leading-tight">
             {heroTitleLines.map((line, idx) => (
               <React.Fragment key={idx}>
@@ -140,31 +239,105 @@ export default function LandingPage() {
             </button>
           </div>
 
-          <div className="bg-surface p-2 rounded-full shadow-2xl flex max-w-3xl mx-auto items-center border-2 border-accent">
-            <div className="flex-1 flex items-center px-4 border-r border-border">
+          <form onSubmit={submitSearch} className="hero-search bg-surface p-2 rounded-full shadow-2xl flex max-w-3xl mx-auto items-center border-2 border-accent relative">
+            <div className="flex-1 flex items-center px-4 border-r border-border relative">
               <Search className="text-accent w-5 h-5 mr-2 shrink-0" />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={settings?.search_placeholder || 'Profession, Business, Restaurant, Product...'}
-                className="w-full py-3 outline-none text-ink text-base font-medium bg-transparent border-0"
+                className="hero-search-input w-full py-3 outline-none text-base font-medium bg-transparent border-0"
               />
+              {suggestions.length > 0 && (
+                <ul className="hero-search-suggest absolute left-0 right-0 top-full mt-3 bg-white text-left rounded-2xl shadow-xl border border-slate-200 z-20 overflow-hidden">
+                  {suggestions.map((item) => (
+                    <li key={`${item.kind}-${item.label}`}>
+                      <button
+                        type="button"
+                        className="hero-search-suggest-btn w-full px-4 py-2.5 text-sm text-left"
+                        onClick={() => {
+                          if (item.kind === 'location') {
+                            setSearchLocation(item.label);
+                            setSuggestions([]);
+                          } else {
+                            setSearchQuery(item.q || item.label);
+                            setSuggestions([]);
+                          }
+                        }}
+                      >
+                        <span className="font-semibold">{item.label}</span>
+                        <span className="ml-2 text-xs uppercase">{item.kind === 'location' ? 'Lieu' : 'Entreprise'}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="w-1/3 flex items-center px-4">
               <MapPin className="text-accent w-5 h-5 mr-2 shrink-0" />
               <input
                 type="text"
+                value={searchLocation}
+                onChange={(e) => setSearchLocation(e.target.value)}
                 placeholder={settings?.search_location_placeholder || 'Location'}
-                className="w-full py-3 outline-none text-ink text-base font-medium bg-transparent border-0"
+                className="hero-search-input w-full py-3 outline-none text-base font-medium bg-transparent border-0"
               />
             </div>
-            <button className="bg-primary hover:opacity-95 text-surface font-bold text-base py-3 px-8 rounded-full transition border-2 border-accent shrink-0">
+            <button type="submit" className="bg-primary hover:opacity-95 text-surface font-bold text-base py-3 px-8 rounded-full transition border-2 border-accent shrink-0">
               Search
             </button>
-          </div>
+          </form>
+          {heroSlides.length > 1 && (
+            <div className="mt-8 flex justify-center gap-2">
+              {heroSlides.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  aria-label={`Image ${i + 1}`}
+                  onClick={() => setHeroIndex(i)}
+                  className={`h-2 rounded-full ${i === heroIndex % heroSlides.length ? 'w-6 bg-white' : 'w-2 bg-white/60'}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
       {settings?.show_categories !== false && (
+      horizontalCategories && !loading && categories.length > 0 ? (
+      <section
+        ref={categoryRail}
+        className="relative"
+        style={{ height: `${Math.max(categories.length, 6) * 18}vh` }}
+      >
+        <div className="sticky top-16 h-[calc(100vh-4rem)] overflow-hidden flex flex-col justify-center">
+          <h2 className="text-3xl font-bold text-gray-900 text-center mb-10 px-4">{settings?.categories_title || 'Explore Categories'}</h2>
+          <div ref={categoryTrack} className="flex gap-6 px-6 w-max will-change-transform">
+            {categories.map((cat) => {
+              const IconComp = categoryIcon(cat.name);
+              const moduleKey = categoryModuleKey(cat);
+              const target = moduleKey === 'education'
+                ? '/education'
+                : (moduleKey === 'hospital'
+                  ? '/hospitals'
+                  : `/businesses?category=${encodeURIComponent(cat.name)}`);
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => navigate(target)}
+                  className="flex flex-col items-center shrink-0 w-44 p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group"
+                >
+                  <IconComp className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
+                  <span className="font-medium text-gray-700 group-hover:text-primary text-center leading-tight">{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+      ) : (
       <section className="py-20 px-4 max-w-7xl mx-auto">
         <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">{settings?.categories_title || 'Explore Categories'}</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
@@ -178,11 +351,16 @@ export default function LandingPage() {
           ) : categories.length > 0 ? (
             categories.map((cat) => {
               const IconComp = categoryIcon(cat.name);
-              const isHealth = HEALTH_TERMS.some((h) => (cat.name || '').toLowerCase().includes(h));
+              const moduleKey = categoryModuleKey(cat);
+              const target = moduleKey === 'education'
+                ? '/education'
+                : (moduleKey === 'hospital'
+                  ? '/hospitals'
+                  : `/businesses?category=${encodeURIComponent(cat.name)}`);
               return (
                 <div
                   key={cat.id}
-                  onClick={() => navigate(isHealth ? '/hospitals' : `/businesses?category=${encodeURIComponent(cat.name)}`)}
+                  onClick={() => navigate(target)}
                   className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group"
                 >
                   <IconComp className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
@@ -195,6 +373,7 @@ export default function LandingPage() {
           )}
         </div>
       </section>
+      )
       )}
 
       {settings?.show_professionals !== false && (

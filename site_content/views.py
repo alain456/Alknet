@@ -28,7 +28,9 @@ DEFAULT_FOOTER_LINKS = [
     ("SUPPORT", "Support", "Help Center", "/pages/help", 1),
     ("SUPPORT", "Support", "Contact Us", "/pages/contact", 2),
     ("LEGAL", "Legal", "Terms of Service", "/pages/terms", 1),
-    ("LEGAL", "Legal", "Privacy Policy", "/pages/privacy", 2),
+    ("LEGAL", "Legal", "CGV", "/pages/cgv", 2),
+    ("LEGAL", "Legal", "Privacy Policy", "/pages/privacy", 3),
+    ("LEGAL", "Legal", "SLA", "/pages/sla", 4),
 ]
 
 DEFAULT_PAGES = [
@@ -41,9 +43,46 @@ DEFAULT_PAGES = [
         "Une question, une suggestion ou un partenariat ? Envoyez-nous un message via le formulaire ci-dessous. "
         "Notre équipe vous répondra dès que possible.",
     ),
-    ("terms", "Terms of Service", "Terms of service content managed by the Super Admin."),
-    ("privacy", "Privacy Policy", "Privacy policy content managed by the Super Admin."),
+    ("terms", "Conditions d'utilisation", "PLACEHOLDER"),
+    ("cgv", "Conditions générales de vente", "PLACEHOLDER"),
+    ("privacy", "Politique de confidentialité", "PLACEHOLDER"),
+    ("sla", "Engagement de service", "PLACEHOLDER"),
 ]
+
+
+LEGAL_BODIES = {
+    "terms": (
+        "Conditions d'utilisation d'Isoko Hub.\n"
+        "Le compte est personnel. Vous êtes responsable de votre mot de passe et des actions faites avec votre session.\n"
+        "Les contenus que vous publiez (fiches, catalogues, dossiers) restent votre responsabilité. Vous garantissez qu'ils sont exacts et licites.\n"
+        "Isoko Hub fournit le logiciel. Les prestations vendues (soins, chambres, produits) sont celles de l'établissement, pas de la plateforme.\n"
+        "Vous pouvez résilier en cessant l'abonnement ou en demandant la suppression du compte. Les obligations de paiement déjà dues restent exigibles.\n"
+        "Le logiciel, la marque et l'interface appartiennent à l'éditeur. Vous recevez un droit d'usage tant que l'abonnement est actif."
+    ),
+    "cgv": (
+        "Conditions générales de vente de l'abonnement Isoko Hub.\n"
+        "L'abonnement est souscrit par l'entreprise, en francs burundais, via BurundiPay. Il n'y a pas de prélèvement automatique par carte bancaire.\n"
+        "Une formule d'essai est gratuite. À son échéance, l'accès métier reste ouvert pendant la période de grâce affichée, puis il est suspendu tant que le paiement n'est pas confirmé.\n"
+        "La mise à niveau ou le retour à une formule inférieure se fait depuis la page Abonnement, au prochain paiement. Aucun passage silencieux au payant.\n"
+        "La résiliation prend effet à la fin de la période déjà payée. Les données de l'établissement peuvent être exportées en JSON avant la fermeture.\n"
+        "La responsabilité de l'éditeur est limitée au montant de l'abonnement des douze derniers mois, hors faute lourde."
+    ),
+    "privacy": (
+        "Politique de confidentialité.\n"
+        "Nous collectons les données de compte (identité, e-mail, téléphone), les données d'usage, et les données métier que vous saisissez (clients, réservations, dossiers de soin).\n"
+        "Le bandeau de consentement concerne les traceurs du site public. La création d'un compte vaut base contractuelle pour les données nécessaires au service.\n"
+        "Vous pouvez corriger votre profil, exporter vos données personnelles au format JSON, et demander la suppression du compte depuis votre profil.\n"
+        "Les données de santé et d'hôtellerie sont accessibles uniquement aux rôles autorisés de l'établissement concerné.\n"
+        "Nous ne vendons pas ces données. Elles sont conservées tant que le compte ou l'abonnement est actif, puis selon les obligations légales de facturation."
+    ),
+    "sla": (
+        "Engagement de service (SLA).\n"
+        "Cible de disponibilité de l'application : 99,5 % sur un mois calendaire, hors maintenance annoncée et hors panne des réseaux ou du prestataire de paiement.\n"
+        "Une panne est un indisponibilité de l'API principale supérieure à 15 minutes.\n"
+        "Compensation : si la cible n'est pas tenue, l'établissement concerné reçoit un avoir d'une période d'abonnement au prorata du temps d'arrêt constaté, sur demande au support dans les 15 jours.\n"
+        "Les sauvegardes métier sont lancées chaque semaine. Elles ne remplacent pas une copie que vous gardez après export."
+    ),
+}
 
 
 def ensure_defaults():
@@ -58,11 +97,31 @@ def ensure_defaults():
                 display_order=order,
                 is_active=True,
             )
+    else:
+        for column, title, label, url, order in DEFAULT_FOOTER_LINKS:
+            if column != "LEGAL":
+                continue
+            FooterLink.objects.get_or_create(
+                url=url,
+                defaults={
+                    "column": column,
+                    "column_title": title,
+                    "label": label,
+                    "display_order": order,
+                    "is_active": True,
+                },
+            )
     for slug, title, body in DEFAULT_PAGES:
-        ContentPage.objects.get_or_create(
+        page, created = ContentPage.objects.get_or_create(
             slug=slug,
             defaults={"title": title, "body": body, "is_published": True},
         )
+        legal = LEGAL_BODIES.get(slug)
+        if legal and (created or "managed by the Super Admin" in (page.body or "") or page.body == "PLACEHOLDER"):
+            page.title = title
+            page.body = legal
+            page.is_published = True
+            page.save(update_fields=["title", "body", "is_published"])
     return settings
 
 
@@ -87,20 +146,20 @@ def _super_admin_emails():
 
 
 def _platform_inbox_emails():
-    """Super Admin + acteurs Support (PLATFORM_SUPPORT)."""
+    """Boîte officielle du projet, plus les comptes Support (pas l’ancien Gmail personnel)."""
+    official = (getattr(django_settings, "DEFAULT_FROM_EMAIL", "") or "info.isokohub@gmail.com").strip()
     from django.contrib.auth import get_user_model
     User = get_user_model()
-    emails = list(
-        User.objects.filter(
-            role__in=('SUPER_ADMIN', 'PLATFORM_SUPPORT'),
-            is_active=True,
-        ).exclude(email='').values_list('email', flat=True)
+    extras = list(
+        User.objects.filter(role='PLATFORM_SUPPORT', is_active=True)
+        .exclude(email='')
+        .values_list('email', flat=True)
     )
-    # Fallback DEFAULT_FROM / CONTACT
-    emails = list(dict.fromkeys([e.strip() for e in emails if e and str(e).strip()]))
-    if not emails:
-        return _super_admin_emails()
-    return emails
+    blocked = {'alaineucridegushakakwimana@gmail.com'}
+    emails = [official, *extras]
+    return list(dict.fromkeys(
+        e.strip() for e in emails if e and str(e).strip() and e.strip().lower() not in blocked
+    ))
 
 
 def notify_super_admins_contact(msg: ContactMessage):
@@ -109,25 +168,20 @@ def notify_super_admins_contact(msg: ContactMessage):
     if not recipients:
         return {"status": "SKIPPED", "reason": "Aucun email Support / Super Admin"}
 
-    subject = f"[Isoko Hub] Contact : {msg.subject}"
+    subject = f"Contact Isoko Hub : {msg.subject}"
     body = (
-        f"Nouveau message depuis la page Contact Us.\n\n"
-        f"Nom : {msg.name}\n"
+        f"Bonjour,\n\n"
+        f"{msg.name} a écrit depuis la page Contact.\n"
         f"Email : {msg.email}\n"
         f"Téléphone : {msg.phone or '—'}\n"
         f"Objet : {msg.subject}\n\n"
-        f"Message :\n{msg.message}\n\n"
-        f"— Reçu le {timezone.localtime(msg.created_at).strftime('%d/%m/%Y %H:%M')}\n"
-        f"Répondre dans l’admin : /admin/support\n"
+        f"{msg.message}\n\n"
+        f"Reçu le {timezone.localtime(msg.created_at).strftime('%d/%m/%Y %H:%M')}.\n"
+        f"Répondez dans Isoko Hub, menu Support.\n"
     )
     try:
-        send_mail(
-            subject=subject,
-            message=body,
-            from_email=getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@isokohub.bi"),
-            recipient_list=recipients,
-            fail_silently=False,
-        )
+        from accounts.outbound_mail import send_isoko_mail
+        send_isoko_mail(subject, body, recipients, reply_to=msg.email)
         return {"status": "SENT", "recipients": recipients}
     except Exception as exc:
         logger.exception("Échec email contact message %s", msg.id)
@@ -282,19 +336,12 @@ class ContactMessageAdminViewSet(viewsets.ModelViewSet):
         mail_body = (
             f"Bonjour {msg.name},\n\n"
             f"{body}\n\n"
-            f"— L’équipe Isoko Hub\n\n"
-            f"---\nVotre message du "
-            f"{timezone.localtime(msg.created_at).strftime('%d/%m/%Y %H:%M')} :\n"
-            f"{msg.message}\n"
+            f"Isoko Hub\n"
+            f"info.isokohub@gmail.com\n"
         )
         try:
-            send_mail(
-                subject=subject,
-                message=mail_body,
-                from_email=getattr(django_settings, "DEFAULT_FROM_EMAIL", "noreply@isokohub.bi"),
-                recipient_list=[msg.email],
-                fail_silently=False,
-            )
+            from accounts.outbound_mail import send_isoko_mail
+            send_isoko_mail(subject, mail_body, [msg.email], reply_to="info.isokohub@gmail.com")
         except Exception as exc:
             logger.exception("Échec reply contact %s", msg.id)
             return Response(

@@ -110,11 +110,14 @@ function ContactPage({ page, paragraphs }) {
     || paragraphs.join(' ')
     || 'Une question sur la plateforme, un partenariat ou un besoin support ? Écrivez-nous.';
   const address = settings?.contact_office_address || 'Bujumbura, Burundi';
-  const email = settings?.footer_contact_email || 'support@isokohub.com';
+  const email = settings?.footer_contact_email || 'info.isokohub@gmail.com';
   const phone = settings?.footer_contact_phone || '';
-  const socialLinks = Array.isArray(settings?.footer_social_links)
-    ? settings.footer_social_links.filter((s) => s?.url)
-    : [];
+  const socialLinks = (Array.isArray(settings?.footer_social_links) ? settings.footer_social_links : [])
+    .map((s) => ({
+      network: s?.network || s?.name || 'website',
+      url: s?.url || s?.link || s?.href || '',
+    }))
+    .filter((s) => s.url);
   const lat = Number(settings?.contact_map_lat);
   const lng = Number(settings?.contact_map_lng);
   const mapsUrl = settings?.contact_google_maps_url || '';

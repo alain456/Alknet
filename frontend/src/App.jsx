@@ -1,3 +1,4 @@
+import { lazyPage } from './shared/lazyPage';
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './auth/ProtectedRoute';
@@ -5,55 +6,8 @@ import { ZONE_ACCESS } from './auth/roleAccess';
 import PublicLayout from './layouts/PublicLayout';
 import HospitalStaffLayout from './layouts/HospitalStaffLayout';
 import LandingPage from './public/LandingPage';
-import ServicesPage from './public/ServicesPage';
-import BusinessesPage from './public/BusinessesPage';
-import JobsPage from './public/JobsPage';
-import HospitalDirectory from './hospital/HospitalDirectory';
-import HospitalProfile from './hospital/HospitalProfile';
-import PublicAppointmentBooking from './hospital/PublicAppointmentBooking';
-import BusinessRegistrationPage from './public/BusinessRegistrationPage';
-import ManageServices from './hospital/admin/ManageServices';
-import ManageExams from './hospital/admin/ManageExams';
-import ManageServiceCategories from './hospital/admin/ManageServiceCategories';
-import ManageDoctors from './hospital/admin/ManageDoctors';
-import ManageSchedules from './hospital/admin/ManageSchedules';
-import ManageAppointments from './hospital/admin/ManageAppointments';
-import ManageMedicalRecords from './hospital/admin/ManageMedicalRecords';
-import ManageInvoices from './hospital/admin/ManageInvoices';
-import ManageLabResults from './hospital/admin/ManageLabResults';
-import HospitalDashboard from './hospital/admin/HospitalDashboard';
-import ManageReports from './hospital/admin/ManageReports';
-import ManagePatients from './hospital/admin/ManagePatients';
-import PatientDetail from './hospital/admin/PatientDetail';
-import ManageAdmissions from './hospital/admin/ManageAdmissions';
-import LegacyHospitalAdminRedirect from './hospital/LegacyHospitalAdminRedirect';
 import PermissionGuard from './auth/PermissionGuard';
 import { PERMISSIONS } from './lib/permissions';
-import LabTechnicianDashboard from './hospital/staff/LabTechnicianDashboard';
-import DoctorDashboard from './hospital/staff/DoctorDashboard';
-import NurseDashboard from './hospital/staff/NurseDashboard';
-import HospitalCashierDashboard from './hospital/staff/CashierDashboard';
-import ReceptionistDashboard from './hospital/staff/ReceptionistDashboard';
-import HotelDashboard from './hotel/admin/HotelDashboard';
-import HotelCompany from './hotel/admin/HotelCompany';
-import ManageRoomTypes from './hotel/admin/ManageRoomTypes';
-import ManageRooms from './hotel/admin/ManageRooms';
-import ManageRates from './hotel/admin/ManageRates';
-import ManageReservations from './hotel/admin/ManageReservations';
-import ManageStays from './hotel/admin/ManageStays';
-import ManageGuests, { ManageHotelServices } from './hotel/admin/ManageGuests';
-import ManageHousekeeping from './hotel/admin/ManageHousekeeping';
-import ManageMaintenance from './hotel/admin/ManageMaintenance';
-import ManageHotelInvoices, { HotelReports } from './hotel/admin/ManageHotelInvoices';
-import FrontDeskArrivals, { FrontDeskDepartures } from './hotel/admin/FrontDesk';
-import CashierFolios from './hotel/admin/CashierFolios';
-import HotelCashierDashboard from './hotel/admin/CashierDashboard';
-import HotelReservationSettings from './hotel/admin/HotelReservationSettings';
-import HotelClientMessages from './hotel/admin/HotelClientMessages';
-import HotelClientReschedules from './hotel/admin/HotelClientReschedules';
-import HotelStaffLayout from './hotel/staff/HotelStaffLayout';
-import PublicHotels from './hotel/public/PublicHotels';
-import PublicHotelBook from './hotel/public/PublicHotelBook';
 import AuthLayout from './layouts/AuthLayout';
 import LoginPage from './auth/LoginPage';
 import RegisterPage from './auth/RegisterPage';
@@ -62,71 +16,142 @@ import ResetPasswordPage from './auth/ResetPasswordPage';
 import VerifyEmailPage from './auth/VerifyEmailPage';
 import OAuthCallbackPage from './auth/OAuthCallbackPage';
 import DashboardLayout from './layouts/DashboardLayout';
-import UserDashboardPage from './dashboard/UserDashboardPage';
-import UserBookingsPage from './dashboard/UserBookingsPage';
-import UserProfilePage from './dashboard/UserProfilePage';
-import Notifications from './patient/Notifications';
-import PatientLabResults from './patient/PatientLabResults';
 import BusinessLayout from './layouts/BusinessLayout';
-import ManageRoles from './business/ManageRoles';
-import BusinessDashboardPage from './business/BusinessDashboardPage';
-import BusinessEmployeesPage from './business/BusinessEmployeesPage';
-import BusinessProductsPage from './business/BusinessProductsPage';
-import BusinessServicesPage from './business/BusinessServicesPage';
-import BusinessOffersPage from './business/BusinessOffersPage';
-import BusinessOrdersPage from './business/BusinessOrdersPage';
-import BusinessBookingsPage from './business/BusinessBookingsPage';
-import BusinessProfilePage from './business/BusinessProfilePage';
-import BusinessSettingsPage from './business/BusinessSettingsPage';
-import BusinessSubscriptionPage from './business/BusinessSubscriptionPage';
-import BusinessAuditLogsPage from './business/BusinessAuditLogsPage';
-import CommerceDashboard from './commerce/CommerceDashboard';
-import CommerceCatalog from './commerce/CommerceCatalog';
-import CommerceInventory from './commerce/CommerceInventory';
-import CommerceOrders from './commerce/CommerceOrders';
-import PublicShop from './commerce/PublicShop';
 import AdminLayout from './layouts/AdminLayout';
-import AdminDashboardPage from './admin/AdminDashboardPage';
-import AdminAnalyticsPage from './admin/AdminAnalyticsPage';
-import AdminUsersPage from './admin/AdminUsersPage';
-import AdminBusinessesPage from './admin/AdminBusinessesPage';
-import AdminProfessionalsPage from './admin/AdminProfessionalsPage';
-import AdminCategoriesPage from './admin/AdminCategoriesPage';
-import AdminServicesPage from './admin/AdminServicesPage';
-import AdminPaymentsPage from './admin/AdminPaymentsPage';
-import AdminLocationsPage from './admin/AdminLocationsPage';
-import AdminSettingsPage from './admin/AdminSettingsPage';
-import AdminAuditLogsPage from './admin/AdminAuditLogsPage';
-import AdminCmsPage from './admin/AdminCmsPage';
-import AdminPlatformRolesPage from './admin/AdminPlatformRolesPage';
-import AdminModerationPage from './admin/AdminModerationPage';
-import AdminSupportPage from './admin/AdminSupportPage';
-import AdminHotelsPage from './admin/AdminHotelsPage';
-import HotelCalendar from './hotel/admin/HotelCalendar';
-import ContentPageView from './public/ContentPageView';
-import BusinessClientHistoryPage from './public/BusinessClientHistoryPage';
-import WholesaleDashboard from './wholesale/WholesaleDashboard';
-import WholesaleCatalog from './wholesale/WholesaleCatalog';
-import WholesaleInventory from './wholesale/WholesaleInventory';
-import WholesaleOrders from './wholesale/WholesaleOrders';
-import WholesaleClients from './wholesale/WholesaleClients';
-import WholesaleHistory from './wholesale/WholesaleHistory';
-import WholesaleCompany from './wholesale/WholesaleCompany';
-import WholesaleCart from './wholesale/WholesaleCart';
-import WholesaleProforma from './wholesale/WholesaleProforma';
-import WholesaleClientCompany from './wholesale/WholesaleClientCompany';
-import PublicWholesaleCatalog from './wholesale/PublicWholesaleCatalog';
-import PublicRetailCatalog from './retail/PublicRetailCatalog';
-import RetailDashboard from './retail/RetailDashboard';
-import RetailCatalog from './retail/RetailCatalog';
-import RetailInventory from './retail/RetailInventory';
-import RetailOrders from './retail/RetailOrders';
-import RetailPatients from './retail/RetailPatients';
-import RetailPrescriptions from './retail/RetailPrescriptions';
-import RetailHistory from './retail/RetailHistory';
-import RetailCompany from './retail/RetailCompany';
-import RetailProforma from './retail/RetailProforma';
-import RetailCart from './retail/RetailCart';
+
+const load_public = () => import('./zones/public.js');
+const SearchResultsPage = lazyPage(() => load_public().then((m) => ({ default: m.SearchResultsPage })));
+const ServicesPage = lazyPage(() => load_public().then((m) => ({ default: m.ServicesPage })));
+const BusinessesPage = lazyPage(() => load_public().then((m) => ({ default: m.BusinessesPage })));
+const JobsPage = lazyPage(() => load_public().then((m) => ({ default: m.JobsPage })));
+const BusinessRegistrationPage = lazyPage(() => load_public().then((m) => ({ default: m.BusinessRegistrationPage })));
+const ContentPageView = lazyPage(() => load_public().then((m) => ({ default: m.ContentPageView })));
+const BusinessClientHistoryPage = lazyPage(() => load_public().then((m) => ({ default: m.BusinessClientHistoryPage })));
+const load_hospital = () => import('./zones/hospital.js');
+const HospitalDirectory = lazyPage(() => load_hospital().then((m) => ({ default: m.HospitalDirectory })));
+const HospitalProfile = lazyPage(() => load_hospital().then((m) => ({ default: m.HospitalProfile })));
+const PublicAppointmentBooking = lazyPage(() => load_hospital().then((m) => ({ default: m.PublicAppointmentBooking })));
+const ManageServices = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageServices })));
+const ManageExams = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageExams })));
+const ManageServiceCategories = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageServiceCategories })));
+const ManageDoctors = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageDoctors })));
+const ManageSchedules = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageSchedules })));
+const ManageAppointments = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageAppointments })));
+const ManageMedicalRecords = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageMedicalRecords })));
+const ManageInvoices = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageInvoices })));
+const ManageLabResults = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageLabResults })));
+const HospitalDashboard = lazyPage(() => load_hospital().then((m) => ({ default: m.HospitalDashboard })));
+const ManageReports = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageReports })));
+const ManagePatients = lazyPage(() => load_hospital().then((m) => ({ default: m.ManagePatients })));
+const PatientDetail = lazyPage(() => load_hospital().then((m) => ({ default: m.PatientDetail })));
+const ManageAdmissions = lazyPage(() => load_hospital().then((m) => ({ default: m.ManageAdmissions })));
+const LegacyHospitalAdminRedirect = lazyPage(() => load_hospital().then((m) => ({ default: m.LegacyHospitalAdminRedirect })));
+const LabTechnicianDashboard = lazyPage(() => load_hospital().then((m) => ({ default: m.LabTechnicianDashboard })));
+const DoctorDashboard = lazyPage(() => load_hospital().then((m) => ({ default: m.DoctorDashboard })));
+const NurseDashboard = lazyPage(() => load_hospital().then((m) => ({ default: m.NurseDashboard })));
+const HospitalCashierDashboard = lazyPage(() => load_hospital().then((m) => ({ default: m.HospitalCashierDashboard })));
+const ReceptionistDashboard = lazyPage(() => load_hospital().then((m) => ({ default: m.ReceptionistDashboard })));
+const load_hotel = () => import('./zones/hotel.js');
+const HotelDashboard = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelDashboard })));
+const HotelCompany = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelCompany })));
+const ManageRoomTypes = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageRoomTypes })));
+const ManageRooms = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageRooms })));
+const ManageRates = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageRates })));
+const ManageReservations = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageReservations })));
+const ManageStays = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageStays })));
+const ManageGuests = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageGuests })));
+const ManageHotelServices = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageHotelServices })));
+const ManageHousekeeping = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageHousekeeping })));
+const ManageMaintenance = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageMaintenance })));
+const ManageHotelInvoices = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageHotelInvoices })));
+const HotelReports = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelReports })));
+const FrontDeskArrivals = lazyPage(() => load_hotel().then((m) => ({ default: m.FrontDeskArrivals })));
+const FrontDeskDepartures = lazyPage(() => load_hotel().then((m) => ({ default: m.FrontDeskDepartures })));
+const CashierFolios = lazyPage(() => load_hotel().then((m) => ({ default: m.CashierFolios })));
+const HotelCashierDashboard = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelCashierDashboard })));
+const HotelReservationSettings = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelReservationSettings })));
+const HotelClientMessages = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelClientMessages })));
+const HotelClientReschedules = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelClientReschedules })));
+const HotelStaffLayout = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelStaffLayout })));
+const PublicHotels = lazyPage(() => load_hotel().then((m) => ({ default: m.PublicHotels })));
+const PublicHotelBook = lazyPage(() => load_hotel().then((m) => ({ default: m.PublicHotelBook })));
+const HotelCalendar = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelCalendar })));
+const load_account = () => import('./zones/account.js');
+const UserDashboardPage = lazyPage(() => load_account().then((m) => ({ default: m.UserDashboardPage })));
+const UserBookingsPage = lazyPage(() => load_account().then((m) => ({ default: m.UserBookingsPage })));
+const UserProfilePage = lazyPage(() => load_account().then((m) => ({ default: m.UserProfilePage })));
+const Notifications = lazyPage(() => load_account().then((m) => ({ default: m.Notifications })));
+const PatientLabResults = lazyPage(() => load_account().then((m) => ({ default: m.PatientLabResults })));
+const load_business = () => import('./zones/business.js');
+const ManageRoles = lazyPage(() => load_business().then((m) => ({ default: m.ManageRoles })));
+const BusinessDashboardPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessDashboardPage })));
+const BusinessEmployeesPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessEmployeesPage })));
+const BusinessProductsPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessProductsPage })));
+const BusinessServicesPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessServicesPage })));
+const BusinessOffersPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessOffersPage })));
+const BusinessOrdersPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessOrdersPage })));
+const BusinessBookingsPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessBookingsPage })));
+const BusinessProfilePage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessProfilePage })));
+const BusinessSettingsPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessSettingsPage })));
+const BusinessSubscriptionPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessSubscriptionPage })));
+const BusinessAuditLogsPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessAuditLogsPage })));
+const load_commerce = () => import('./zones/commerce.js');
+const CommerceDashboard = lazyPage(() => load_commerce().then((m) => ({ default: m.CommerceDashboard })));
+const CommerceCatalog = lazyPage(() => load_commerce().then((m) => ({ default: m.CommerceCatalog })));
+const CommerceInventory = lazyPage(() => load_commerce().then((m) => ({ default: m.CommerceInventory })));
+const CommerceOrders = lazyPage(() => load_commerce().then((m) => ({ default: m.CommerceOrders })));
+const PublicShop = lazyPage(() => load_commerce().then((m) => ({ default: m.PublicShop })));
+const load_education = () => import('./zones/education.js');
+const EducationDirectory = lazyPage(() => load_education().then((m) => ({ default: m.EducationDirectory })));
+const EducationEstablishment = lazyPage(() => load_education().then((m) => ({ default: m.EducationEstablishment })));
+const EducationDashboard = lazyPage(() => load_education().then((m) => ({ default: m.EducationDashboard })));
+const EducationStaff = lazyPage(() => load_education().then((m) => ({ default: m.EducationStaff })));
+const EducationAdmissions = lazyPage(() => load_education().then((m) => ({ default: m.EducationAdmissions })));
+const PublicSchoolEnrollment = lazyPage(() => load_education().then((m) => ({ default: m.PublicSchoolEnrollment })));
+const EnrollmentDossier = lazyPage(() => load_education().then((m) => ({ default: m.EnrollmentDossier })));
+const SchoolAccounting = lazyPage(() => load_education().then((m) => ({ default: m.SchoolAccounting })));
+const load_admin = () => import('./zones/admin.js');
+const AdminDashboardPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminDashboardPage })));
+const AdminAnalyticsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminAnalyticsPage })));
+const AdminUsersPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminUsersPage })));
+const AdminBusinessesPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminBusinessesPage })));
+const AdminProfessionalsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminProfessionalsPage })));
+const AdminCategoriesPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminCategoriesPage })));
+const AdminServicesPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminServicesPage })));
+const AdminPaymentsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminPaymentsPage })));
+const AdminLocationsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminLocationsPage })));
+const AdminSettingsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminSettingsPage })));
+const AdminAuditLogsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminAuditLogsPage })));
+const AdminCmsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminCmsPage })));
+const AdminPlatformRolesPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminPlatformRolesPage })));
+const AdminModerationPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminModerationPage })));
+const AdminSupportPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminSupportPage })));
+const AdminHotelsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminHotelsPage })));
+const load_pharmacy = () => import('./zones/pharmacy.js');
+const WholesaleDashboard = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleDashboard })));
+const WholesaleCatalog = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleCatalog })));
+const WholesaleInventory = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleInventory })));
+const WholesaleOrders = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleOrders })));
+const WholesaleClients = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleClients })));
+const WholesaleHistory = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleHistory })));
+const WholesaleCompany = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleCompany })));
+const WholesaleCart = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleCart })));
+const WholesaleProforma = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleProforma })));
+const WholesaleClientCompany = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleClientCompany })));
+const PublicWholesaleCatalog = lazyPage(() => load_pharmacy().then((m) => ({ default: m.PublicWholesaleCatalog })));
+const PublicRetailCatalog = lazyPage(() => load_pharmacy().then((m) => ({ default: m.PublicRetailCatalog })));
+const RetailDashboard = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailDashboard })));
+const RetailCatalog = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailCatalog })));
+const RetailInventory = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailInventory })));
+const RetailOrders = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailOrders })));
+const RetailPatients = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailPatients })));
+const RetailPrescriptions = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailPrescriptions })));
+const RetailHistory = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailHistory })));
+const RetailCashier = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailCashier })));
+const WholesaleCashier = lazyPage(() => load_pharmacy().then((m) => ({ default: m.WholesaleCashier })));
+const RetailCompany = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailCompany })));
+const RetailProforma = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailProforma })));
+const RetailCart = lazyPage(() => load_pharmacy().then((m) => ({ default: m.RetailCart })));
 
 function App() {
   return (
@@ -134,6 +159,7 @@ function App() {
       <Routes>
           <Route path="/" element={<PublicLayout />}>
             <Route index element={<LandingPage />} />
+            <Route path="search" element={<SearchResultsPage />} />
             <Route path="services" element={<ServicesPage />} />
             <Route path="businesses" element={<BusinessesPage />} />
             <Route path="businesses/:id/catalog" element={<PublicWholesaleCatalog />} />
@@ -151,6 +177,11 @@ function App() {
             <Route path="hotels" element={<PublicHotels />} />
             <Route path="hotels/:id/historique" element={<BusinessClientHistoryPage />} />
             <Route path="hotels/:id" element={<PublicHotelBook />} />
+            <Route path="education" element={<EducationDirectory />} />
+            {/* `:source` = id EducationProfile (annuaire) ou id Business (liste générale) */}
+            <Route path="education/establishment/:id" element={<EducationEstablishment />} />
+            <Route path="education/inscription" element={<PublicSchoolEnrollment />} />
+            <Route path="education/dossier" element={<EnrollmentDossier />} />
             <Route path="register-business" element={<BusinessRegistrationPage />} />
             <Route path="pages/:slug" element={<ContentPageView />} />
           </Route>
@@ -215,7 +246,19 @@ function App() {
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
               <Route path="audit" element={<BusinessAuditLogsPage />} />
             </Route>
-            
+
+            {/* Module Éducation — propriétaire de l'établissement */}
+            <Route path="/education/dashboard" element={<BusinessLayout />}>
+              <Route index element={<EducationDashboard />} />
+              <Route path="admissions" element={<EducationAdmissions />} />
+              <Route path="profile" element={<Navigate to="/business/profile" replace />} />
+              <Route path="settings" element={<Navigate to="/business/settings" replace />} />
+              <Route path="employees" element={<Navigate to="/business/employees" replace />} />
+              <Route path="roles" element={<Navigate to="/business/roles" replace />} />
+              <Route path="subscription" element={<BusinessSubscriptionPage />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
+            </Route>
+
             {/* Module Hôpital — routes MVP + compatibilité /hospital/admin/* */}
             <Route path="/hospital" element={<BusinessLayout />}>
               <Route index element={<Navigate to="/hospital/dashboard" replace />} />
@@ -312,6 +355,7 @@ function App() {
               <Route path="orders/:id" element={<WholesaleOrders />} />
               <Route path="clients" element={<WholesaleClients />} />
               <Route path="clients/:clientKey" element={<WholesaleClients />} />
+              <Route path="cashier" element={<WholesaleCashier />} />
               <Route path="history" element={<WholesaleHistory />} />
               <Route path="audit" element={<BusinessAuditLogsPage />} />
               <Route path="settings" element={<BusinessSettingsPage />} />
@@ -341,10 +385,28 @@ function App() {
               <Route path="patients" element={<RetailPatients />} />
               <Route path="patients/:key" element={<RetailPatients />} />
               <Route path="proformas" element={<RetailProforma />} />
+              <Route path="cashier" element={<RetailCashier />} />
               <Route path="history" element={<RetailHistory />} />
               <Route path="audit" element={<BusinessAuditLogsPage />} />
               <Route path="settings" element={<BusinessSettingsPage />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
+            </Route>
+          </Route>
+
+          {/* Module Éducation — personnel (scolarité, direction pédagogique) */}
+          <Route element={
+            <ProtectedRoute
+              allowedRoles={ZONE_ACCESS.educationStaff.allowedRoles}
+              forbiddenRoles={ZONE_ACCESS.educationStaff.forbiddenRoles}
+            />
+          }>
+            <Route path="/education/staff" element={<BusinessLayout />}>
+              <Route index element={<EducationStaff />} />
+              <Route path="profile" element={<Navigate to="/business/profile" replace />} />
+              <Route path="settings" element={<Navigate to="/business/settings" replace />} />
+            </Route>
+            <Route path="/education/accounting" element={<BusinessLayout />}>
+              <Route index element={<SchoolAccounting />} />
             </Route>
           </Route>
 

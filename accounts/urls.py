@@ -1,6 +1,4 @@
 from django.urls import path
-# pyrefly: ignore [missing-import]
-from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     RegisterView, ProfileView, AdminUserListView, AdminProfessionalListView,
     CustomTokenObtainPairView,     AdminUserCreateView, AdminUserDetailView, AdminAuditLogListView,
@@ -8,13 +6,19 @@ from .views import (
     AdminPlatformActorListCreateView, AdminPlatformActorDetailView,
     VerifyEmailView, ResendVerificationEmailView,
     PasswordResetRequestView, PasswordResetConfirmView,
-    OAuthProvidersStatusView, OAuthStartView, OAuthCallbackView,
+    OAuthProvidersStatusView, OAuthStartView, OAuthCallbackView, OAuthExchangeView,
+    LoginOtpVerifyView, PersonalDataExportView, PersonalDataDeleteView,
+    BusinessDataExportView, LogoutView, CookieTokenRefreshView,
 )
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('login/verify/', LoginOtpVerifyView.as_view(), name='login_otp_verify'),
+    path('me/export/', PersonalDataExportView.as_view(), name='personal_data_export'),
+    path('me/delete/', PersonalDataDeleteView.as_view(), name='personal_data_delete'),
+    path('refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
+    path('logout/', LogoutView.as_view(), name='logout'),
     path('profile/', ProfileView.as_view(), name='profile'),
     path('verify-email/', VerifyEmailView.as_view(), name='verify_email'),
     path('resend-verification/', ResendVerificationEmailView.as_view(), name='resend_verification'),
@@ -23,6 +27,7 @@ urlpatterns = [
     path('oauth/providers/', OAuthProvidersStatusView.as_view(), name='oauth_providers'),
     path('oauth/<str:provider>/start/', OAuthStartView.as_view(), name='oauth_start'),
     path('oauth/<str:provider>/callback/', OAuthCallbackView.as_view(), name='oauth_callback'),
+    path('oauth/exchange/', OAuthExchangeView.as_view(), name='oauth_exchange'),
     path('admin/users/', AdminUserListView.as_view(), name='admin_user_list'),
     path('admin/users/create/', AdminUserCreateView.as_view(), name='admin_user_create'),
     path('admin/users/<uuid:pk>/', AdminUserDetailView.as_view(), name='admin_user_detail'),

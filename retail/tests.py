@@ -61,6 +61,8 @@ class RetailWorkflowTests(TestCase):
 
     def test_accept_reserves_stock_confirms_proforma_and_emails(self):
         order = self.create_order()
+        order.payment_status = 'PAID'
+        order.save(update_fields=['payment_status'])
         order, result = accept_order(order, self.owner)
         self.product.refresh_from_db()
         order.proforma.refresh_from_db()
@@ -69,7 +71,7 @@ class RetailWorkflowTests(TestCase):
         self.assertEqual(self.product.quantity_reserved, 2)
         self.assertEqual(order.proforma.status, 'CONFIRMED')
         self.assertEqual(result['status'], 'SENT')
-        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(len(mail.outbox), 2)
 
     def test_clarification_requires_comment(self):
         order = self.create_order()
@@ -136,3 +138,28 @@ class RetailWorkflowTests(TestCase):
         self.assertIsNotNone(rx)
         self.assertTrue(bool(rx.file))
         self.assertTrue((rx.file_url or '').startswith('/media/') or bool(rx.file.name))
+        anonymous = APIClient().get(rx.file_url)
+        self.assertEqual(anonymous.status_code, 401)
+
+    def test_guest_checkout_rejects_svg_upload(self):
+        self.product.prescription_required = True
+        self.product.save(update_fields=['prescription_required'])
+        svg = SimpleUploadedFile(
+            'ordonnance.svg',
+            b'<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+            content_type='image/svg+xml',
+        )
+        response = APIClient().post(
+            '/api/v1/retail/guest-checkout/',
+            {
+                'pharmacy_id': str(self.business.id),
+                'patient_name': 'Guest Rx',
+                'patient_email': 'guest-svg@example.com',
+                'payment_method': 'BURUNDIPAY',
+                'payer_phone': '79123456',
+                'items': json.dumps([{'product_id': str(self.product.id), 'quantity': 1}]),
+                'prescription_file': svg,
+            },
+            format='multipart',
+        )
+        self.assertEqual(response.status_code, 400)
