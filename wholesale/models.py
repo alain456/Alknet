@@ -5,6 +5,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from businesses.models import Business
+from businesses import payment_access as businesses_payment_access
 
 
 class WholesalePharmacyProfile(models.Model):
@@ -27,7 +28,7 @@ class WholesalePharmacyProfile(models.Model):
     acceptance_email_message = models.TextField(
         blank=True,
         default=(
-            'Bonjour,\n\nVotre commande {reference} a ete acceptee par {wholesale_name}.\n'
+            'Bonjour,\n\nVotre commande {reference} a été acceptée par {wholesale_name}.\n'
             'Montant total : {total_amount} {currency}.\n\n'
             'Merci de nous contacter pour la suite de la collaboration.\n\n'
             'Cordialement,\n{wholesale_name}'
@@ -177,6 +178,11 @@ class WholesaleOrder(models.Model):
     )
     total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     currency = models.CharField(max_length=10, default='BIF')
+    # Jeton de possession : autorise l'acheteur invité à payer sans compte.
+    payment_token = models.CharField(
+        max_length=64, editable=False, db_index=True,
+        default=businesses_payment_access.issue_payment_token,
+    )
     refusal_reason = models.CharField(max_length=255, blank=True)
     refusal_comment = models.TextField(blank=True)
     notification_email = models.EmailField(blank=True)

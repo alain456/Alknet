@@ -6,6 +6,7 @@ from django.db import models
 from django.utils import timezone
 
 from businesses.models import Business
+from businesses import payment_access as businesses_payment_access
 
 
 class RetailPharmacyProfile(models.Model):
@@ -27,9 +28,18 @@ class RetailPharmacyProfile(models.Model):
     acceptance_email_message = models.TextField(
         blank=True,
         default=(
-            'Bonjour {patient_name},\n\nVotre commande {reference} a ete acceptee par '
+            'Bonjour {patient_name},\n\nVotre commande {reference} a été acceptée par '
             '{pharmacy_name}.\nMontant total : {total_amount} {currency}.\n\n'
             'Cordialement,\n{pharmacy_name}'
+        ),
+    )
+    submission_email_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {patient_name},\n\nVotre commande {reference} a bien été enregistrée '
+            'par {pharmacy_name}.\nMontant total : {total_amount} {currency}.\n\n'
+            'Vous recevrez un email dès que la pharmacie aura accepté ou refusé votre '
+            'commande.\n\nCordialement,\n{pharmacy_name}'
         ),
     )
     is_open_for_orders = models.BooleanField(
@@ -158,6 +168,11 @@ class RetailOrder(models.Model):
     )
     total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     currency = models.CharField(max_length=10, default='BIF')
+    # Jeton de possession : autorise le patient invité à payer sans compte.
+    payment_token = models.CharField(
+        max_length=64, editable=False, db_index=True,
+        default=businesses_payment_access.issue_payment_token,
+    )
     rejection_reason = models.CharField(max_length=255, blank=True)
     rejection_comment = models.TextField(blank=True)
     clarification_comment = models.TextField(blank=True)

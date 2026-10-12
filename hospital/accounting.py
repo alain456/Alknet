@@ -1,5 +1,6 @@
 """Comptabilité hôpital : factures, rapprochement des paiements, clôture du jour."""
 import csv
+import logging
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
@@ -9,6 +10,8 @@ from django.http import HttpResponse
 from django.utils import timezone
 
 from .appointment_payment import mark_appointment_paid_by_staff
+
+logger = logging.getLogger(__name__)
 from .appointment_workflow import get_hospital_code
 from .models import Appointment, HospitalCashClosing, Invoice
 from .schedule_dynamics import HOSPITAL_TZ, hospital_now
@@ -271,7 +274,18 @@ def close_day(hospital, user, day, notes=''):
 
 
 @transaction.atomic
-def create_invoice_for_appointment(appointment, user, method=None):
+def create_invoice_for_appointment(appointment, user, method=None, settle=True):
+    """Facture une consultation rattachée à un rendez-vous.
+
+    settle=True (action manuelle « encaisser ») : si le rendez-vous n'est pas
+    payé, la caisse l'enregistre comme encaissé. C'est le comportement d'origine
+    et il est volontaire — un agent qui encaisse l'argent le déclare.
+
+    settle=False (facturation automatique) : aucun paiement n'est inventé. La
+    facture ne fait que refléter l'état réel du rendez-vous, PENDING s'il n'est
+    pas payé. Confondre les deux transformerait des consultations impayées en
+    chiffre d'affaires fictif, c'est pourquoi le distinction est explicite.
+    """
     existing = (
         Invoice.objects.filter(appointment=appointment)
         .exclude(status='CANCELLED')
@@ -286,7 +300,7 @@ def create_invoice_for_appointment(appointment, user, method=None):
         raise ValueError('Cette journée est déjà clôturée.')
 
     requested = (method or '').upper()
-    if appointment.payment_status in ('UNPAID', 'FAILED', 'AWAITING_PIN'):
+    if settle and appointment.payment_status in ('UNPAID', 'FAILED', 'AWAITING_PIN'):
         mark_appointment_paid_by_staff(
             appointment,
             method=requested or 'CASH',
@@ -300,21 +314,33 @@ def create_invoice_for_appointment(appointment, user, method=None):
         if day_is_closed(hospital, paid_day):
             raise ValueError('La journée de ce paiement est déjà clôturée.')
 
-    pay_method = (appointment.payment_method or requested or 'CASH').upper()
+    settled = appointment.payment_status in ('PAID', 'WAIVED')
+    if not settled:
+        # Une facture d'impayé n'a pas de moyen de paiement : sans cela la
+        # caisse afficherait de l'encaissement qui n'a jamais eu lieu.
+        pay_method = ''
+    else:
+        pay_method = (appointment.payment_method or requested or 'CASH').upper()
     if pay_method == 'WAIVED':
         pay_method = 'FREE'
-    if pay_method not in METHOD_LABELS or pay_method == '':
-        pay_method = 'OTHER' if pay_method else 'CASH'
-    if appointment.payment_status == 'WAIVED':
-        pay_method = 'FREE'
+    if settled:
+        if pay_method not in METHOD_LABELS or pay_method == '':
+            pay_method = 'OTHER' if pay_method else 'CASH'
+        if appointment.payment_status == 'WAIVED':
+            pay_method = 'FREE'
 
     service_name = ''
     if appointment.service_id and appointment.service:
         service_name = appointment.service.name
     amount = Decimal(int(appointment.consultation_fee_amount or 0))
-    status = 'PAID' if appointment.payment_status in ('PAID', 'WAIVED') else 'PENDING'
+    status = 'PAID' if settled else 'PENDING'
     if pay_method == 'FREE':
         status = 'PAID'
+    # Une facture payée sans date sort de tous les agrégats par période
+    # (CA du jour, du mois, du trimestre) : elle resterait invisible.
+    paid_at = appointment.paid_at if status == 'PAID' else None
+    if status == 'PAID' and paid_at is None:
+        paid_at = timezone.now()
     return Invoice.objects.create(
         hospital=hospital,
         patient=appointment.patient,
@@ -328,8 +354,41 @@ def create_invoice_for_appointment(appointment, user, method=None):
         act_label=service_name or 'Consultation',
         status=status,
         payment_method=pay_method if status == 'PAID' else '',
-        paid_at=appointment.paid_at if status == 'PAID' else None,
+        paid_at=paid_at,
     )
+
+
+def ensure_invoice_for_appointment(appointment, actor=None):
+    """Facturation automatique d'une consultation : ne peut rien inventer.
+
+    Appelée sur le cycle de vie du rendez-vous (consultation terminée, paiement
+    confirmé) pour que tout soin facturable laisse une trace comptable sans
+    dépendre d'un clic humain — c'était la cause des 34 rendez-vous pour une
+    seule facture.
+
+    Trois garanties :
+    - ne crée rien si le tarif est à zéro (consultation d'intérêt général) ;
+    - ne crée jamais de paiement, seulement une facture PENDING si l'acte n'est
+      pas encore payé, donc le chiffre d'affaires reste exact ;
+    - n'échoue jamais. Un jour clôturé ou une erreur de compta ne doit pas
+      empêcher un soignant de terminer une consultation.
+    """
+    if int(appointment.consultation_fee_amount or 0) <= 0:
+        return None
+    try:
+        return create_invoice_for_appointment(appointment, actor, settle=False)
+    except ValueError:
+        # Journée clôturée : la comptabilité refuse la facture, le soin reste fait.
+        logger.warning(
+            'Facture automatique refusée : journée %s clôturée (%s)',
+            appointment.hospital_id, appointment.reference_code,
+        )
+        return None
+    except Exception:
+        logger.exception(
+            'Facture automatique en échec pour le rendez-vous %s', appointment.reference_code,
+        )
+        return None
 
 
 def export_invoices_csv(hospital, day, scope='day'):

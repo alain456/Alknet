@@ -1,0 +1,16 @@
+export { default as AdminDashboardPage } from '../admin/AdminDashboardPage';
+export { default as AdminAnalyticsPage } from '../admin/AdminAnalyticsPage';
+export { default as AdminUsersPage } from '../admin/AdminUsersPage';
+export { default as AdminBusinessesPage } from '../admin/AdminBusinessesPage';
+export { default as AdminProfessionalsPage } from '../admin/AdminProfessionalsPage';
+export { default as AdminCategoriesPage } from '../admin/AdminCategoriesPage';
+export { default as AdminServicesPage } from '../admin/AdminServicesPage';
+export { default as AdminPaymentsPage } from '../admin/AdminPaymentsPage';
+export { default as AdminLocationsPage } from '../admin/AdminLocationsPage';
+export { default as AdminSettingsPage } from '../admin/AdminSettingsPage';
+export { default as AdminAuditLogsPage } from '../admin/AdminAuditLogsPage';
+export { default as AdminCmsPage } from '../admin/AdminCmsPage';
+export { default as AdminPlatformRolesPage } from '../admin/AdminPlatformRolesPage';
+export { default as AdminModerationPage } from '../admin/AdminModerationPage';
+export { default as AdminSupportPage } from '../admin/AdminSupportPage';
+export { default as AdminHotelsPage } from '../admin/AdminHotelsPage';

@@ -1,10 +1,11 @@
 from decimal import Decimal
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from businesses.models import Business
+from businesses import payment_access
 from businesses.tenant import get_user_tenant_business
 from .models import (
     WholesalePharmacyProfile, WholesaleProduct, StockMovement,
@@ -219,11 +220,30 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         return super().get_permissions()
 
+    def _payment_scoped_queryset(self):
+        """Commande atteignable par l'acheteur, son créateur, son/ses tenants, ou le porteur du jeton."""
+        user = self.request.user
+        base = WholesaleOrder.objects.select_related(
+            'client_business', 'wholesale_business', 'created_by', 'proforma'
+        ).prefetch_related('items')
+        if getattr(user, 'is_authenticated', False):
+            tenant_ids = list(
+                Business.objects.filter(
+                    Q(owner=user) | Q(employees__user=user, employees__is_active=True),
+                ).distinct().values_list('id', flat=True)
+            )
+        else:
+            tenant_ids = []
+        return payment_access.filter_by_payment_access(
+            base,
+            payment_access.owner_clause(user, 'created_by'),
+            payment_access.tenant_clause(user, tenant_ids, 'client_business', 'wholesale_business'),
+            payment_access.token_clause(payment_access.extract_payment_token(self.request)),
+        )
+
     def get_queryset(self):
         if getattr(self, 'action', None) in ('pay', 'confirm_payment'):
-            return WholesaleOrder.objects.select_related(
-                'client_business', 'wholesale_business', 'created_by', 'proforma'
-            ).prefetch_related('items')
+            return self._payment_scoped_queryset()
 
         business = get_user_tenant_business(self.request.user)
         user = self.request.user

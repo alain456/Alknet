@@ -74,6 +74,7 @@ class BusinessSerializer(serializers.ModelSerializer):
         data['burundipay_merchant_account'] = instance.lumicash_merchant_account or ''
         cat = getattr(instance, 'primary_category', None)
         data['primary_category_slug'] = getattr(cat, 'slug', None) or ''
+        data['primary_category_module'] = getattr(cat, 'module', None) or ''
         data['primary_category_name'] = (
             data.get('primary_category_name')
             or getattr(cat, 'name', None)

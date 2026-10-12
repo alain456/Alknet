@@ -43,7 +43,7 @@ export default function OrderPaymentSuccess({
     setBusy(true);
     setMsg('');
     try {
-      const res = await confirmPayment(current.id);
+      const res = await confirmPayment(current.id, current.payment_token);
       const next = pickEntity(res, current);
       setCurrent({ ...current, ...next });
       onOrderUpdate?.(next);
@@ -64,7 +64,7 @@ export default function OrderPaymentSuccess({
     setBusy(true);
     setMsg('');
     try {
-      const res = await retryPayment(current.id, phone);
+      const res = await retryPayment(current.id, phone, current.payment_token);
       const next = pickEntity(res, current);
       const merged = { ...current, ...next, payer_phone: next?.payer_phone || phone };
       setCurrent(merged);

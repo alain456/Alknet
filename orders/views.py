@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from rest_framework.views import APIView
 
 from businesses.commerce import ensure_commerce_profile, is_commerce_business, next_order_reference
 from businesses.models import Business, BusinessEmployee
+from businesses import payment_access
 from businesses.tenant import get_user_tenant_business
 from products.models import Product, ProductVariant
 
@@ -24,6 +26,17 @@ def _business_staff(user, business):
     return BusinessEmployee.objects.filter(
         user=user, business=business, is_active=True
     ).exists()
+
+
+def _user_business_ids(user):
+    """Ids des businesses possédés ou employés par l'utilisateur."""
+    if not user or not user.is_authenticated:
+        return []
+    owned = Business.objects.filter(owner=user).values_list('id', flat=True)
+    employed = Business.objects.filter(
+        employees__user=user, employees__is_active=True,
+    ).values_list('id', flat=True)
+    return set(owned) | set(employed)
 
 
 def _notify_order_client(order, *, subject, body):
@@ -75,7 +88,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ('pay', 'confirm_payment', 'retrieve'):
+        if self.action in ('pay', 'confirm_payment'):
             return [permissions.AllowAny()]
         return super().get_permissions()
 
@@ -84,8 +97,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         queryset = Order.objects.select_related('customer', 'business').prefetch_related('items')
 
         if not user.is_authenticated:
-            if getattr(self, 'action', None) in ('retrieve', 'pay', 'confirm_payment'):
-                return queryset
             ref = self.request.query_params.get('reference')
             if ref:
                 return queryset.filter(reference_code=ref)
@@ -107,6 +118,22 @@ class OrderViewSet(viewsets.ModelViewSet):
         if status_param:
             queryset = queryset.filter(status=status_param)
         return queryset.distinct()
+
+    def _payment_scoped_queryset(self, pk):
+        """Commande atteignable par le client, le staff du tenant, ou le porteur du jeton.
+
+        Aucune branche ouverte => ``none()`` : l'UUID seul ne donne aucun accès.
+        """
+        user = self.request.user
+        return payment_access.filter_by_payment_access(
+            Order.objects.filter(pk=pk),
+            payment_access.owner_clause(user, 'customer'),
+            payment_access.tenant_clause(user, _user_business_ids(user), 'business'),
+            payment_access.token_clause(payment_access.extract_payment_token(self.request)),
+        )
+
+    def _get_payment_order(self, pk):
+        return get_object_or_404(self._payment_scoped_queryset(pk))
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -181,7 +208,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], permission_classes=[permissions.AllowAny])
     def pay(self, request, pk=None):
-        order = self.get_object()
+        order = self._get_payment_order(pk)
         phone = (request.data.get('payer_phone') or request.data.get('phone') or '').strip()
         if not phone:
             return Response({'error': 'Numéro BurundiPay requis.'}, status=400)
@@ -196,7 +223,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='confirm-payment', permission_classes=[permissions.AllowAny])
     def confirm_payment(self, request, pk=None):
-        order = self.get_object()
+        order = self._get_payment_order(pk)
         result = order_payment.confirm_order_payment_stub(order)
         return Response({
             'ok': result.get('ok'),

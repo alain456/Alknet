@@ -38,6 +38,44 @@ export default function BusinessProfilePage() {
   const isHospital = categoryKey === 'hospital';
   const isCommerce = categoryKey === 'commerce';
 
+  // Les libellés de la page sont définis par la catégorie : une école ne doit
+  // jamais voir de formulation hospitalière.
+  const copy = isHospital
+    ? {
+        badge: 'Établissement de Santé',
+        titleFallback: "Profil de l'Hôpital",
+        subtitle: 'Gérez les équipements, les assurances acceptées et les informations de votre établissement.',
+        namePlaceholder: 'ex: Hôpital Général de Référence',
+        descriptionLabel: "Présentation & Description de l'Hôpital",
+        descriptionPlaceholder: 'Présentez les missions de votre établissement, la qualité de vos soins et votre équipe médicale...',
+        emailLabel: "E-mail Officiel de l'Hôpital",
+        emailPlaceholder: 'contact@hopital.bi',
+        logoAlt: 'Logo de l’hôpital',
+      }
+    : isCommerce
+      ? {
+          badge: 'Commerce',
+          titleFallback: 'Profil de la boutique',
+          subtitle: 'Gérez les informations de votre boutique, vos horaires et vos informations de retrait.',
+          namePlaceholder: 'ex: Boutique Mode',
+          descriptionLabel: 'Présentation de la boutique',
+          descriptionPlaceholder: 'Présentez votre boutique, vos produits et ce qui vous distingue...',
+          emailLabel: 'E-mail Officiel de la Boutique',
+          emailPlaceholder: 'contact@boutique.bi',
+          logoAlt: 'Logo de la boutique',
+        }
+      : {
+          badge: 'Établissement',
+          titleFallback: "Profil de l'Établissement",
+          subtitle: 'Gérez les informations générales de votre établissement.',
+          namePlaceholder: 'ex: Nom de l’établissement',
+          descriptionLabel: 'Présentation de l’établissement',
+          descriptionPlaceholder: 'Présentez votre établissement, votre offre et ce qui vous distingue...',
+          emailLabel: 'E-mail Officiel',
+          emailPlaceholder: 'contact@etablissement.bi',
+          logoAlt: "Logo de l'établissement",
+        };
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -117,13 +155,18 @@ export default function BusinessProfilePage() {
             pickup_info: extras.pickup_info || emptyCommerceExtras.pickup_info,
             nif_number: extras.nif_number || '',
           });
-        } else {
+        } else if (isHospital) {
           setHospitalData({
             ...emptyHospitalExtras,
             ...extras,
             facilities: Array.isArray(extras.facilities) ? extras.facilities : emptyHospitalExtras.facilities,
             insurances: Array.isArray(extras.insurances) ? extras.insurances : emptyHospitalExtras.insurances,
           });
+        } else {
+          // Éducation et autres secteurs non hospitaliers : on ne charge aucun
+          // extra hospitalier, sinon les valeurs par défaut d'un hôpital
+          // seraient réinjectées dans `extra_attributes`.
+          setHospitalData(emptyHospitalExtras);
         }
       }
     } catch (err) {
@@ -207,10 +250,14 @@ export default function BusinessProfilePage() {
               category_type: undefined,
               approval_number: undefined,
             }
-          : hospitalData,
+          : isHospital
+            // Hôpital : on conserve les autres extras déjà enregistrés.
+            ? { ...rawExtras, ...hospitalData }
+            // Éducation et autres secteurs : aucune donnée hospitalière.
+            : rawExtras,
       };
       // Nettoyer les undefined du JSON
-      if (isCommerce && payload.extra_attributes) {
+      if (payload.extra_attributes) {
         Object.keys(payload.extra_attributes).forEach((k) => {
           if (payload.extra_attributes[k] === undefined) delete payload.extra_attributes[k];
         });
@@ -292,7 +339,7 @@ export default function BusinessProfilePage() {
             <div className="flex items-center gap-5">
               <div className="w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center overflow-hidden">
                 {formData.logo ? (
-                  <img src={formData.logo} alt="Logo" className="w-full h-full object-cover" />
+                  <img src={formData.logo} alt={copy.logoAlt} className="w-full h-full object-cover" />
                 ) : (
                   <Store className="w-10 h-10 text-emerald-300" />
                 )}
@@ -556,11 +603,11 @@ export default function BusinessProfilePage() {
             </div>
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-semibold border border-emerald-500/30 mb-2">
-                <Sparkles className="w-3.5 h-3.5" /> Établissement de Santé
+                <Sparkles className="w-3.5 h-3.5" /> {copy.badge}
               </div>
-              <h1 className="text-3xl font-extrabold">{formData.name || "Profil de l'Hôpital"}</h1>
+              <h1 className="text-3xl font-extrabold">{formData.name || copy.titleFallback}</h1>
               <p className="text-blue-200 text-sm mt-1">
-                Gérez les équipements, les assurances acceptées et les informations de votre établissement.
+                {copy.subtitle}
               </p>
             </div>
           </div>
@@ -604,34 +651,38 @@ export default function BusinessProfilePage() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                placeholder="ex: Hôpital Général de Référence"
+                placeholder={copy.namePlaceholder}
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Niveau / Catégorie d&apos;Hôpital</label>
-              <select
-                value={hospitalData.category_type}
-                onChange={(e) => setHospitalData({ ...hospitalData, category_type: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-              >
-                <option value="Hôpital National de Référence">Hôpital National de Référence (CHUK, etc.)</option>
-                <option value="Hôpital Provincial / Régional">Hôpital Provincial / Régional</option>
-                <option value="Hôpital de District">Hôpital de District</option>
-                <option value="Centre Médical Spécialisé">Centre Médical Spécialisé / Clinique Privée</option>
-              </select>
-            </div>
+            {isHospital && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Niveau / Catégorie d&apos;Hôpital</label>
+                  <select
+                    value={hospitalData.category_type}
+                    onChange={(e) => setHospitalData({ ...hospitalData, category_type: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="Hôpital Général de Référence">Hôpital Général de Référence (CHUK, etc.)</option>
+                    <option value="Hôpital Provincial / Régional">Hôpital Provincial / Régional</option>
+                    <option value="Hôpital de District">Hôpital de District</option>
+                    <option value="Centre Médical Spécialisé">Centre Médical Spécialisé / Clinique Privée</option>
+                  </select>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Numéro d&apos;Agrément Sanitaire</label>
-              <input
-                type="text"
-                value={hospitalData.approval_number}
-                onChange={(e) => setHospitalData({ ...hospitalData, approval_number: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                placeholder="ex: MSPLS/AGR/2024/089"
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Numéro d&apos;Agrément Sanitaire</label>
+                  <input
+                    type="text"
+                    value={hospitalData.approval_number}
+                    onChange={(e) => setHospitalData({ ...hospitalData, approval_number: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                    placeholder="ex: MSPLS/AGR/2024/089"
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Lien Document Justificatif / Agrément (URL)</label>
@@ -645,152 +696,199 @@ export default function BusinessProfilePage() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Présentation & Description de l&apos;Hôpital</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{copy.descriptionLabel}</label>
               <textarea
                 rows={3}
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                placeholder="Présentez les missions de votre établissement, la qualité de vos soins et votre équipe médicale..."
+                placeholder={copy.descriptionPlaceholder}
               />
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-3 text-red-600 dark:text-red-400">
-            <PhoneCall className="w-5 h-5 text-red-600 dark:text-red-400" />
-            2. Urgences 24h/24 & Contacts Directs
-          </h2>
+        {isHospital && (
+          <>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-4">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-3 text-red-600 dark:text-red-400">
+              <PhoneCall className="w-5 h-5 text-red-600 dark:text-red-400" />
+              2. Urgences 24h/24 & Contacts Directs
+            </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-100 dark:border-red-900/50">
-              <label className="block text-sm font-bold text-red-900 dark:text-red-300 mb-1">Ligne Directe des Urgences (Ligne Rouge 24/7)</label>
-              <input
-                type="text"
-                value={hospitalData.emergency_phone}
-                onChange={(e) => setHospitalData({ ...hospitalData, emergency_phone: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold focus:ring-2 focus:ring-red-500 outline-none"
-                placeholder="+257 22 XX XX XX / 79 XX XX XX"
-              />
-            </div>
-
-            <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/50">
-              <label className="block text-sm font-bold text-blue-900 dark:text-blue-300 mb-1">Service d&apos;Ambulance & Numéro d&apos;Appel</label>
-              <div className="flex items-center gap-3 mt-2">
-                <input
-                  type="checkbox"
-                  id="has_ambulance"
-                  checked={hospitalData.has_ambulance}
-                  onChange={(e) => setHospitalData({ ...hospitalData, has_ambulance: e.target.checked })}
-                  className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-                />
-                <label htmlFor="has_ambulance" className="text-sm font-medium text-blue-900 dark:text-blue-300 cursor-pointer">
-                  Ambulance disponible 24/7
-                </label>
-              </div>
-              {hospitalData.has_ambulance && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-red-50 dark:bg-red-950/30 rounded-xl border border-red-100 dark:border-red-900/50">
+                <label className="block text-sm font-bold text-red-900 dark:text-red-300 mb-1">Ligne Directe des Urgences (Ligne Rouge 24/7)</label>
                 <input
                   type="text"
-                  value={hospitalData.ambulance_phone}
-                  onChange={(e) => setHospitalData({ ...hospitalData, ambulance_phone: e.target.value })}
-                  className="w-full mt-3 px-4 py-2 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-900 dark:text-blue-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="Numéro direct ambulance"
+                  value={hospitalData.emergency_phone}
+                  onChange={(e) => setHospitalData({ ...hospitalData, emergency_phone: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-400 font-bold focus:ring-2 focus:ring-red-500 outline-none"
+                  placeholder="+257 22 XX XX XX / 79 XX XX XX"
                 />
-              )}
-            </div>
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Téléphone Secrétariat / Général</label>
-              <input
-                type="text"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                placeholder="+257 22..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Compte marchand BurundiPay (consultations)</label>
-              <input
-                type="text"
-                value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  burundipay_merchant_account: e.target.value,
-                  lumicash_merchant_account: e.target.value,
-                })}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                placeholder="Ex. HOSP-BAHO-LC"
-              />
-              <p className="text-xs text-gray-500 mt-1">Encaissement des consultations (tarif médecin) — distinct de l&apos;abonnement Isoko Hub.</p>
-            </div>
+              <div className="p-4 bg-blue-50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/50">
+                <label className="block text-sm font-bold text-blue-900 dark:text-blue-300 mb-1">Service d&apos;Ambulance & Numéro d&apos;Appel</label>
+                <div className="flex items-center gap-3 mt-2">
+                  <input
+                    type="checkbox"
+                    id="has_ambulance"
+                    checked={hospitalData.has_ambulance}
+                    onChange={(e) => setHospitalData({ ...hospitalData, has_ambulance: e.target.checked })}
+                    className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                  <label htmlFor="has_ambulance" className="text-sm font-medium text-blue-900 dark:text-blue-300 cursor-pointer">
+                    Ambulance disponible 24/7
+                  </label>
+                </div>
+                {hospitalData.has_ambulance && (
+                  <input
+                    type="text"
+                    value={hospitalData.ambulance_phone}
+                    onChange={(e) => setHospitalData({ ...hospitalData, ambulance_phone: e.target.value })}
+                    className="w-full mt-3 px-4 py-2 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-800 rounded-xl text-blue-900 dark:text-blue-100 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="Numéro direct ambulance"
+                  />
+                )}
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">E-mail Officiel de l&apos;Hôpital</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-                placeholder="contact@hopital.bi"
-              />
-            </div>
-          </div>
-        </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Téléphone Secrétariat / Général</label>
+                <input
+                  type="text"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                  placeholder="+257 22..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Compte marchand BurundiPay (consultations)</label>
+                <input
+                  type="text"
+                  value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    burundipay_merchant_account: e.target.value,
+                    lumicash_merchant_account: e.target.value,
+                  })}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                  placeholder="Ex. HOSP-BAHO-LC"
+                />
+                <p className="text-xs text-gray-500 mt-1">Encaissement des consultations (tarif médecin) — distinct de l&apos;abonnement Isoko Hub.</p>
+              </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <Activity className="w-5 h-5 text-indigo-500" />
-              3. Plateau Technique & Équipements
-            </h2>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newFacilityInput}
-                onChange={(e) => setNewFacilityInput(e.target.value)}
-                placeholder="Nouvel équipement / service..."
-                className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={handleAddFacility}
-                className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Ajouter
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Capacité Totale en Lits d&apos;Hospitalisation</label>
-              <input
-                type="number"
-                value={hospitalData.bed_capacity}
-                onChange={(e) => setHospitalData({ ...hospitalData, bed_capacity: parseInt(e.target.value, 10) || 0 })}
-                className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{copy.emailLabel}</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                  placeholder={copy.emailPlaceholder}
+                />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Équipements & Services Actifs ({hospitalData.facilities?.length || 0}) :
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {(hospitalData.facilities || []).map((facility) => (
-                <span
-                  key={facility}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 shadow-sm"
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Activity className="w-5 h-5 text-indigo-500" />
+                3. Plateau Technique & Équipements
+              </h2>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newFacilityInput}
+                  onChange={(e) => setNewFacilityInput(e.target.value)}
+                  placeholder="Nouvel équipement / service..."
+                  className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddFacility}
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
                 >
-                  <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
-                  {facility}
+                  <Plus className="w-3.5 h-3.5" /> Ajouter
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Capacité Totale en Lits d&apos;Hospitalisation</label>
+                <input
+                  type="number"
+                  value={hospitalData.bed_capacity}
+                  onChange={(e) => setHospitalData({ ...hospitalData, bed_capacity: parseInt(e.target.value, 10) || 0 })}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Équipements & Services Actifs ({hospitalData.facilities?.length || 0}) :
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {(hospitalData.facilities || []).map((facility) => (
+                  <span
+                    key={facility}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 shadow-sm"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
+                    {facility}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFacility(facility)}
+                      className="text-indigo-400 hover:text-red-500 transition cursor-pointer ml-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-emerald-500" />
+                4. Assurances Maladie & Mutuelles Acceptées
+              </h2>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newInsuranceInput}
+                  onChange={(e) => setNewInsuranceInput(e.target.value)}
+                  placeholder="Nouvelle assurance..."
+                  className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddInsurance}
+                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Ajouter
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2.5">
+              {(hospitalData.insurances || []).map((insurance) => (
+                <span
+                  key={insurance}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800 shadow-sm"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  {insurance}
                   <button
                     type="button"
-                    onClick={() => handleRemoveFacility(facility)}
-                    className="text-indigo-400 hover:text-red-500 transition cursor-pointer ml-1"
+                    onClick={() => handleRemoveInsurance(insurance)}
+                    className="text-emerald-400 hover:text-red-500 transition cursor-pointer ml-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -798,51 +896,8 @@ export default function BusinessProfilePage() {
               ))}
             </div>
           </div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-emerald-500" />
-              4. Assurances Maladie & Mutuelles Acceptées
-            </h2>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={newInsuranceInput}
-                onChange={(e) => setNewInsuranceInput(e.target.value)}
-                placeholder="Nouvelle assurance..."
-                className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none text-gray-900 dark:text-white focus:ring-2 focus:ring-emerald-500"
-              />
-              <button
-                type="button"
-                onClick={handleAddInsurance}
-                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" /> Ajouter
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2.5">
-            {(hospitalData.insurances || []).map((insurance) => (
-              <span
-                key={insurance}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-100 dark:border-emerald-800 shadow-sm"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                {insurance}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveInsurance(insurance)}
-                  className="text-emerald-400 hover:text-red-500 transition cursor-pointer ml-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
+          </>
+        )}
 
         <div className="flex justify-end pt-4">
           <button

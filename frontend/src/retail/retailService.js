@@ -37,8 +37,64 @@ function appendCheckoutFields(fd, data = {}) {
   }
 }
 
+/**
+ * Téléchargement d'un export de caisse.
+ *
+ * Le client API partagé termine toujours par response.json() : il ne sait pas
+ * renvoyer un fichier. Cet export passe donc par un fetch direct, en reusing
+ * exactement le même préfixe d'API et le même jeton, sinon la caisse serait
+ * exportable par le front mais refusée par le serveur.
+ */
+async function downloadCashExport({ filetype = 'excel', report = 'both' } = {}) {
+  const url =
+    `/api/v1/retail/cash-register/export/?filetype=${filetype}&report=${report}`;
+  const token = getToken();
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let message = `Export impossible (HTTP ${res.status}).`;
+    try {
+      message = (await res.json())?.detail || message;
+    } catch {
+      /* le serveur n'a pas renvoyé de JSON : on garde le message générique */
+    }
+    throw new Error(message);
+  }
+  // Le nom de fichier est décidé par le serveur, pas deviné ici.
+  const match = /filename="?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') || '');
+  const filename = match ? match[1] : `caisse.${filetype === 'csv' ? 'csv' : 'xlsx'}`;
+  const href = URL.createObjectURL(await res.blob());
+  const link = document.createElement('a');
+  link.href = href;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Sans revoke, chaque export fuit un blob en mémoire.
+  URL.revokeObjectURL(href);
+  return filename;
+}
+
 const retailService = {
   getDashboard: () => api.get('retail/dashboard/', { auth: true }),
+
+  // ── Caisse ────────────────────────────────────────────────────────────
+  // noCache sur chaque lecture : un encaissement saisi doit apparaître
+  // immédiatement, pas après le cache de 45 s du client API.
+  // Le serveur déduit le type de pharmacie (détail ou gros) de l'entreprise
+  // du propriétaire : un même endpoint sert les deux, donc pas de divergence.
+  getCashDashboard: (days = 30) =>
+    api.get(`retail/cash-register/dashboard/${query({ days })}`, { auth: true, noCache: true }),
+  getCashCollections: (params = {}) =>
+    api.get(`retail/cash-register/${query(params)}`, { auth: true, noCache: true }),
+  getCashReconciliation: (days = 30) =>
+    api.get(`retail/cash-register/reconciliation/${query({ days })}`, { auth: true, noCache: true }),
+  getMissingCollections: () =>
+    api.get('retail/cash-register/missing-collections/', { auth: true, noCache: true }),
+  recordMissingCollection: (orderId) =>
+    api.post('retail/cash-register/record-missing/', { order_id: orderId }, { auth: true }),
+  exportCash: (options) => downloadCashExport(options),
   setOrdersOpen: (is_open_for_orders) =>
     api.patch('retail/profile/me/', { is_open_for_orders }, { auth: true }),
   getProfile: () => api.get('retail/profile/', { auth: true }),
@@ -84,8 +140,8 @@ const retailService = {
     }
     return api.post('retail/guest-checkout/', data);
   },
-  payOrder: (id, payerPhone) => api.post(`retail/orders/${id}/pay/`, { payer_phone: payerPhone }),
-  confirmOrderPayment: (id) => api.post(`retail/orders/${id}/confirm-payment/`, {}),
+  payOrder: (id, payerPhone, payment_token) => api.post(`retail/orders/${id}/pay/`, { payer_phone: payerPhone, payment_token }),
+  confirmOrderPayment: (id, payment_token) => api.post(`retail/orders/${id}/confirm-payment/`, { payment_token }, { noCache: true }),
   getCart: (pharmacy) => api.get(`retail/cart/${query(pharmacy ? { pharmacy } : {})}`, { auth: true }),
   addToCart: (data) => api.post('retail/cart/add_item/', data, { auth: true }),
   updateCartItem: (data) => api.post('retail/cart/update_item/', data, { auth: true }),

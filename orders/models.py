@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from businesses.models import Business
+from businesses import payment_access as businesses_payment_access
 from products.models import Product, ProductVariant
 
 
@@ -64,6 +65,13 @@ class Order(models.Model):
     payment_provider_reference = models.CharField(max_length=120, blank=True, default='')
     payment_note = models.CharField(max_length=255, blank=True, default='')
     paid_at = models.DateTimeField(null=True, blank=True)
+
+    # Jeton de possession : autorise le client invité à payer sa commande
+    # sans compte. Ne jamais exposer ce champ en écriture.
+    payment_token = models.CharField(
+        max_length=64, editable=False, db_index=True,
+        default=businesses_payment_access.issue_payment_token,
+    )
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -153,3 +161,100 @@ class CartItem(models.Model):
         if self.variant_id:
             return self.variant.unit_price
         return self.product.effective_price
+
+
+class CashCollection(models.Model):
+    """Encaissement réel, en écriture seule : l'historique de l'argent.
+
+    RetailOrder.payment_status et WholesaleOrder.payment_status ne sont que
+    des champs mutables sur la commande. Ils ne disent rien de l'argent
+    réellement encaissé : un remboursement écrase le statut, un paiement
+    partiel est indiscernable d'un paiement total, et le total du jour est
+    impossible à reconstituer. Chaque ligne ici est un encaissement non
+    modifiable ; les agrégats se font dessus.
+
+    Une commande acceptée sans ligne CashCollection est un paiement non
+    justifié : c'est ce que detect_reconciliation signale.
+    """
+
+    SOURCE_RETAIL = 'RETAIL'
+    SOURCE_WHOLESALE = 'WHOLESALE'
+    SOURCE_CHOICES = (
+        (SOURCE_RETAIL, 'Pharmacie (retail)'),
+        (SOURCE_WHOLESALE, 'Grossiste (wholesale)'),
+    )
+
+    METHOD_CHOICES = (
+        ('CASH', 'Espèces'),
+        ('MOBILE_MONEY', 'Mobile money'),
+        ('CARD', 'Carte'),
+        ('TRANSFER', 'Virement'),
+        ('BURUNDIPAY', 'BurundiPay'),
+        ('OTHER', 'Autre'),
+    )
+
+    STATUS_CHOICES = (
+        ('COLLECTED', 'Encaissé'),
+        ('REFUNDED', 'Remboursé'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business = models.ForeignKey(
+        Business, on_delete=models.CASCADE, related_name='cash_collections',
+    )
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES)
+    # ContentType générique : la même table sert retail et wholesale sans
+    # dépendance croisée entre les apps.
+    source_order = models.ForeignKey(
+        'contenttypes.ContentType', on_delete=models.PROTECT,
+        related_name='+',
+    )
+    source_object_id = models.UUIDField()
+    source_order_ref = models.CharField(
+        max_length=40, blank=True,
+        help_text='Référence de la commande au moment de l\'encaissement.',
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=10, default='BIF')
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='COLLECTED')
+    # Clé d'idempotence : un même transfert ne peut pas être compté deux fois.
+    external_reference = models.CharField(
+        max_length=120, blank=True, db_index=True,
+        help_text='Référence fournisseur (BurundiPay, mobile money...).',
+    )
+    customer_name = models.CharField(max_length=120, blank=True)
+    note = models.TextField(blank=True, default='')
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cash_collections',
+    )
+    collected_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-collected_at']
+        indexes = [
+            models.Index(fields=['business', '-collected_at']),
+            models.Index(fields=['business', 'status']),
+        ]
+        constraints = [
+            # Un paiement ne peut être compté qu'une fois par commande.
+            # C'est la garantie qui empêche le double comptage en cas de
+            # double callback ou double clic.
+            models.UniqueConstraint(
+                fields=['source', 'source_object_id', 'external_reference'],
+                condition=~models.Q(external_reference=''),
+                name='uniq_cash_collection_per_reference',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.get_source_display()} {self.source_order_ref} {self.amount}'
+
+    @property
+    def signed_amount(self):
+        """Montant signé pour les agrégats (un remboursement sort de la caisse)."""
+        if self.status == 'REFUNDED':
+            return -self.amount
+        return self.amount

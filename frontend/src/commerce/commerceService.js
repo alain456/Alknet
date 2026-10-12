@@ -79,10 +79,10 @@ const commerceService = {
     return api.post(`orders/commerce/${businessId}/checkout/`, checkoutBody, { headers: cartHeaders() });
   },
 
-  payOrder: (orderId, payer_phone) =>
-    api.post(`orders/${orderId}/pay/`, { payer_phone }),
-  confirmPayment: (orderId) =>
-    api.post(`orders/${orderId}/confirm-payment/`, {}),
+  payOrder: (orderId, payer_phone, payment_token) =>
+    api.post(`orders/${orderId}/pay/`, { payer_phone, payment_token }),
+  confirmPayment: (orderId, payment_token) =>
+    api.post(`orders/${orderId}/confirm-payment/`, { payment_token }, { noCache: true }),
 };
 
 export const ORDER_STATUS_LABELS = {

@@ -32,12 +32,14 @@ class OrderSerializer(serializers.ModelSerializer):
             'payer_phone', 'payment_merchant_account', 'payment_provider_reference',
             'payment_note', 'paid_at',
             'items', 'items_data',
+            'payment_token',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
             'customer', 'total_amount', 'reference_code', 'payment_status',
             'payment_method', 'payment_merchant_account', 'payment_provider_reference',
             'payment_note', 'paid_at', 'created_at', 'updated_at',
+            'payment_token',
         ]
 
     def get_customer_name(self, obj):

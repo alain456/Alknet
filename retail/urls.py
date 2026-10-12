@@ -1,6 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
+from .cash_views import CashRegisterViewSet
 from .views import (
     PrescriptionViewSet,
     RetailCartViewSet,
@@ -23,6 +24,7 @@ router.register(r'stock-movements', StockMovementViewSet, basename='retail-stock
 router.register(r'orders', RetailOrderViewSet, basename='retail-orders')
 router.register(r'cart', RetailCartViewSet, basename='retail-cart')
 router.register(r'prescriptions', PrescriptionViewSet, basename='retail-prescriptions')
+router.register(r'cash-register', CashRegisterViewSet, basename='retail-cash-register')
 
 urlpatterns = [
     path('dashboard/', retail_dashboard, name='retail-dashboard'),

@@ -10,6 +10,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 
 from businesses.models import Business
+from businesses import payment_access
 from businesses.tenant import get_user_tenant_business
 
 from .models import (
@@ -306,12 +307,34 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
             return [permissions.AllowAny()]
         return super().get_permissions()
 
+    def _payment_scoped_queryset(self):
+        """Commande atteignable par le patient, son créateur, la pharmacie, ou le porteur du jeton."""
+        user = self.request.user
+        base = RetailOrder.objects.select_related(
+            'retail_business', 'patient', 'created_by', 'proforma'
+        ).prefetch_related('items')
+        business = _admin_business(user)
+        if business:
+            pharmacy_ids = [business.id]
+        elif getattr(user, 'is_authenticated', False):
+            pharmacy_ids = list(
+                Business.objects.filter(
+                    employees__user=user, employees__is_active=True,
+                ).values_list('id', flat=True)
+            )
+        else:
+            pharmacy_ids = []
+        return payment_access.filter_by_payment_access(
+            base,
+            payment_access.owner_clause(user, 'patient', 'created_by'),
+            payment_access.tenant_clause(user, pharmacy_ids, 'retail_business'),
+            payment_access.token_clause(payment_access.extract_payment_token(self.request)),
+        )
+
     def get_queryset(self):
         user = self.request.user
         if getattr(self, 'action', None) in ('pay', 'confirm_payment'):
-            return RetailOrder.objects.select_related(
-                'retail_business', 'patient', 'created_by', 'proforma'
-            ).prefetch_related('items')
+            return self._payment_scoped_queryset()
 
         business = _admin_business(user)
         qs = RetailOrder.objects.select_related(

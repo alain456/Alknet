@@ -185,14 +185,15 @@ class WholesaleOrderSerializer(serializers.ModelSerializer):
             'total_amount', 'currency', 'refusal_reason', 'refusal_comment',
             'notification_email', 'accepted_by', 'accepted_at', 'refused_by',
             'refused_at', 'submitted_at', 'items', 'events', 'notification_logs',
-            'proforma', 'email_status', 'items_count', 'created_at', 'updated_at',
+            'proforma', 'email_status', 'items_count', 'payment_token',
+            'created_at', 'updated_at',
         ]
         read_only_fields = (
             'id', 'reference', 'total_amount', 'accepted_by', 'accepted_at',
             'refused_by', 'refused_at', 'submitted_at', 'created_at', 'updated_at',
             'payment_status', 'payment_method', 'payer_phone',
             'payment_merchant_account', 'payment_provider_reference', 'payment_note',
-            'paid_at', 'paid_by',
+            'paid_at', 'paid_by', 'payment_token',
         )
 
     def get_items_count(self, obj):

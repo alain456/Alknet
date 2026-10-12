@@ -7,6 +7,8 @@ from django.utils import timezone
 
 from businesses import burundipay
 
+from orders.cash_register import record_order_payment
+
 
 def pharmacy_merchant_account(business) -> str:
     if not business:
@@ -113,6 +115,7 @@ def confirm_order_payment_stub(order) -> dict:
     order.save(update_fields=[
         'payment_status', 'paid_at', 'payment_method', 'payment_note', 'updated_at',
     ])
+    record_order_payment(order, method='BURUNDIPAY', note='Paiement BurundiPay confirmé')
     return {
         'ok': True,
         'message': 'Paiement commande confirmé (simulation). Récupérez les produits après acceptation par le grossiste.',

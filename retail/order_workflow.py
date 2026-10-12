@@ -5,6 +5,8 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 
+from orders.cash_register import record_order_payment
+
 from .models import (
     NotificationLog,
     ProformaInvoice,
@@ -172,6 +174,12 @@ def submit_order(order, user=None):
     recalculate_order_total(order)
     order.save(update_fields=['reference', 'status', 'submitted_at', 'updated_at'])
     log_order_event(order, 'SUBMITTED', 'Commande envoyee par le patient.', user)
+    # Accusé de réception : le client doit savoir que sa commande est arrivée
+    # avant d'attendre la décision de la pharmacie. Placé ici et non dans la
+    # vue pour couvrir tous les chemins de soumission. La fonction ne lève
+    # jamais : un échec SMTP ne doit pas faire échouer la commande (ni
+    # déclencher la suppression de l'ordre par l'appelant).
+    notify_order_submitted(order)
     return order
 
 
@@ -247,6 +255,7 @@ def mark_order_paid(order, user, payment_method='', payment_note=''):
         f'Paiement confirmé par le personnel ({method}).',
         user,
     )
+    record_order_payment(order, method=method, received_by=user, note='Règlement saisi au comptoir')
     return order
 
 
@@ -402,11 +411,11 @@ def notify_order_accepted(order):
     except (KeyError, ValueError):
         body = (
             f'Bonjour {order.patient_name},\n\nVotre commande {order.reference} '
-            f'a ete acceptee par {order.retail_business.name}.'
+            f'a été acceptée par {order.retail_business.name}.'
         )
     try:
         send_mail(
-            subject=f'Commande {order.reference} acceptee',
+            subject=f'[Isoko Hub] Commande {order.reference} acceptée',
             message=body,
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
             recipient_list=[recipient],
@@ -425,6 +434,60 @@ def notify_order_accepted(order):
 
 def _retail_client_email(order):
     return (order.notification_email or order.patient_email or '').strip()
+
+
+def notify_order_submitted(order):
+    """Accusé de réception : la commande du patient vient d'être enregistrée.
+
+    Envoyé au moment où la commande est créée, avant tout traitement par la
+    pharmacie, pour que le client sache immédiatement qu'elle est arrivée et
+    qu'il s'attende à un second email (acceptation ou refus).
+    """
+    recipient = _retail_client_email(order)
+    log = NotificationLog.objects.create(
+        order=order,
+        recipient_email=recipient or 'unknown@example.com',
+        status='PENDING',
+    )
+    if not recipient:
+        log.status = 'FAILED'
+        log.error_message = 'Aucun email destinataire.'
+        log.save(update_fields=['status', 'error_message'])
+        return {'status': 'FAILED', 'error': log.error_message}
+
+    profile = ensure_retail_profile(order.retail_business)
+    context = {
+        'patient_name': order.patient_name,
+        'reference': order.reference or f'#{order.id}',
+        'pharmacy_name': profile.commercial_name or order.retail_business.name,
+        'total_amount': order.total_amount,
+        'currency': order.currency,
+    }
+    try:
+        body = profile.submission_email_message.format(**context)
+    except (KeyError, ValueError, IndexError):
+        body = (
+            f'Bonjour {order.patient_name},\n\nVotre commande {order.reference or f"#{order.id}"} '
+            f'a bien été enregistrée par {order.retail_business.name}.\n\n'
+            'Vous recevrez un email dès que la pharmacie aura accepté ou refusé votre commande.'
+        )
+    try:
+        send_mail(
+            subject=f'[Isoko Hub] Commande {order.reference or f"#{order.id}"} enregistrée',
+            message=body,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+        log.status = 'SENT'
+        log.sent_at = timezone.now()
+        log.save(update_fields=['status', 'sent_at'])
+        return {'status': 'SENT', 'recipient': recipient}
+    except Exception as exc:
+        log.status = 'FAILED'
+        log.error_message = str(exc)
+        log.save(update_fields=['status', 'error_message'])
+        return {'status': 'FAILED', 'recipient': recipient, 'error': str(exc)}
 
 
 def notify_order_rejected(order, reason='', comment=''):

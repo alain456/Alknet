@@ -197,7 +197,8 @@ class RetailOrderSerializer(serializers.ModelSerializer):
             'rejection_comment', 'clarification_comment', 'notification_email',
             'accepted_by', 'accepted_at', 'rejected_by', 'rejected_at',
             'submitted_at', 'items', 'items_count', 'events', 'prescriptions',
-            'notification_logs', 'proforma', 'created_at', 'updated_at',
+            'notification_logs', 'proforma', 'payment_token',
+            'created_at', 'updated_at',
         ]
         read_only_fields = [
             'id', 'reference', 'patient', 'is_guest', 'created_by', 'status',
@@ -206,6 +207,7 @@ class RetailOrderSerializer(serializers.ModelSerializer):
             'paid_at', 'paid_by',
             'total_amount', 'accepted_by', 'accepted_at', 'rejected_by',
             'rejected_at', 'submitted_at', 'created_at', 'updated_at',
+            'payment_token',
         ]
 
     def get_items_count(self, obj):

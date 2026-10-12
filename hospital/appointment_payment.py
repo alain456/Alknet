@@ -118,6 +118,17 @@ def initiate_appointment_payment(appointment, payer_phone: str) -> dict:
     }
 
 
+def _invoice_after_payment(appointment):
+    """Aligne la comptabilité dès qu'un paiement de consultation aboutit.
+
+    L'argent encaissé doit apparaître dans le chiffre d'affaires le jour même,
+    sans attendre que la consultation soit marquée terminée ni qu'un-agent
+    pense à cliquer sur « facturer ».
+    """
+    from .accounting import ensure_invoice_for_appointment
+    return ensure_invoice_for_appointment(appointment, actor=None)
+
+
 def confirm_appointment_payment_stub(appointment) -> dict:
     """Confirme le paiement en mode simulation BurundiPay."""
     if not burundipay.is_stub_mode():
@@ -142,6 +153,7 @@ def confirm_appointment_payment_stub(appointment) -> dict:
     appointment.save(update_fields=[
         'payment_status', 'paid_at', 'payment_method', 'payment_note', 'updated_at',
     ])
+    _invoice_after_payment(appointment)
     return {
         'ok': True,
         'message': 'Paiement consultation confirmé (simulation).',
@@ -160,6 +172,7 @@ def mark_appointment_paid_by_staff(appointment, *, method='CASH', note='', actor
     appointment.save(update_fields=[
         'payment_status', 'paid_at', 'payment_method', 'payment_note', 'updated_at',
     ])
+    _invoice_after_payment(appointment)
     return {'ok': True, 'message': 'Consultation marquée payée.', 'appointment': appointment}
 
 

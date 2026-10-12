@@ -43,8 +43,8 @@ const wholesaleService = {
   removeCartItem: (data) => api.post('wholesale/cart/remove_item/', data, { auth: true }),
   clearCart: (data) => api.post('wholesale/cart/clear/', data, { auth: true }),
   checkout: (data) => api.post('wholesale/cart/checkout/', data, { auth: true }),
-  payOrder: (id, payerPhone) => api.post(`wholesale/orders/${id}/pay/`, { payer_phone: payerPhone }),
-  confirmOrderPayment: (id) => api.post(`wholesale/orders/${id}/confirm-payment/`, {}),
+  payOrder: (id, payerPhone, payment_token) => api.post(`wholesale/orders/${id}/pay/`, { payer_phone: payerPhone, payment_token }),
+  confirmOrderPayment: (id, payment_token) => api.post(`wholesale/orders/${id}/confirm-payment/`, { payment_token }, { noCache: true }),
 };
 
 export default wholesaleService;

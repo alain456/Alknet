@@ -29,6 +29,13 @@ export const PERMISSIONS = {
   PAYMENT_CREATE: 'payment.create',
   REPORT_VIEW: 'report.view',
   AUDIT_VIEW: 'audit.view',
+  EDUCATION_PROFILE_VIEW: 'education.profile.view',
+  EDUCATION_PROFILE_UPDATE: 'education.profile.update',
+  EDUCATION_STRUCTURE_MANAGE: 'education.structure.manage',
+  EDUCATION_PROGRAMS_MANAGE: 'education.programs.manage',
+  EDUCATION_ADMISSIONS_MANAGE: 'education.admissions.manage',
+  EDUCATION_FEES_MANAGE: 'education.fees.manage',
+  EDUCATION_SERVICES_MANAGE: 'education.services.manage',
 };
 
 /** Alias vers les clés réellement stockées dans BusinessRole.permissions */
@@ -67,6 +74,7 @@ export const ACCESS_DENIED_MESSAGE = 'Accès non autorisé pour votre rôle.';
 /** Import expand hôtel (masters legacy + hotel.manage) — source unique hotelPermissions */
 import { expandHotelPermissions } from '../hotel/hotelPermissions';
 import { expandHospitalPermissions } from '../hospital/hospitalPermissions';
+import { expandEducationPermissions } from '../education/educationPermissions';
 
 export function userHasPermission(user, permission) {
   if (!user) return false;
@@ -86,6 +94,13 @@ export function userHasPermission(user, permission) {
     }
     if (expanded.includes(permission) || userPerms.includes(permission)) return true;
     return false;
+  }
+
+  // Éducation : un droit `manage` ouvre le CRUD du module.
+  if (permission?.startsWith('education.')) {
+    const educationExpanded = expandEducationPermissions(userPerms);
+    if (educationExpanded.includes('*')) return true;
+    return educationExpanded.includes(permission) || userPerms.includes(permission);
   }
 
   const hospitalExpanded = expandHospitalPermissions(userPerms);

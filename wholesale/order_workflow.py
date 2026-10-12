@@ -5,6 +5,9 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+
+from orders.cash_register import record_order_payment
+
 from .models import (
     WholesaleOrder, WholesaleOrderItem, WholesaleOrderEvent,
     WholesaleProduct, StockMovement, NotificationLog, WholesalePharmacyProfile,
@@ -229,6 +232,7 @@ def mark_order_paid(order, user, payment_method='', payment_note=''):
         f'Paiement confirmé par le personnel ({method}).',
         user,
     )
+    record_order_payment(order, method=method, received_by=user, note='Règlement saisi au comptoir')
     return order
 
 
@@ -322,17 +326,17 @@ def notify_order_rejected(order, reason='', comment=''):
 
     body = (
         f'Bonjour,\n\n'
-        f'La pharmacie de gros {order.wholesale_business.name} a refuse votre commande.\n\n'
-        f'Reference : {order.reference}\n'
+        f'La pharmacie de gros {order.wholesale_business.name} a refusé votre commande.\n\n'
+        f'Référence : {order.reference}\n'
         f'Pharmacie cliente : {client_name}\n'
-        f'Motif : {reason or "Non precise"}\n'
-        + (f'Detail : {comment}\n' if comment else '')
-        + '\nVeuillez consulter votre espace professionnel pour plus de details.\n'
+        f'Motif : {reason or "Non précisé"}\n'
+        + (f'Détail : {comment}\n' if comment else '')
+        + '\nVeuillez consulter votre espace professionnel pour plus de détails.\n'
         f'\n— Isoko Hub\n'
     )
     try:
         send_mail(
-            subject=f'[Isoko Hub] Commande {order.reference} refusee',
+            subject=f'[Isoko Hub] Commande {order.reference} refusée',
             message=body,
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
             recipient_list=[recipient],
@@ -385,17 +389,17 @@ def notify_order_accepted(order):
     body = (
         f'Bonjour,\n\n'
         f'La pharmacie de gros {order.wholesale_business.name} confirme l\'acceptation de votre commande.\n\n'
-        f'Reference : {order.reference}\n'
+        f'Reférence : {order.reference}\n'
         f'Pharmacie cliente : {client_name}\n'
         f'Date d\'acceptation : {accept_date}\n'
         f'Montant total : {order.total_amount} {order.currency}\n'
-        f'Statut : Acceptee\n\n'
-        f'Detail des produits :\n{items_txt}\n\n'
-        f'Veuillez consulter votre espace professionnel pour voir le detail de la commande.\n'
+        f'Statut : Acceptée\n\n'
+        f'Détail des produits :\n{items_txt}\n\n'
+        f'Veuillez consulter votre espace professionnel pour voir le détail de la commande.\n'
     )
     try:
         send_mail(
-            subject=f'Commande {order.reference} acceptee',
+            subject=f'[Isoko Hub] Commande {order.reference} acceptée',
             message=body,
             from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
             recipient_list=[recipient],

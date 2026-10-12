@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  MapPin, Plus, Edit, Trash2, RefreshCw, ChevronRight, ChevronDown, 
-  Building, Layers, Search, CheckCircle, AlertCircle, Navigation, Map 
+import {
+  MapPin, Plus, Edit, Trash2, RefreshCw, ChevronRight, ChevronDown,
+  Building, Layers, Search, CheckCircle, AlertCircle, Navigation, Map
 } from 'lucide-react';
+import api from '../shared/api';
 
 export default function AdminLocationsPage() {
   const [treeData, setTreeData] = useState([]);
@@ -100,8 +101,8 @@ export default function AdminLocationsPage() {
     if (!window.confirm("Voulez-vous ré-initialiser la hiérarchie officielle du Burundi (Province -> Commune -> Zone -> Quartier -> Avenue) ?")) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/locations/seed/', { method: 'POST' });
-      const data = await res.json();
+      const res = await api.post('locations/seed/', {}, { auth: true });
+      const data = res;
       setActionMessage({ type: 'success', text: data.message });
       fetchLocationsTree();
     } catch (err) {
@@ -185,23 +186,18 @@ export default function AdminLocationsPage() {
     }
 
     try {
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyData)
-      });
-
-      if (response.ok) {
-        setActionMessage({ type: 'success', text: 'Enregistrement effectué avec succès !' });
-        closeModal();
-        fetchLocationsTree();
+      const path = url.replace('/api/v1/', '');
+      if (method === 'PUT') {
+        await api.put(path, bodyData, { auth: true });
       } else {
-        const errorData = await response.json();
-        const readableMsg = typeof errorData === 'object' ? Object.entries(errorData).map(([k, v]) => `${k}: ${v}`).join(', ') : 'Erreur de validation';
-        setActionMessage({ type: 'error', text: readableMsg });
+        await api.post(path, bodyData, { auth: true });
       }
+
+      setActionMessage({ type: 'success', text: 'Enregistrement effectué avec succès !' });
+      closeModal();
+      fetchLocationsTree();
     } catch (err) {
-      setActionMessage({ type: 'error', text: err.message });
+      setActionMessage({ type: 'error', text: err.message || 'Erreur de validation' });
     } finally {
       setIsSubmitting(false);
     }
@@ -211,13 +207,11 @@ export default function AdminLocationsPage() {
   const handleDelete = async (type, id, name) => {
     if (!window.confirm(`Êtes-vous sûr de vouloir supprimer "${name}" ?`)) return;
 
-    let url = `/api/v1/locations/${type}s/${id}/`;
+    const path = `locations/${type}s/${id}/`;
     try {
-      const res = await fetch(url, { method: 'DELETE' });
-      if (res.ok) {
-        setActionMessage({ type: 'success', text: `"${name}" supprimé.` });
-        fetchLocationsTree();
-      }
+      await api.delete(path, { auth: true });
+      setActionMessage({ type: 'success', text: `"${name}" supprimé.` });
+      fetchLocationsTree();
     } catch (err) {
       setActionMessage({ type: 'error', text: err.message });
     }

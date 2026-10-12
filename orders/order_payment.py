@@ -74,7 +74,13 @@ def initiate_order_payment(order, payer_phone: str) -> dict:
 
 
 def confirm_order_payment_stub(order) -> dict:
-    """Simulation PIN (dev) — même pattern que retail."""
+    """Simulation PIN — refusée dès que BURUNDIPAY_STUB est désactivé (fail-closed)."""
+    if not burundipay.is_stub_mode():
+        return {
+            'ok': False,
+            'message': 'Confirmation manuelle réservée au mode simulation (BURUNDIPAY_STUB).',
+            'order': order,
+        }
     if order.payment_status == 'PAID':
         return {'ok': True, 'already_paid': True, 'order': order}
     if order.payment_status not in ('AWAITING_PIN', 'UNPAID', 'FAILED'):
