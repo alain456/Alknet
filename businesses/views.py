@@ -1413,8 +1413,14 @@ class MySubscriptionBurundiPayPayView(APIView):
         if request.user.role not in ('BUSINESS_OWNER', 'PROFESSIONAL') and not getattr(request.user, 'is_superuser', False):
             return Response({'detail': 'Permission refusée.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Abonnement plateforme = propriétaire uniquement (pas le Manager employé)
-        if request.user.role == 'PROFESSIONAL' and business.owner_id != request.user.id:
+        # Abonnement encore actif : seul le propriétaire paie.
+        # Expiré : un membre de l'entreprise peut renouveler depuis le menu Abonnement.
+        from .subscription import business_has_active_subscription
+        if (
+            request.user.role == 'PROFESSIONAL'
+            and business.owner_id != request.user.id
+            and business_has_active_subscription(business)
+        ):
             return Response(
                 {'detail': 'Seul le propriétaire de l\'entreprise peut gérer l\'abonnement plateforme.'},
                 status=status.HTTP_403_FORBIDDEN,

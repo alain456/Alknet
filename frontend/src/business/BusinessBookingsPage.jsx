@@ -131,11 +131,11 @@ export default function BusinessBookingsPage() {
 
       <div className="flex gap-2">
         <button onClick={() => setTab('hospital')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${tab === 'hospital' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${tab === 'hospital' ? 'bg-accent text-ink' : 'bg-gray-100 text-gray-600'}`}>
           <Stethoscope className="w-4 h-4" /> Rendez-vous médicaux
         </button>
         <button onClick={() => setTab('services')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${tab === 'services' ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+          className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${tab === 'services' ? 'bg-accent text-ink' : 'bg-gray-100 text-gray-600'}`}>
           <Calendar className="w-4 h-4" /> Services
         </button>
       </div>

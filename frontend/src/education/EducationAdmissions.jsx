@@ -738,7 +738,7 @@ export default function EducationAdmissions() {
                 <button
                   type="button"
                   onClick={() => setFeeMode('PAYANT')}
-                  className={`text-left rounded-xl border-2 p-3 ${feeMode === 'PAYANT' ? 'border-accent bg-primary/5' : 'border-border'}`}
+                  className={`text-left rounded-xl border-2 p-3 ${feeMode === 'PAYANT' ? 'bg-accent text-ink border-accent' : 'border-border'}`}
                 >
                   <p className="text-sm font-extrabold">Payante</p>
                   <p className="text-xs text-ink-muted mt-1">L&apos;élève règle les frais via BurundiPay avant d&apos;envoyer le dossier.</p>
@@ -746,7 +746,7 @@ export default function EducationAdmissions() {
                 <button
                   type="button"
                   onClick={() => { setFeeMode('GRATUIT'); setFeeAmount(''); }}
-                  className={`text-left rounded-xl border-2 p-3 ${feeMode === 'GRATUIT' ? 'border-accent bg-primary/5' : 'border-border'}`}
+                  className={`text-left rounded-xl border-2 p-3 ${feeMode === 'GRATUIT' ? 'bg-accent text-ink border-accent' : 'border-border'}`}
                 >
                   <p className="text-sm font-extrabold">Gratuite</p>
                   <p className="text-xs text-ink-muted mt-1">L&apos;élève envoie le dossier. Aucun paiement n&apos;est demandé.</p>
@@ -949,7 +949,7 @@ export default function EducationAdmissions() {
                 type="button"
                 onClick={() => setQueue(item.id)}
                 className={`px-3 py-1.5 text-xs rounded-xl border-2 font-bold ${
-                  queue === item.id ? 'border-accent bg-primary/10 text-ink' : 'border-border text-ink-muted'
+                  queue === item.id ? 'bg-accent text-ink border-accent' : 'border-border text-ink-muted'
                 }`}
               >
                 {item.label} ({count})

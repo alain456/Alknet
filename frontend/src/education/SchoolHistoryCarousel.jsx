@@ -44,7 +44,7 @@ export default function SchoolHistoryCarousel({ images = [], name = 'École', he
       onBlurCapture={() => setPaused(false)}
     >
       <div
-        className={`relative w-full overflow-hidden bg-[#123568] ${hero ? 'max-h-[70vh]' : 'max-h-96 rounded-2xl border border-border'}`}
+        className={`relative w-full overflow-hidden bg-[#132F45] ${hero ? 'max-h-[70vh]' : 'max-h-96 rounded-2xl border border-border'}`}
         style={{ aspectRatio: ratio }}
       >
         {photos.map((src, i) => (

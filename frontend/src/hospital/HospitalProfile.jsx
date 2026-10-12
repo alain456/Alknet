@@ -317,7 +317,7 @@ export default function HospitalProfile() {
     <div className="min-h-screen bg-surface text-ink pb-16">
       {/* Hero */}
       <div className="bg-primary text-surface relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(ellipse at 20% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)' }} />
+        <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(ellipse at 20% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)' }} />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-24 relative">
           <p className="text-xs font-bold uppercase tracking-widest text-accent mb-2">Prise de rendez-vous médical</p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-surface max-w-2xl">{hospital.name}</h1>
@@ -438,7 +438,7 @@ export default function HospitalProfile() {
                             onClick={() => handleOpenServiceBooking(srv)}
                             className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition border-2 ${
                               bookable
-                                ? 'bg-primary text-surface border-accent cursor-pointer'
+                                ? 'bg-accent text-ink border-accent cursor-pointer'
                                 : 'bg-accent/15 text-ink border-alert cursor-not-allowed'
                             }`}
                           >
@@ -796,7 +796,7 @@ export default function HospitalProfile() {
                 {confirmedAppointment && Number(confirmedAppointment.consultation_fee_amount || 0) > 0 && (
                   <div className={`p-4 rounded-xl text-left text-sm border-2 ${
                     ['PAID', 'WAIVED'].includes(confirmedAppointment.payment_status)
-                      ? 'bg-primary/5 border-accent text-ink'
+                      ? 'bg-accent text-ink border-accent'
                       : 'bg-accent/10 border-alert text-ink'
                   }`}>
                     <p className="font-semibold">

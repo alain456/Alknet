@@ -223,13 +223,13 @@ export default function AdminCategoriesPage() {
           <div className="flex items-center bg-paper dark:bg-black/20 p-1 border border-border dark:border-white/10 rounded-md">
             <button 
               onClick={() => setViewMode('grouped')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition ${viewMode === 'grouped' ? 'bg-green-700 text-white shadow-xs' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition ${viewMode === 'grouped' ? 'bg-accent text-ink' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
             >
               <Layers className="w-3.5 h-3.5" /> Secteurs & Catégories Groupés
             </button>
             <button 
               onClick={() => setViewMode('table')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition ${viewMode === 'table' ? 'bg-green-700 text-white shadow-xs' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md flex items-center gap-1.5 transition ${viewMode === 'table' ? 'bg-accent text-ink' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
             >
               <List className="w-3.5 h-3.5" /> Vue Tableau à Plat
             </button>
@@ -393,19 +393,19 @@ export default function AdminCategoriesPage() {
             <div className="flex items-center gap-1 bg-surface dark:bg-green-900/50 p-1 border border-border dark:border-white/10 rounded-md">
               <button 
                 onClick={() => setActiveTab('all')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${activeTab === 'all' ? 'bg-green-700 text-white shadow-xs' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${activeTab === 'all' ? 'bg-accent text-ink' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
               >
                 Tous ({categories.length})
               </button>
               <button 
                 onClick={() => setActiveTab('sectors')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${activeTab === 'sectors' ? 'bg-green-700 text-white shadow-xs' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${activeTab === 'sectors' ? 'bg-accent text-ink' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
               >
                 Secteurs Parents ({categories.filter(c => !c.parent).length})
               </button>
               <button 
                 onClick={() => setActiveTab('subcategories')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${activeTab === 'subcategories' ? 'bg-green-700 text-white shadow-xs' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${activeTab === 'subcategories' ? 'bg-accent text-ink' : 'text-ink-muted dark:text-green-100/70 hover:text-ink'}`}
               >
                 Sous-Catégories ({categories.filter(c => !!c.parent).length})
               </button>

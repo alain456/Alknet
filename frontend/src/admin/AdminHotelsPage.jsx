@@ -282,7 +282,7 @@ export default function AdminHotelsPage() {
                       onClick={() => setStarsDraft(n)}
                       className={`min-w-[2.5rem] px-3 py-2 rounded-xl border text-sm font-bold ${
                         starsDraft === n
-                          ? 'bg-amber-500 text-white border-amber-500'
+                          ? 'bg-amber-500 text-ink border-amber-500'
                           : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
                       }`}
                     >

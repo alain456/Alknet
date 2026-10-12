@@ -415,7 +415,7 @@ export default function ManageRoomTypes() {
                   {filtered.map((t) => (
                     <tr
                       key={t.id}
-                      className={`border-b border-accent/10 text-ink ${editingId === t.id ? 'bg-primary/5' : ''}`}
+                      className={`border-b border-accent/10 text-ink ${editingId === t.id ? 'bg-accent/20' : ''}`}
                     >
                       <td className="py-3 pr-2">
                         <div className="flex items-start gap-2">

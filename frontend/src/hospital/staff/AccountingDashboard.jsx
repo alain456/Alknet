@@ -20,13 +20,13 @@ function openReceipt(invoice, hospitalName) {
   ].filter((row) => row[1]);
   win.document.write(`<!DOCTYPE html><html><head><title>Reçu ${invoice.invoice_number || ''}</title>
     <style>
-      body { font-family: sans-serif; color: #1B4F9C; padding: 24px; }
+      body { font-family: sans-serif; color: #32667F; padding: 24px; }
       h1 { font-size: 18px; margin: 0 0 4px; }
       p { margin: 0 0 16px; color: #3d6b66; }
       table { width: 100%; border-collapse: collapse; }
       td { padding: 8px 0; border-bottom: 1px solid #d5e0df; vertical-align: top; }
       td:first-child { color: #3d6b66; width: 40%; }
-      button { margin-top: 20px; background: #1B4F9C; color: #F5F5F3; border: 0; padding: 10px 16px; border-radius: 8px; }
+      button { margin-top: 20px; background: #32667F; color: #F5F5F5; border: 0; padding: 10px 16px; border-radius: 8px; }
     </style></head><body>
     <h1>${hospitalName || 'Hôpital'}</h1>
     <p>Reçu de comptabilité</p>
@@ -385,7 +385,7 @@ export default function AccountingDashboard() {
                     key={status}
                     type="button"
                     onClick={() => setStatusFilter(status)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${statusFilter === status ? 'bg-teal-700 text-white' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${statusFilter === status ? 'bg-accent text-ink' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'}`}
                   >
                     {status === 'ALL' ? 'Toutes' : status === 'PENDING' ? 'En attente' : status === 'PAID' ? 'Payées' : 'Annulées'}
                   </button>

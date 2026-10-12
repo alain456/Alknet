@@ -15,7 +15,7 @@ export default function AuthLayout() {
           className="absolute inset-0 opacity-35 pointer-events-none"
           style={{
             background:
-              'radial-gradient(ellipse at 20% 10%, #1E8B4A 0%, transparent 55%), radial-gradient(ellipse at 90% 90%, #E1302A 0%, transparent 50%)',
+              'radial-gradient(ellipse at 20% 10%, #EA8B33 0%, transparent 55%), radial-gradient(ellipse at 90% 90%, #E1302A 0%, transparent 50%)',
           }}
         />
         <div className="relative z-10">

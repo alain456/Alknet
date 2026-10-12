@@ -264,7 +264,7 @@ export default function AdminBusinessesPage() {
           >
             <ShieldAlert className="w-4 h-4 text-amber-600" /> Modération
             {pendingModerationCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-600 text-white">
+              <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-600 text-ink">
                 {pendingModerationCount}
               </span>
             )}

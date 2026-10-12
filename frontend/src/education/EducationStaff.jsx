@@ -124,7 +124,7 @@ export default function EducationStaff() {
             <button
               type="button"
               onClick={() => setEditing({ ...EMPTY_PROGRAM_ROW })}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-ink text-sm font-bold"
             >
               <Plus className="w-4 h-4" /> Nouvelle
             </button>
@@ -178,7 +178,7 @@ export default function EducationStaff() {
             <button
               type="button"
               onClick={() => setEditing({ ...EMPTY_UNIT })}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold"
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-ink text-sm font-bold"
             >
               <Plus className="w-4 h-4" /> Nouvelle unité
             </button>
@@ -288,7 +288,7 @@ export default function EducationStaff() {
           )}
 
           <div className="flex gap-2">
-            <button type="submit" disabled={busy} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold disabled:opacity-60">
+            <button type="submit" disabled={busy} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-ink text-sm font-bold disabled:opacity-60">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Enregistrer
             </button>
             <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-xl border border-border dark:border-white/20 text-sm font-semibold text-ink dark:text-white">

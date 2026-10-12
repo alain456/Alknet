@@ -2,8 +2,8 @@ import React from 'react';
 import useSiteContent from '../useSiteContent';
 
 /** Palette logo : bleu ISOKO, vert HUB */
-const PRIMARY = '#1B4F9C';
-const ACCENT = '#1E8B4A';
+const PRIMARY = '#32667F';
+const ACCENT = '#EA8B33';
 
 export default function Logo({ className = '', isDark = false, showText = true }) {
   const { settings } = useSiteContent();

@@ -195,7 +195,7 @@ export default function UserBookingsPage() {
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`pb-3 text-sm font-medium capitalize ${activeTab === tab ? 'text-teal-600 border-b-2 border-teal-600' : 'text-gray-500'}`}
+            className={`pb-3 text-sm font-medium capitalize ${activeTab === tab ? 'text-ink border-b-2 border-accent' : 'text-gray-500'}`}
           >
             {tab === 'upcoming' ? 'À venir' : tab === 'past' ? 'Passés' : 'Tous'}
           </button>

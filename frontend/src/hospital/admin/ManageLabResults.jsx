@@ -196,7 +196,7 @@ export default function ManageLabResults() {
                     onClick={() => setFilterStatus(status)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
                       filterStatus === status
-                        ? 'bg-teal-600 text-white'
+                        ? 'bg-accent text-ink'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >

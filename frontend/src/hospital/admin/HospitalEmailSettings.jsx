@@ -110,7 +110,7 @@ export default function HospitalEmailSettings() {
           <button type="button" onClick={load} className="px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg flex items-center gap-1">
             <RefreshCw className="w-3.5 h-3.5" /> Actualiser
           </button>
-          <button type="submit" disabled={saving} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1">
+          <button type="submit" disabled={saving} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-ink text-xs font-bold rounded-xl flex items-center gap-1">
             <Save className="w-3.5 h-3.5" /> {saving ? 'Enregistrement...' : 'Enregistrer'}
           </button>
         </div>

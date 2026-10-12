@@ -93,7 +93,7 @@ export default function BusinessRegistrationPage() {
           className="absolute inset-0 opacity-30"
           style={{
             background:
-              'radial-gradient(ellipse at 15% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 95% 90%, #E1302A 0%, transparent 45%)',
+              'radial-gradient(ellipse at 15% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 95% 90%, #E1302A 0%, transparent 45%)',
           }}
         />
         <div className="max-w-3xl mx-auto px-4 pt-10 pb-16 relative text-center space-y-4">

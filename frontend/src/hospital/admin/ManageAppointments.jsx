@@ -735,7 +735,7 @@ export default function ManageAppointments() {
           type="button"
           onClick={() => openAnticipationModal(apt)}
           disabled={actionLoading}
-          className="px-2 py-1 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 inline-flex items-center gap-1"
+          className="px-2 py-1 text-xs font-semibold bg-amber-600 text-ink rounded-lg hover:bg-amber-700 disabled:opacity-50 inline-flex items-center gap-1"
         >
           <Clock className="w-3.5 h-3.5" /> Déplacer
         </button>
@@ -870,7 +870,7 @@ export default function ManageAppointments() {
           onClick={() => openConfirmModal(apt)}
           disabled={actionLoading || unpaid}
           title={unpaid ? 'Paiement consultation requis avant confirmation' : ''}
-          className={`${btnClass} bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-1`}
+          className={`${btnClass} bg-green-600 text-ink hover:bg-green-700 disabled:opacity-50 flex items-center gap-1`}
         >
           <CheckCircle className="w-4 h-4" /> Confirmer
         </button>
@@ -991,14 +991,14 @@ export default function ManageAppointments() {
               onClick={() => setActiveTab('requests')}
               className={`pb-3 text-sm font-semibold flex items-center gap-2 transition cursor-pointer border-b-2 whitespace-nowrap ${
                 activeTab === 'requests'
-                  ? 'border-teal-600 text-teal-600'
+                  ? 'border-accent text-ink'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
               <AlertCircle className="w-4 h-4" />
               Demandes à traiter
               {(pendingRequests.length + anticipationRequests.length) > 0 && (
-                <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-500 text-ink text-[10px] font-bold">
                   {pendingRequests.length + anticipationRequests.length}
                 </span>
               )}
@@ -1008,7 +1008,7 @@ export default function ManageAppointments() {
               onClick={() => setActiveTab('slots')}
               className={`pb-3 text-sm font-semibold flex items-center gap-2 transition cursor-pointer border-b-2 ${
                 activeTab === 'slots'
-                  ? 'border-teal-600 text-teal-600'
+                  ? 'border-accent text-ink'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -1020,7 +1020,7 @@ export default function ManageAppointments() {
               onClick={() => setActiveTab('appointments')}
               className={`pb-3 text-sm font-semibold flex items-center gap-2 transition cursor-pointer border-b-2 ${
                 activeTab === 'appointments'
-                  ? 'border-teal-600 text-teal-600'
+                  ? 'border-accent text-ink'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -1032,7 +1032,7 @@ export default function ManageAppointments() {
               onClick={() => setActiveTab('queue')}
               className={`pb-3 text-sm font-semibold flex items-center gap-2 transition cursor-pointer border-b-2 ${
                 activeTab === 'queue'
-                  ? 'border-teal-600 text-teal-600'
+                  ? 'border-accent text-ink'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -1070,7 +1070,7 @@ export default function ManageAppointments() {
                           type="button"
                           onClick={() => openAnticipationModal(apt)}
                           disabled={actionLoading}
-                          className="px-4 py-2 text-sm font-semibold rounded-xl bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 inline-flex items-center gap-1"
+                          className="px-4 py-2 text-sm font-semibold rounded-xl bg-amber-600 text-ink hover:bg-amber-700 disabled:opacity-50 inline-flex items-center gap-1"
                         >
                           <Clock className="w-4 h-4" /> Traiter
                         </button>
@@ -1243,7 +1243,7 @@ export default function ManageAppointments() {
                             <button
                               onClick={() => handleToggleSlotStatus(slot.id, slot.is_active)}
                               className={`px-3 py-2 text-xs font-semibold rounded-xl flex items-center gap-1 ${
-                                slot.is_active ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                slot.is_active ? 'bg-orange-100 text-orange-700 hover:bg-orange-200' : 'bg-emerald-600 text-ink hover:bg-emerald-700'
                               }`}
                             >
                               {slot.is_active ? <><EyeOff className="w-3.5 h-3.5" /> Dépublier</> : <><Eye className="w-3.5 h-3.5" /> Publier</>}
@@ -1319,7 +1319,7 @@ export default function ManageAppointments() {
                           onClick={() => setFilterStatus(status)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap cursor-pointer ${
                             filterStatus === status
-                              ? 'bg-teal-600 text-white'
+                              ? 'bg-accent text-ink'
                               : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                           }`}
                         >
@@ -1698,7 +1698,7 @@ export default function ManageAppointments() {
                     onClick={() => setSlotFormData({ ...slotFormData, consultation_type: 'IN_PERSON' })}
                     className={`p-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition ${
                       slotFormData.consultation_type === 'IN_PERSON'
-                        ? 'border-teal-600 bg-teal-50 text-teal-800'
+                        ? 'border-accent bg-accent text-ink'
                         : 'border-gray-200 text-gray-600'
                     }`}
                   >
@@ -1776,7 +1776,7 @@ export default function ManageAppointments() {
                 type="button"
                 onClick={() => handleConfirm(confirmTarget.id)}
                 disabled={actionLoading || !confirmMessage.trim()}
-                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-ink rounded-xl text-sm font-semibold disabled:opacity-50"
               >
                 {actionLoading ? 'Confirmation...' : 'Confirmer et notifier patient + médecin'}
               </button>
@@ -1936,7 +1936,7 @@ export default function ManageAppointments() {
                 type="button"
                 disabled={actionLoading || (!anticipationNewDate && !anticipationTarget.anticipation_preferred_at)}
                 onClick={() => handleRespondAnticipation('accept')}
-                className="px-4 py-2 bg-amber-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50"
+                className="px-4 py-2 bg-amber-600 text-ink rounded-xl text-sm font-semibold disabled:opacity-50"
               >
                 {actionLoading ? 'Traitement…' : 'Accepter le déplacement'}
               </button>

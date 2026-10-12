@@ -541,7 +541,7 @@ export default function AdminPlatformRolesPage() {
                             key={action.key}
                             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${
                               on
-                                ? 'bg-teal-50 border-teal-300 text-teal-900'
+                                ? 'bg-accent text-ink border-accent'
                                 : 'bg-gray-50 border-gray-200 text-gray-600'
                             } ${role.is_locked ? 'opacity-80' : 'cursor-pointer'}`}
                           >

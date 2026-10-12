@@ -97,7 +97,7 @@ export default function SchoolAccounting() {
             key={value}
             type="button"
             onClick={() => setFilter(value)}
-            className={`px-3 py-1.5 text-xs rounded-xl border-2 font-bold ${filter === value ? 'border-accent bg-primary/10' : 'border-gray-200'}`}
+            className={`px-3 py-1.5 text-xs rounded-xl border-2 font-bold ${filter === value ? 'bg-accent text-ink border-accent' : 'border-gray-200'}`}
           >
             {label}
           </button>

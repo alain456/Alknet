@@ -651,7 +651,7 @@ export default function BusinessClientHistoryPage() {
                     onClick={() => setTab(t.key)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                       tab === t.key
-                        ? 'bg-teal-700 text-white'
+                        ? 'bg-accent text-ink'
                         : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
                     }`}
                   >
@@ -815,7 +815,7 @@ export default function BusinessClientHistoryPage() {
                             <button
                               type="button"
                               onClick={() => openAnticipate(item)}
-                              className="w-full sm:w-auto px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white inline-flex items-center justify-center gap-2 shadow-sm"
+                              className="w-full sm:w-auto px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-ink inline-flex items-center justify-center gap-2 shadow-sm"
                             >
                               <Clock className="w-4 h-4" />
                               Anticiper ou reporter
@@ -830,7 +830,7 @@ export default function BusinessClientHistoryPage() {
                             <button
                               type="button"
                               onClick={() => openHotelReschedule(item)}
-                              className="w-full sm:w-auto px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white inline-flex items-center justify-center gap-2 shadow-sm"
+                              className="w-full sm:w-auto px-4 py-2.5 text-sm font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-ink inline-flex items-center justify-center gap-2 shadow-sm"
                             >
                               <Clock className="w-4 h-4" />
                               Anticiper ou reporter
@@ -1030,7 +1030,7 @@ export default function BusinessClientHistoryPage() {
                 <button
                   type="submit"
                   disabled={anticipateBusy || !anticipateReason.trim()}
-                  className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                  className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-ink rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >
                   <Clock className="w-4 h-4" />
                   {anticipateBusy ? 'Envoi…' : 'Envoyer à l\'hôpital'}
@@ -1192,7 +1192,7 @@ export default function BusinessClientHistoryPage() {
                 <button
                   type="submit"
                   disabled={rescheduleBusy || !rescheduleReason.trim()}
-                  className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                  className="px-5 py-3 bg-amber-600 hover:bg-amber-700 text-ink rounded-xl text-sm font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2"
                 >
                   <Clock className="w-4 h-4" />
                   {rescheduleBusy ? 'Envoi…' : 'Envoyer à l’hôtel'}

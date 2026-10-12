@@ -206,7 +206,7 @@ export default function LandingPage() {
             className="absolute inset-0 opacity-30 pointer-events-none"
             style={{
               background:
-                'radial-gradient(ellipse at 20% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)',
+                'radial-gradient(ellipse at 20% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)',
             }}
           />
         )}

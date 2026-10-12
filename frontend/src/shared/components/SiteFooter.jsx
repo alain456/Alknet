@@ -133,9 +133,9 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
       className="text-surface relative overflow-hidden"
       style={{
         background:
-          'radial-gradient(ellipse at 12% 0%, color-mix(in srgb, #1E8B4A 35%, transparent) 0%, transparent 42%), '
+          'radial-gradient(ellipse at 12% 0%, color-mix(in srgb, #EA8B33 35%, transparent) 0%, transparent 42%), '
           + 'radial-gradient(ellipse at 92% 100%, color-mix(in srgb, #E1302A 28%, transparent) 0%, transparent 40%), '
-          + 'color-mix(in srgb, #1B4F9C 62%, #0a1628)',
+          + 'color-mix(in srgb, #32667F 62%, #0a1628)',
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14 space-y-12">

@@ -27,9 +27,9 @@ function openReportsPdf({ from, to, summary, byMethod, daily, hotelName }) {
   )).join('');
   win.document.write(`<!DOCTYPE html><html><head><title>Rapport hôtel ${from}–${to}</title>
     <style>
-      body { font-family: Georgia, 'Times New Roman', serif; color: #1B4F9C; padding: 28px; background: #F5F5F3; }
+      body { font-family: Georgia, 'Times New Roman', serif; color: #32667F; padding: 28px; background: #F5F5F5; }
       h1 { font-size: 22px; margin: 0 0 4px; }
-      h2 { font-size: 15px; margin: 24px 0 8px; color: #1E8B4A; }
+      h2 { font-size: 15px; margin: 24px 0 8px; color: #EA8B33; }
       p { margin: 0 0 12px; color: #3d4a66; }
       table { width: 100%; border-collapse: collapse; font-size: 13px; background: #fff; }
       th, td { padding: 8px 10px; border-bottom: 1px solid #d5e0df; text-align: left; }
@@ -37,7 +37,7 @@ function openReportsPdf({ from, to, summary, byMethod, daily, hotelName }) {
       .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
       .kpi { background: #fff; border: 1px solid #d5e0df; padding: 12px; border-radius: 8px; }
       .kpi strong { display: block; font-size: 18px; margin-top: 4px; }
-      button { margin-top: 20px; background: #1B4F9C; color: #F5F5F3; border: 0; padding: 10px 16px; border-radius: 8px; }
+      button { margin-top: 20px; background: #32667F; color: #F5F5F5; border: 0; padding: 10px 16px; border-radius: 8px; }
       @media print { button { display: none; } body { background: #fff; } }
     </style></head><body>
     <h1>${hotelName || 'Rapport hôtel'}</h1>

@@ -346,7 +346,7 @@ export default function PublicWholesaleCatalog() {
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="bg-accent text-primary text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
+              className="bg-accent text-ink text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
             >
               <ShoppingCart className="w-3.5 h-3.5" />
               Panier · {cartCount} article{cartCount > 1 ? 's' : ''}
@@ -412,11 +412,11 @@ export default function PublicWholesaleCatalog() {
           <div>
             <h3 className="text-[13px] font-bold uppercase tracking-wide text-primary mb-2.5">Catégorie</h3>
             <div className="space-y-1">
-              <button type="button" onClick={() => setCategoryFilter('ALL')} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === 'ALL' ? 'bg-green-100 text-primary font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
+              <button type="button" onClick={() => setCategoryFilter('ALL')} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === 'ALL' ? 'bg-accent text-ink font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
                 Tous <span className="font-mono text-[11px] text-ink-faint">{products.length}</span>
               </button>
               {categories.map(([name, count]) => (
-                <button key={name} type="button" onClick={() => setCategoryFilter(name)} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === name ? 'bg-green-100 text-primary font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
+                <button key={name} type="button" onClick={() => setCategoryFilter(name)} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === name ? 'bg-accent text-ink font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
                   {name} <span className="font-mono text-[11px] text-ink-faint">{count}</span>
                 </button>
               ))}

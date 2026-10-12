@@ -455,7 +455,7 @@ export default function ManageRooms() {
                   {filtered.map((r) => (
                     <tr
                       key={r.id}
-                      className={`border-b border-accent/10 text-ink ${editingId === r.id ? 'bg-primary/5' : ''}`}
+                      className={`border-b border-accent/10 text-ink ${editingId === r.id ? 'bg-accent/20' : ''}`}
                     >
                       <td className="py-3 pr-2 font-extrabold">{r.number}</td>
                       <td className="py-3 pr-2 font-medium">{r.room_type_name || '—'}</td>

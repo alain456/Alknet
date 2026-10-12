@@ -297,7 +297,7 @@ export default function AdminPaymentsPage() {
             type="button"
             onClick={() => setTab(t.id)}
             className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
-              tab === t.id ? 'bg-teal-700 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+              tab === t.id ? 'bg-accent text-ink' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
             }`}
           >
             {t.label}

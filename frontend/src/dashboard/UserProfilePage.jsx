@@ -223,7 +223,7 @@ export default function UserProfilePage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-[#1B4F9C] text-[#1B4F9C] text-sm font-semibold"
+              className="px-4 py-2 rounded-lg border border-[#32667F] text-[#32667F] text-sm font-semibold"
               onClick={async () => {
                 const data = await api.get('accounts/me/export/', { auth: true });
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -257,7 +257,7 @@ export default function UserProfilePage() {
           {user?.role === 'BUSINESS_OWNER' && (
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-[#1B4F9C] text-white text-sm font-semibold"
+              className="px-4 py-2 rounded-lg bg-[#32667F] text-white text-sm font-semibold"
               onClick={async () => {
                 const data = await api.get('businesses/me/data-export/', { auth: true });
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

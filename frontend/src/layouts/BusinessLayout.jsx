@@ -279,7 +279,10 @@ export default function BusinessLayout() {
       .sort((a, b) => (b.path?.length || 0) - (a.path?.length || 0))[0];
     const item = exact || prefix;
     if (!item) return true;
-    if (item.ownerOnly) return user?.role === ROLES.BUSINESS_OWNER;
+    if (item.ownerOnly) {
+      if (subscriptionBlocked && isSubscriptionPath(pathname)) return true;
+      return user?.role === ROLES.BUSINESS_OWNER;
+    }
     if (item.hideForOwner && user?.role === ROLES.BUSINESS_OWNER) return false;
     if (item.alwaysShow) return true;
     if (item.anyPerm?.length) return item.anyPerm.some((p) => userHasPermission(user, p));
@@ -595,16 +598,19 @@ export default function BusinessLayout() {
                   ? educationNavGroups
                   : genericNavGroups;
     if (!subscriptionBlocked) return groups;
-    // Seul le propriétaire gère l'abonnement plateforme
+    const renewItem = { name: 'Abonnement', icon: Crown, path: subscriptionHome };
     if (isHotel && user?.role !== ROLES.BUSINESS_OWNER) {
       return [{
         title: 'Accès plateforme',
-        items: [{ name: 'Tableau de bord', icon: LayoutDashboard, path: '/hotel/dashboard' }],
+        items: [
+          { name: 'Tableau de bord', icon: LayoutDashboard, path: '/hotel/dashboard' },
+          renewItem,
+        ],
       }];
     }
     return [{
       title: 'Accès plateforme',
-      items: [{ name: 'Abonnement', icon: Crown, path: subscriptionHome }],
+      items: [renewItem],
     }];
   })();
 
@@ -686,7 +692,7 @@ export default function BusinessLayout() {
   }
 
   if (subscriptionBlocked && !isSubscriptionPath(location.pathname)) {
-    // Manager employé : pas de page abonnement — rester sur le dashboard
+    // Manager hôtel : tableau de bord ou page Abonnement, rien d'autre tant que c'est expiré.
     if (isHotel && user?.role !== ROLES.BUSINESS_OWNER) {
       if (location.pathname !== '/hotel/dashboard') {
         return <Navigate to="/hotel/dashboard" replace />;
@@ -696,11 +702,12 @@ export default function BusinessLayout() {
     }
   }
 
-  // Manager hôtel (employé) : pas d'accès à l'abonnement plateforme
+  // Abonnement actif : réservé au propriétaire. Expiré : le menu Abonnement reste ouvert pour renouveler.
   if (
     isHotel
     && isSubscriptionPath(location.pathname)
     && user?.role !== ROLES.BUSINESS_OWNER
+    && !subscriptionBlocked
   ) {
     return <Navigate to="/hotel/dashboard" replace />;
   }
@@ -777,11 +784,11 @@ export default function BusinessLayout() {
                       onClick={closeSidebar}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
                         isActive
-                          ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
+                          ? 'bg-accent text-ink'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-white/10 hover:text-white'
                       }`}
                     >
-                      <item.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} />
+                      <item.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-ink' : 'text-white/70'}`} />
                       <span className="truncate flex-1">{item.name}</span>
                       {item.badgeKey === 'clientMessages' && hotelMsgAlert > 0 && (
                         <span className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center ${
@@ -793,7 +800,7 @@ export default function BusinessLayout() {
                       )}
                       {item.badgeKey === 'rescheduleRequests' && hotelRescheduleAlert > 0 && (
                         <span className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center ${
-                          isActive ? 'bg-white text-amber-800' : 'bg-amber-500 text-white'
+                          isActive ? 'bg-white text-amber-800' : 'bg-amber-500 text-ink'
                         }`}
                         >
                           {hotelRescheduleAlert > 9 ? '9+' : hotelRescheduleAlert}
@@ -801,7 +808,7 @@ export default function BusinessLayout() {
                       )}
                       {item.badgeKey === 'planningAlerts' && planningAlert > 0 && (
                         <span className={`shrink-0 min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] font-extrabold inline-flex items-center justify-center ${
-                          isActive ? 'bg-white text-amber-800' : 'bg-amber-500 text-white'
+                          isActive ? 'bg-white text-amber-800' : 'bg-amber-500 text-ink'
                         }`}
                         >
                           {planningAlert > 9 ? '9+' : planningAlert}
@@ -815,19 +822,19 @@ export default function BusinessLayout() {
           ))}
         </div>
 
-        <div className="p-4 border-t border-gray-100 dark:border-gray-800 shrink-0 bg-gray-50/30 dark:bg-gray-900">
+        <div className="sidebar-account p-4 border-t border-white/15 shrink-0">
           <div className="flex items-center gap-3 mb-3 px-1">
-            <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-xs shrink-0 border border-teal-200 dark:border-teal-800">
+            <div className="sidebar-account-mark w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
               <UserCheck className="w-4 h-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+              <div className="text-xs font-bold truncate">
                 {user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : 'Administrateur'}
               </div>
-              <div className="text-[10px] text-teal-700 dark:text-teal-400 font-semibold truncate">
+              <div className="text-[10px] font-semibold truncate">
                 {user?.business_info?.role_name || spaceLabel}
               </div>
-              <div className="text-[10px] text-gray-400 truncate">
+              <div className="text-[10px] truncate opacity-80">
                 {user?.email || 'admin@isoko.bi'}
               </div>
             </div>
@@ -835,7 +842,7 @@ export default function BusinessLayout() {
 
           <button
             onClick={handleLogout}
-            className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 border border-red-100 dark:border-red-900/30 transition cursor-pointer"
+            className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-xl text-xs font-bold transition cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             Déconnexion
@@ -896,14 +903,14 @@ export default function BusinessLayout() {
                 />
               )}
               {isHotel && (hotelMsgAlert > 0 || hotelHkAlert > 0 || hotelRescheduleAlert > 0) && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-ink text-[9px] font-extrabold flex items-center justify-center">
                   {(hotelRescheduleAlert || hotelMsgAlert || hotelHkAlert) > 9
                     ? '9+'
                     : (hotelRescheduleAlert || hotelMsgAlert || hotelHkAlert)}
                 </span>
               )}
               {!isHotel && planningAlert > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-amber-500 text-ink text-[9px] font-extrabold flex items-center justify-center">
                   {planningAlert > 9 ? '9+' : planningAlert}
                 </span>
               )}

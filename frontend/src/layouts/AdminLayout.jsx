@@ -267,11 +267,11 @@ export default function AdminLayout() {
               onClick={closeSidebar}
               className={`flex items-center gap-3 px-3 py-2 rounded-md text-[13.5px] font-medium transition-colors ${
                 isActive
-                  ? 'bg-green-100 text-green-700 dark:bg-white/10 dark:text-white'
-                  : 'text-ink-muted hover:text-green-900 dark:text-green-100/70 dark:hover:text-white hover:bg-green-50 dark:hover:bg-white/5'
+                  ? 'bg-accent text-ink'
+                  : 'text-ink-muted hover:text-ink dark:text-green-100/70 dark:hover:text-white hover:bg-white/10'
               }`}
             >
-              <item.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-green-700 dark:text-white' : 'text-ink-faint dark:text-green-100/50'}`} strokeWidth={1.8} />
+              <item.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-ink' : 'text-ink-faint dark:text-green-100/50'}`} strokeWidth={1.8} />
               <span className="flex-1 truncate">{label}</span>
               {showContactBadge && (
                 <span className="min-w-[1.15rem] h-[1.15rem] px-1 rounded-full bg-alert text-white text-[10px] font-bold flex items-center justify-center shrink-0">
@@ -315,18 +315,18 @@ export default function AdminLayout() {
           ))}
         </div>
 
-        <div className="p-4 border-t border-border dark:border-white/10 shrink-0">
-          <div className="flex items-center gap-3 px-3 py-2 text-sm text-ink-muted dark:text-green-100/70">
-            <div className="w-8 h-8 rounded-full bg-green-700 text-white flex items-center justify-center shrink-0 font-display font-semibold text-[13px]">
+        <div className="sidebar-account p-4 border-t border-white/15 shrink-0">
+          <div className="flex items-center gap-3 px-3 py-2 text-sm">
+            <div className="sidebar-account-mark w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-display font-semibold text-[13px]">
               {getInitials()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-green-900 dark:text-white truncate">
+              <p className="text-[13px] font-semibold truncate">
                 {user?.first_name
                   ? `${user.first_name} ${user.last_name || ''}`.trim()
                   : (platformRoleLabel(user) || user?.email || 'Admin')}
               </p>
-              <p className="text-[11px] text-ink-faint dark:text-green-100/50 truncate font-mono">
+              <p className="text-[11px] truncate font-mono opacity-80">
                 {user?.platform_role_name || platformRoleLabel(user) || user?.email || ''}
               </p>
             </div>

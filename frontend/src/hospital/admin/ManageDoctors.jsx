@@ -270,7 +270,7 @@ export default function ManageDoctors() {
             onClick={() => setActiveCategoryTab(tab.key)}
             className={`px-4 py-2 rounded-lg text-xs font-bold transition whitespace-nowrap cursor-pointer ${
               activeCategoryTab === tab.key
-                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                ? 'bg-accent text-ink'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
             }`}
           >
@@ -479,7 +479,7 @@ export default function ManageDoctors() {
                       }}
                       className={`p-2 rounded-lg text-xs font-semibold border transition cursor-pointer text-center ${
                         formData.staff_category === cat.key
-                          ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                          ? 'bg-accent text-ink border-accent'
                           : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-50'
                       }`}
                     >

@@ -517,14 +517,14 @@ export default function AdminCmsPage() {
               onClick={() => selectTab(t.key)}
               className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
                 tab === t.key
-                  ? 'bg-primary text-white'
+                  ? 'bg-accent text-ink'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
               }`}
             >
               <Icon className="w-4 h-4" /> {t.label}
               {t.key === 'messages' && unreadCount > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                  tab === t.key ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                  tab === t.key ? 'bg-ink text-surface' : 'bg-red-500 text-white'
                 }`}>
                   {unreadCount}
                 </span>

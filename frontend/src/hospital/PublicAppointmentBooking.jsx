@@ -239,7 +239,7 @@ export default function PublicAppointmentBooking() {
           className="absolute inset-0 opacity-30"
           style={{
             background:
-              'radial-gradient(ellipse at 15% 0%, #1E8B4A 0%, transparent 50%), radial-gradient(ellipse at 95% 90%, #E1302A 0%, transparent 45%)',
+              'radial-gradient(ellipse at 15% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 95% 90%, #E1302A 0%, transparent 45%)',
           }}
         />
         <div className="max-w-4xl mx-auto px-4 pt-10 pb-16 relative text-center space-y-3">
@@ -260,7 +260,7 @@ export default function PublicAppointmentBooking() {
               key={label}
               className={`flex items-center gap-1.5 text-[10px] sm:text-xs font-bold px-2.5 py-1.5 rounded-lg border-2 ${
                 i === step
-                  ? 'bg-primary text-surface border-accent'
+                  ? 'bg-accent text-ink border-accent'
                   : i < step
                     ? 'bg-accent/15 text-ink border-accent'
                     : 'bg-surface text-ink-muted border-border'
@@ -514,7 +514,7 @@ export default function PublicAppointmentBooking() {
             <div
               className={`p-4 rounded-xl text-sm text-left border-2 ${
                 createdAppointment.payment_status === 'PAID' || createdAppointment.payment_status === 'WAIVED'
-                  ? 'bg-primary/5 border-accent text-ink'
+                  ? 'bg-accent text-ink border-accent'
                   : 'bg-accent/10 border-alert text-ink'
               }`}
             >

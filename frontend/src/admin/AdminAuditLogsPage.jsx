@@ -258,7 +258,7 @@ export default function AdminAuditLogsPage() {
             <button
               type="button"
               onClick={exportToCSV}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-xs"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-ink rounded-xl font-semibold text-xs"
             >
               <Download className="w-4 h-4" />
               Exporter CSV
@@ -272,7 +272,7 @@ export default function AdminAuditLogsPage() {
             onClick={() => setScope('platform')}
             className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border transition ${
               isPlatformScope
-                ? 'bg-emerald-500/30 border-emerald-400/50 text-white'
+                ? 'bg-emerald-500/30 border-emerald-400/50 text-ink'
                 : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
             }`}
           >
@@ -283,7 +283,7 @@ export default function AdminAuditLogsPage() {
             onClick={() => setScope('business')}
             className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border transition ${
               !isPlatformScope
-                ? 'bg-emerald-500/30 border-emerald-400/50 text-white'
+                ? 'bg-emerald-500/30 border-emerald-400/50 text-ink'
                 : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
             }`}
           >
@@ -419,7 +419,7 @@ export default function AdminAuditLogsPage() {
                 ))}
               </select>
             </div>
-            <button type="submit" className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs rounded-xl">
+            <button type="submit" className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-ink font-medium text-xs rounded-xl">
               Filtrer
             </button>
           </div>
@@ -671,7 +671,7 @@ export default function AdminAuditLogsPage() {
               <button
                 type="button"
                 onClick={() => setActiveLogModal(null)}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-xs"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-ink rounded-xl font-medium text-xs"
               >
                 Fermer
               </button>

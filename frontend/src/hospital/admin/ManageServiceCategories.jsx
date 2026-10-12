@@ -190,7 +190,7 @@ export default function ManageServiceCategories() {
 
         <div
           className="bg-white dark:bg-gray-900 p-5 rounded-2xl shadow-sm flex items-center gap-4 border-duo"
-          style={{ '--ih-frame-bg': 'var(--color-white, #F5F5F3)' }}
+          style={{ '--ih-frame-bg': 'var(--color-white, #F5F5F5)' }}
         >
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950 text-emerald-600 rounded-xl border border-accent">
             <ShieldCheck className="w-6 h-6" />

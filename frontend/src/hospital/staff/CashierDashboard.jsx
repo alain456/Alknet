@@ -213,7 +213,7 @@ function CashierDesk() {
                     onClick={() => setFilterStatus(status)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
                       filterStatus === status
-                        ? 'bg-orange-600 text-white'
+                        ? 'bg-orange-600 text-ink'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -303,7 +303,7 @@ function CashierDesk() {
                             {invoice.status === 'PENDING' && (
                               <button
                                 onClick={() => handlePaymentStatusUpdate(invoice.id, 'PAID')}
-                                className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition"
+                                className="px-3 py-1 bg-green-600 text-ink text-xs rounded-lg hover:bg-green-700 transition"
                               >
                                 Marquer Payée
                               </button>
@@ -311,7 +311,7 @@ function CashierDesk() {
                             {invoice.status === 'PAID' && (
                               <button
                                 onClick={() => handlePaymentStatusUpdate(invoice.id, 'PENDING')}
-                                className="px-3 py-1 bg-yellow-600 text-white text-xs rounded-lg hover:bg-yellow-700 transition"
+                                className="px-3 py-1 bg-yellow-600 text-ink text-xs rounded-lg hover:bg-yellow-700 transition"
                               >
                                 Marquer En attente
                               </button>

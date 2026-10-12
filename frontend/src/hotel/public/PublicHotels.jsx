@@ -62,7 +62,7 @@ export default function PublicHotels() {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(ellipse at 20% 10%, #1E8B4A 0%, transparent 45%), radial-gradient(ellipse at 90% 80%, #1B4F9C 0%, transparent 50%), linear-gradient(160deg, #0d2347 0%, #153a75 40%, #4a1512 100%)',
+              'radial-gradient(ellipse at 20% 10%, #EA8B33 0%, transparent 45%), radial-gradient(ellipse at 90% 80%, #32667F 0%, transparent 50%), linear-gradient(160deg, #132F45 0%, #153a75 40%, #4a1512 100%)',
           }}
         />
         <div

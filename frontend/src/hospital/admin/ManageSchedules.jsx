@@ -540,7 +540,7 @@ export default function ManageSchedules() {
                       onClick={() => toggleTemplateDay(d.id)}
                       className={`min-w-[3.25rem] px-3 py-2 rounded-xl text-xs font-bold border transition ${
                         active
-                          ? 'bg-teal-600 text-white border-teal-600'
+                          ? 'bg-accent text-ink border-accent'
                           : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-600 hover:border-teal-400'
                       }`}
                     >
@@ -741,7 +741,7 @@ export default function ManageSchedules() {
             <button
               type="submit"
               disabled={disabledBulk || monthGenerating}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-ink font-semibold rounded-xl text-sm disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {monthGenerating && <Loader2 className="w-4 h-4 animate-spin" />}
               {monthGenerating ? 'Génération...' : 'Générer pour tous'}

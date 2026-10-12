@@ -166,7 +166,7 @@ export default function UserDashboardPage() {
           </div>
           <Link
             to="/services"
-            className="inline-flex items-center gap-2 bg-accent hover:opacity-95 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition"
+            className="inline-flex items-center gap-2 bg-accent hover:opacity-95 text-ink font-semibold py-3 px-6 rounded-lg shadow-md transition"
           >
             <Compass className="w-5 h-5" />
             Explorer les services

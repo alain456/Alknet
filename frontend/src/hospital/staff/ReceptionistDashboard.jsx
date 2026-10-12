@@ -333,7 +333,7 @@ export default function ReceptionistDashboard() {
                     onClick={() => selectAppointment(apt)}
                     className={`w-full text-left p-3 rounded-xl border text-xs transition ${
                       selectedAppointment?.id === apt.id
-                        ? 'border-teal-500 bg-teal-50 ring-1 ring-teal-400'
+                        ? 'border-accent bg-accent text-ink'
                         : isAlreadyOriented(apt)
                           ? 'border-amber-200 bg-amber-50/50 hover:bg-amber-50'
                           : 'border-gray-200 hover:bg-gray-50'
@@ -571,7 +571,7 @@ export default function ReceptionistDashboard() {
                     }}
                     className={`w-full text-left p-3 rounded-xl border transition ${
                       selectedAppointment?.id === apt.id
-                        ? 'border-teal-500 bg-teal-50'
+                        ? 'border-accent bg-accent text-ink'
                         : 'border-gray-200 hover:border-teal-200 bg-white'
                     }`}
                   >

@@ -241,7 +241,7 @@ export default function CommerceInventory() {
                     }
                   }}
                   className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold border ${
-                    mode === opt.key ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200'
+                    mode === opt.key ? 'bg-accent text-ink border-accent' : 'bg-white text-gray-600 border-gray-200'
                   }`}
                 >
                   {opt.label}

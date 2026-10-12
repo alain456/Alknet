@@ -476,7 +476,7 @@ export default function BusinessAuditLogsPage() {
               <button
                 type="button"
                 onClick={() => setActiveLog(null)}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium text-xs"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-ink rounded-xl font-medium text-xs"
               >
                 Fermer
               </button>

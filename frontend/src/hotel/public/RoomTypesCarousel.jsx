@@ -177,7 +177,7 @@ export default function RoomTypesCarousel({
                     <button
                       type="button"
                       onClick={() => onBook(t)}
-                      className="shrink-0 px-3.5 py-2 rounded-xl bg-[#1E8B4A] hover:opacity-95 text-white text-xs font-extrabold border border-[#8fd4a8]/60 transition"
+                      className="shrink-0 px-3.5 py-2 rounded-xl bg-[#EA8B33] hover:opacity-95 text-white text-xs font-extrabold border border-[#8fd4a8]/60 transition"
                     >
                       Réserver
                     </button>

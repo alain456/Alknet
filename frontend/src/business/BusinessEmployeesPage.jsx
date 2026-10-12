@@ -576,7 +576,7 @@ export default function BusinessEmployeesPage() {
               onClick={() => setSelectedCategoryFilter(tab.key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
                 selectedCategoryFilter === tab.key
-                  ? 'bg-teal-600 text-white shadow-md shadow-teal-600/30'
+                  ? 'bg-accent text-ink'
                   : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
               }`}
             >

@@ -58,7 +58,7 @@ export default function PublicLayout() {
                 </Link>
                 <button
                   onClick={logout}
-                  className="bg-warm hover:opacity-95 text-white font-bold py-2 px-3.5 rounded-lg shadow-sm transition cursor-pointer text-sm sm:text-base"
+                  className="bg-ink hover:opacity-95 text-surface font-bold py-2 px-3.5 rounded-lg shadow-sm transition cursor-pointer text-sm sm:text-base"
                 >
                   Logout
                 </button>
@@ -66,7 +66,7 @@ export default function PublicLayout() {
             ) : (
               <>
                 <Link to="/login" className="text-white font-semibold hover:text-white/80 py-2 transition text-sm sm:text-base">Login</Link>
-                <Link to="/register" className="bg-alert hover:opacity-95 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition text-sm sm:text-base">Sign Up</Link>
+                <Link to="/register" className="bg-accent hover:opacity-95 font-bold py-2 px-4 rounded-lg shadow-sm transition text-sm sm:text-base">Sign Up</Link>
               </>
             )}
           </div>

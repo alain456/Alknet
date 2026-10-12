@@ -358,7 +358,7 @@ export default function BusinessProfilePage() {
               type="button"
               onClick={handleSubmit}
               disabled={saving}
-              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg transition disabled:opacity-50"
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-ink px-6 py-3 rounded-xl font-bold shadow-lg transition disabled:opacity-50"
             >
               <Save className="w-5 h-5" />
               {saving ? 'Enregistrement...' : 'Enregistrer'}
@@ -615,7 +615,7 @@ export default function BusinessProfilePage() {
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition cursor-pointer disabled:opacity-50"
+            className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-ink px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/30 transition cursor-pointer disabled:opacity-50"
           >
             <Save className="w-5 h-5" />
             {saving ? 'Enregistrement...' : 'Enregistrer le Profil'}
@@ -870,7 +870,7 @@ export default function BusinessProfilePage() {
                 <button
                   type="button"
                   onClick={handleAddInsurance}
-                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
+                  className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-ink px-3 py-1.5 rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" /> Ajouter
                 </button>

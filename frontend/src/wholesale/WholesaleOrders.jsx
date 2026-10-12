@@ -294,7 +294,7 @@ function OrderDetail({ id, clientMode }) {
                 onClick={() => setAcceptOpen(true)}
                 disabled={!canAccept}
                 title={!canAccept ? 'L\'acheteur doit d\'abord payer via BurundiPay' : undefined}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-semibold disabled:opacity-40"
+                className="px-4 py-2 bg-emerald-600 text-ink rounded-xl font-semibold disabled:opacity-40"
               >
                 Accepter
               </button>
@@ -415,7 +415,7 @@ function OrderDetail({ id, clientMode }) {
             </p>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setAcceptOpen(false)} className="px-4 py-2 border rounded-xl">Annuler</button>
-              <button type="button" disabled={busy} onClick={accept} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-semibold">
+              <button type="button" disabled={busy} onClick={accept} className="px-4 py-2 bg-emerald-600 text-ink rounded-xl font-semibold">
                 Confirmer l&apos;acceptation
               </button>
             </div>

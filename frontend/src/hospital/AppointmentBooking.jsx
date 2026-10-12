@@ -64,9 +64,9 @@ export default function AppointmentBooking({ doctor, hospitalId, hospitalName, o
 
         {step < 3 && (
           <div className="flex items-center mb-6">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 1 ? 'bg-teal-600 text-white' : 'bg-gray-200'}`}>1</div>
-            <div className={`h-1 flex-1 ${step >= 2 ? 'bg-teal-600' : 'bg-gray-200'}`} />
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 2 ? 'bg-teal-600 text-white' : 'bg-gray-200'}`}>2</div>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 1 ? 'bg-accent text-ink' : 'bg-gray-200'}`}>1</div>
+            <div className={`h-1 flex-1 ${step >= 2 ? 'bg-accent' : 'bg-gray-200'}`} />
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= 2 ? 'bg-accent text-ink' : 'bg-gray-200'}`}>2</div>
           </div>
         )}
 
@@ -82,7 +82,7 @@ export default function AppointmentBooking({ doctor, hospitalId, hospitalName, o
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3">
               <div onClick={() => setFormData({ ...formData, type: 'IN_PERSON' })}
-                className={`border rounded-xl p-3 cursor-pointer text-center ${formData.type === 'IN_PERSON' ? 'border-teal-600 bg-teal-50' : ''}`}>
+                className={`border rounded-xl p-3 cursor-pointer text-center ${formData.type === 'IN_PERSON' ? 'border-accent bg-accent text-ink' : ''}`}>
                 <User className="w-6 h-6 mx-auto text-teal-600" />
                 <span className="text-sm font-medium">Présentiel</span>
               </div>
@@ -98,7 +98,7 @@ export default function AppointmentBooking({ doctor, hospitalId, hospitalName, o
               <div className="grid grid-cols-4 gap-2">
                 {timeSlots.map((time) => (
                   <div key={time} onClick={() => setFormData({ ...formData, time })}
-                    className={`text-center py-2 text-sm rounded-lg border cursor-pointer ${formData.time === time ? 'bg-teal-600 text-white' : ''}`}>
+                    className={`text-center py-2 text-sm rounded-lg border cursor-pointer ${formData.time === time ? 'bg-accent text-ink' : ''}`}>
                     {time}
                   </div>
                 ))}

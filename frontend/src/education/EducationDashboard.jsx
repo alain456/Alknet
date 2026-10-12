@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   GraduationCap, Save, Send, Plus, Pencil, Trash2, ExternalLink, EyeOff, Eye, Loader2, ImagePlus,
+  Clock, CheckCircle2, BookOpen, Wallet,
 } from 'lucide-react';
+import { api } from '../shared/api';
 import educationService from './educationService';
 import SchoolSectionsEditor from './SchoolSectionsEditor';
 import SchoolEcofoClassesEditor, { DEFAULT_ECOFO_CLASSES } from './SchoolEcofoClassesEditor';
@@ -11,6 +13,10 @@ import { parseListField, EMPTY_ITEM } from './educationListFields';
 import { readImageAsDataUrl } from '../shared/components/BusinessRegistrationForm';
 
 const inputClass = 'w-full px-3 py-2 text-sm bg-surface border-2 border-accent rounded-xl text-ink outline-none focus:border-alert';
+const actionBtn = 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-accent text-ink hover:opacity-95 disabled:opacity-50';
+
+const WAITING = ['LISTE_ATTENTE', 'ENVOYEE', 'EN_INSTRUCTION', 'COMPLEMENT_DEMANDE'];
+const ACCEPTED = ['ACCEPTEE', 'CONFIRMEE'];
 
 const EMPTY_PROGRAM = {
   title: '', domain: '', degree_awarded: '', duration_label: '',
@@ -85,6 +91,8 @@ export default function EducationDashboard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [campaigns, setCampaigns] = useState([]);
+  const [applications, setApplications] = useState([]);
   const [enums, setEnums] = useState({
     establishment_types: [],
     levels: [],
@@ -135,6 +143,15 @@ export default function EducationDashboard() {
       });
       setPrograms(Array.isArray(list) ? list : (list?.results || []));
       setUnits(Array.isArray(unitList) ? unitList : (unitList?.results || []));
+      if (p?.business_detail?.category_slug === 'ecole') {
+        const [campaignData, applicationData] = await Promise.all([
+          api.get('education/campaigns/?mine=1', { auth: true }).catch(() => []),
+          api.get('education/applications/', { auth: true }).catch(() => []),
+        ]);
+        const asList = (data) => (Array.isArray(data) ? data : (data?.results || []));
+        setCampaigns(asList(campaignData));
+        setApplications(asList(applicationData));
+      }
       setError('');
     } catch (e) {
       setError(e.message || 'Impossible de charger votre fiche');
@@ -307,9 +324,97 @@ export default function EducationDashboard() {
   const status = profile?.publication_status;
   const statusLabel = (enums.publication_statuses || []).find((row) => row.value === status)?.label || status;
   const isSchool = profile?.business_detail?.category_slug === 'ecole';
+  const tracks = [
+    profile?.offers_prescolaire && 'Préscolaire',
+    profile?.offers_ecofo && 'Fondamental',
+    profile?.offers_post_fondamental && 'Post-fondamental',
+  ].filter(Boolean);
+  const openCampaigns = campaigns.filter((row) => row.open_today);
+  const waiting = applications.filter((row) => WAITING.includes(row.status));
+  const accepted = applications.filter((row) => ACCEPTED.includes(row.status));
+  const updatedLabel = profile?.updated_at
+    ? new Date(profile.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+    : '';
+  const stats = [
+    { label: 'Parcours publiés', value: tracks.length ? tracks.join(' · ') : 'Aucun', icon: BookOpen },
+    { label: 'Inscriptions ouvertes', value: String(openCampaigns.length), icon: GraduationCap },
+    { label: 'Liste d’attente', value: String(waiting.length), icon: Clock },
+    { label: 'Acceptés', value: String(accepted.length), icon: CheckCircle2 },
+  ];
 
   return (
     <div className="space-y-6 pb-10 text-ink">
+      {isSchool ? (
+        <section className="rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-border">
+          <div className="school-dash-hero bg-ink px-5 py-6 sm:px-7">
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+              <div>
+                <p className="school-dash-kicker text-[11px] font-bold uppercase tracking-[0.16em]">École</p>
+                <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold">{profile?.business_name || 'Tableau de bord'}</h1>
+                <p className="mt-2 text-sm opacity-80">
+                  {statusLabel}{updatedLabel ? ` · Mis à jour le ${updatedLabel}` : ''}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/education/dashboard/admissions" className={actionBtn}>
+                  <GraduationCap className="w-4 h-4" /> Admissions
+                </Link>
+                <Link to="/education/accounting" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-surface">
+                  <Wallet className="w-4 h-4" /> Comptabilité
+                </Link>
+                {status === 'PUBLISHED' && (
+                  <Link
+                    to={`/education/establishment/${profile?.id}`}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border border-surface/40"
+                  >
+                    <ExternalLink className="w-4 h-4" /> Page publique
+                  </Link>
+                )}
+                {(status === 'DRAFT' || status === 'REJECTED') && (
+                  <button type="button" onClick={submitForReview} disabled={busy} className={actionBtn}>
+                    <Send className="w-4 h-4" /> Envoyer en validation
+                  </button>
+                )}
+              </div>
+            </div>
+            {profile?.moderation_note && status === 'REJECTED' && (
+              <p className="mt-4 text-sm font-medium">Motif du rejet : {profile.moderation_note}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            {stats.map((item) => (
+              <div key={item.label} className="px-5 py-4 border-t border-border sm:border-r last:border-r-0">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+                  <item.icon className="w-4 h-4 text-accent" />
+                  {item.label}
+                </div>
+                <p className="mt-2 text-lg font-extrabold text-ink truncate">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className="px-5 py-4 border-t border-border bg-surface">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-sm font-extrabold text-ink">Dossiers à traiter</h2>
+              <Link to="/education/dashboard/admissions" className="text-xs font-bold text-primary">Voir la file</Link>
+            </div>
+            {waiting.length === 0 ? (
+              <p className="text-sm text-ink-muted">Aucun dossier en attente.</p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {waiting.slice(0, 4).map((row) => (
+                  <li key={row.id} className="py-2.5 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-ink truncate">{row.student_name || 'Dossier'}</p>
+                      <p className="text-xs text-ink-muted truncate">{row.program_title || row.applicant_email}</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg bg-accent/15 text-ink">En attente</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : (
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border-duo bg-surface p-5">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -352,15 +457,21 @@ export default function EducationDashboard() {
           )}
         </div>
       </div>
+      )}
 
       {error && <div className="rounded-xl border-2 border-alert bg-alert/10 text-ink px-4 py-3 text-sm font-medium">{error}</div>}
       {notice && <div className="rounded-xl border-2 border-accent bg-primary/5 text-ink px-4 py-3 text-sm font-medium">{notice}</div>}
 
-      <form onSubmit={saveProfile} className="space-y-4 p-5 rounded-2xl border-2 border-accent bg-white dark:bg-gray-900 shadow-sm">
-        <h2 className="font-extrabold text-ink text-lg">Fiche de l&apos;établissement</h2>
+      <form onSubmit={saveProfile} className={`space-y-5 p-5 sm:p-6 rounded-2xl bg-white dark:bg-gray-900 shadow-sm ${isSchool ? 'ring-1 ring-border' : 'border-2 border-accent'}`}>
+        <div>
+          <h2 className="font-extrabold text-ink text-lg">Fiche de l&apos;établissement</h2>
+          {isSchool && (
+            <p className="text-sm text-ink-muted mt-1">Ce que les familles voient sur la page publique de l&apos;école.</p>
+          )}
+        </div>
 
         {profile?.business_detail?.category_slug === 'ecole' && (
-          <div className="space-y-3 p-4 rounded-xl border-2 border-accent/40">
+          <div className="space-y-3 p-4 rounded-xl bg-surface ring-1 ring-border">
             <p className="text-sm font-bold text-ink">Cette école est *</p>
             <p className="text-xs text-ink-muted">Le choix s&apos;enregistre dès que vous le cochez. Il apparaît ensuite sur la page publique.</p>
             {(() => {
@@ -640,7 +751,7 @@ export default function EducationDashboard() {
         <button
           type="submit"
           disabled={busy}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-md shadow-teal-600/20 disabled:opacity-50"
+          className={actionBtn}
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Enregistrer la fiche

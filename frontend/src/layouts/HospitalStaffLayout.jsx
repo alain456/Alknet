@@ -129,10 +129,16 @@ export default function HospitalStaffLayout() {
             Les opérations de cet établissement sont suspendues. Contactez l&apos;administrateur
             de l&apos;hôpital pour renouveler l&apos;abonnement plateforme.
           </p>
+          <Link
+            to="/hospital/subscription"
+            className="inline-flex px-4 py-2 rounded-lg bg-accent text-ink text-sm font-semibold"
+          >
+            Renouveler l&apos;abonnement
+          </Link>
           <button
             type="button"
             onClick={handleLogout}
-            className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold"
+            className="px-4 py-2 rounded-lg border border-border text-ink text-sm font-semibold"
           >
             Déconnexion
           </button>
@@ -185,11 +191,11 @@ export default function HospitalStaffLayout() {
                   onClick={closeSidebar}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-sm font-bold ${
                     isActive
-                      ? 'bg-primary text-surface shadow-md border-2 border-accent'
+                      ? 'bg-accent text-ink'
                       : 'text-ink hover:bg-primary/10 hover:text-ink'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-surface' : 'text-accent'}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-ink' : 'text-white/70'}`} />
                   <span className="truncate">{item.name}</span>
                 </Link>
               );
@@ -213,12 +219,12 @@ export default function HospitalStaffLayout() {
               onClick={() => setShowNotifications(!showNotifications)}
               className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                 showNotifications 
-                  ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800' 
+                  ? 'bg-accent text-ink' 
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800/60 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
               <div className="flex items-center gap-3">
-                <Bell className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                <Bell className={`w-4 h-4 shrink-0 ${showNotifications ? 'text-ink' : 'text-white/70'}`} />
                 <span>Notifications</span>
               </div>
               {unreadStaffCount > 0 ? (
@@ -232,25 +238,25 @@ export default function HospitalStaffLayout() {
           </div>
 
           {/* User Info & Logout */}
-          <div className="p-4 border-t border-gray-200 dark:border-gray-800">
+          <div className="sidebar-account p-4 border-t border-white/15">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 bg-teal-100 dark:bg-teal-950/80 border border-teal-200 dark:border-teal-800 rounded-full flex items-center justify-center shrink-0">
-                <span className="font-bold text-teal-700 dark:text-teal-300 text-xs">
+              <div className="sidebar-account-mark w-9 h-9 rounded-full flex items-center justify-center shrink-0">
+                <span className="font-bold text-xs">
                   {(user?.first_name?.[0] || 'U').toUpperCase()}{(user?.last_name?.[0] || '').toUpperCase()}
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-xs text-gray-900 dark:text-white truncate">
+                <p className="font-bold text-xs truncate">
                   {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : 'Agent Hospitalier'}
                 </p>
-                <p className="text-[10px] text-gray-400 truncate">
+                <p className="text-[10px] truncate opacity-80">
                   {user?.email || 'personnel@isoko.bi'}
                 </p>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/30 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors text-xs font-bold cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-colors text-xs font-bold cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Déconnexion</span>

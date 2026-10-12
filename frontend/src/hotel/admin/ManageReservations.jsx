@@ -362,7 +362,7 @@ export default function ManageReservations({
             onClick={() => setFilter(key)}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition ${
               filter === key
-                ? 'bg-primary text-surface border-accent'
+                ? 'bg-accent text-ink border-accent'
                 : 'bg-surface text-ink border-accent/40 hover:bg-primary/5'
             }`}
           >

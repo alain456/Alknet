@@ -685,7 +685,7 @@ export default function DoctorDashboard() {
               <button
                 type="button"
                 onClick={() => handleCompleteConsultation(appointment.id)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg"
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-ink text-xs font-bold rounded-lg"
               >
                 Terminer
               </button>
@@ -861,7 +861,7 @@ export default function DoctorDashboard() {
                   onClick={() => { setFilterDay(opt.id); setActiveTab('appointments'); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${
                     filterDay === opt.id
-                      ? 'bg-primary text-surface border-accent'
+                      ? 'bg-accent text-ink border-accent'
                       : 'bg-surface text-ink border-border hover:border-accent'
                   }`}
                 >
@@ -881,7 +881,7 @@ export default function DoctorDashboard() {
                   onClick={() => { setFilterType(opt.id); setActiveTab('appointments'); }}
                   className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${
                     filterType === opt.id
-                      ? 'bg-primary text-surface border-accent'
+                      ? 'bg-accent text-ink border-accent'
                       : 'bg-surface text-ink border-border hover:border-accent'
                   }`}
                 >
@@ -926,7 +926,7 @@ export default function DoctorDashboard() {
                   onClick={() => { setFilterStatus(chip.id); setActiveTab('appointments'); }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${
                     filterStatus === chip.id
-                      ? 'bg-primary text-surface border-accent'
+                      ? 'bg-accent text-ink border-accent'
                       : 'bg-surface text-ink border-border hover:border-accent'
                   }`}
                 >
@@ -1029,7 +1029,7 @@ export default function DoctorDashboard() {
                 onClick={() => setActiveTab('slots')}
                 className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'slots'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    ? 'text-ink border-b-2 border-accent bg-accent/15'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -1040,7 +1040,7 @@ export default function DoctorDashboard() {
                 onClick={() => setActiveTab('appointments')}
                 className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'appointments'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    ? 'text-ink border-b-2 border-accent bg-accent/15'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -1051,7 +1051,7 @@ export default function DoctorDashboard() {
                 onClick={() => setActiveTab('records')}
                 className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'records'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    ? 'text-ink border-b-2 border-accent bg-accent/15'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -1062,7 +1062,7 @@ export default function DoctorDashboard() {
                 onClick={() => setActiveTab('prescriptions')}
                 className={`flex-1 px-6 py-4 font-medium transition whitespace-nowrap ${
                   activeTab === 'prescriptions'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                    ? 'text-ink border-b-2 border-accent bg-accent/15'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
@@ -1191,7 +1191,7 @@ export default function DoctorDashboard() {
                                         <button
                                           type="button"
                                           onClick={() => handleCompleteConsultation(apt.id)}
-                                          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold rounded-lg"
+                                          className="px-2 py-1 bg-green-600 hover:bg-green-700 text-ink text-[10px] font-bold rounded-lg"
                                         >
                                           Terminer
                                         </button>

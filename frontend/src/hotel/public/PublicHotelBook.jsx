@@ -220,7 +220,7 @@ export default function PublicHotelBook() {
             className="absolute inset-0"
             style={{
               background:
-                'radial-gradient(ellipse at 15% 0%, #1E8B4A 0%, transparent 50%), linear-gradient(160deg, #1B4F9C 0%, #1a0c0b 100%)',
+                'radial-gradient(ellipse at 15% 0%, #EA8B33 0%, transparent 50%), linear-gradient(160deg, #32667F 0%, #1a0c0b 100%)',
             }}
           />
         )}

@@ -265,7 +265,7 @@ function OrderCard({
             type="button"
             disabled={busy}
             onClick={onReady}
-            className="px-2 py-1 text-[11px] bg-amber-500 text-white rounded-lg font-semibold disabled:opacity-40"
+            className="px-2 py-1 text-[11px] bg-amber-500 text-ink rounded-lg font-semibold disabled:opacity-40"
           >
             Prête au retrait
           </button>
@@ -275,7 +275,7 @@ function OrderCard({
             type="button"
             disabled={busy}
             onClick={onDone}
-            className="px-2 py-1 text-[11px] bg-green-600 text-white rounded-lg font-semibold disabled:opacity-40"
+            className="px-2 py-1 text-[11px] bg-green-600 text-ink rounded-lg font-semibold disabled:opacity-40"
           >
             Marquer retirée
           </button>

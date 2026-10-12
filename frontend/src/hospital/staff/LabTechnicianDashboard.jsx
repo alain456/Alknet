@@ -499,7 +499,7 @@ export default function LabTechnicianDashboard() {
                         type="button"
                         onClick={() => setFilterStatus(status)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap ${
-                          filterStatus === status ? 'bg-teal-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          filterStatus === status ? 'bg-accent text-ink' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
                         {status === 'ALL' ? 'Tous' : STATUS_CHOICES.find((s) => s.value === status)?.label}
@@ -924,7 +924,7 @@ export default function LabTechnicianDashboard() {
                         <label
                           key={id}
                           className={`flex items-start gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm ${
-                            checked ? 'bg-teal-50 border border-teal-200' : 'hover:bg-slate-50'
+                            checked ? 'bg-accent/20 border border-accent' : 'hover:bg-slate-50'
                           }`}
                         >
                           <input

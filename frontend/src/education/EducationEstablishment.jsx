@@ -310,7 +310,7 @@ export default function EducationEstablishment() {
         {gallery.length > 0 ? (
           <SchoolHistoryCarousel hero images={gallery} name={business.name} />
         ) : (
-          <div className="h-[420px] sm:h-[560px] bg-gradient-to-br from-primary to-[#123568]" />
+          <div className="h-[420px] sm:h-[560px] bg-gradient-to-br from-primary to-[#132F45]" />
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-black/10" />
         <div className="pointer-events-none absolute inset-0 z-10 flex items-end sm:items-center">
@@ -340,7 +340,7 @@ export default function EducationEstablishment() {
               </p>
             )}
             <div className="mt-6 flex flex-wrap gap-3">
-              <a href="#informations" className="pointer-events-auto inline-flex items-center px-5 py-2.5 rounded-full bg-[#1E8B4A] text-white text-sm font-bold">
+              <a href="#informations" className="pointer-events-auto inline-flex items-center px-5 py-2.5 rounded-full bg-[#EA8B33] text-white text-sm font-bold">
                 Voir les informations
               </a>
               {(business.phone || profile.institutional_email || business.email) && (
@@ -360,7 +360,7 @@ export default function EducationEstablishment() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 grid lg:grid-cols-2 gap-8 items-center">
           <div className="relative rounded-2xl overflow-hidden min-h-[220px] bg-primary/10">
             {(gallery[1] || gallery[0] || business.logo) ? (
-              <img src={gallery[1] || gallery[0] || business.logo} alt="" className="w-full max-h-80 object-contain bg-[#123568]" />
+              <img src={gallery[1] || gallery[0] || business.logo} alt="" className="w-full max-h-80 object-contain bg-[#132F45]" />
             ) : (
               <div className="h-64 flex items-center justify-center">
                 <GraduationCap className="w-16 h-16 text-primary/40" />
@@ -447,7 +447,7 @@ export default function EducationEstablishment() {
             <p className="mt-3 text-sm text-white/85">
               Les formations publiées indiquent les périodes d&apos;inscription encore ouvertes.
             </p>
-            <a href="#informations" className="inline-flex mt-5 self-start px-4 py-2 rounded-lg bg-[#1E8B4A] text-white text-sm font-bold">
+            <a href="#informations" className="inline-flex mt-5 self-start px-4 py-2 rounded-lg bg-[#EA8B33] text-white text-sm font-bold">
               Voir les informations
             </a>
           </div>
@@ -662,7 +662,7 @@ export default function EducationEstablishment() {
                   <Link
                     to={user ? `/education/inscription?campaign=${year.id}` : '/login'}
                     state={user ? undefined : { from: `/education/inscription?campaign=${year.id}` }}
-                    className="inline-flex mt-2 px-4 py-2 rounded-xl bg-[#1E8B4A] text-white text-sm font-bold"
+                    className="inline-flex mt-2 px-4 py-2 rounded-xl bg-[#EA8B33] text-white text-sm font-bold"
                   >
                     S&apos;inscrire
                   </Link>
@@ -671,7 +671,7 @@ export default function EducationEstablishment() {
                     <button
                       type="button"
                       disabled
-                      className="inline-flex mt-2 px-4 py-2 rounded-xl bg-[#1E8B4A]/40 text-white text-sm font-bold cursor-not-allowed"
+                      className="inline-flex mt-2 px-4 py-2 rounded-xl bg-[#EA8B33]/40 text-white text-sm font-bold cursor-not-allowed"
                     >
                       S&apos;inscrire
                     </button>
