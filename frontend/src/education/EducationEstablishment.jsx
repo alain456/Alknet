@@ -599,8 +599,17 @@ export default function EducationEstablishment() {
             <p className="text-sm text-ink-muted">L&apos;école n&apos;a pas encore ouvert d&apos;année scolaire.</p>
           ) : schoolYears.map((year) => (
             <article key={year.id} className="mt-3 space-y-2">
-              <p className="font-bold text-ink">{year.academic_year}</p>
+              <p className="font-bold text-ink">
+                {year.academic_year}
+                {year.enrollment_fee?.fee_mode === 'PAYANT' ? ' · Inscription payante' : ''}
+                {year.enrollment_fee?.fee_mode === 'GRATUIT' ? ' · Inscription gratuite' : ''}
+              </p>
               <p className="text-sm text-ink-muted">{year.opens_on} → {year.closes_on}</p>
+              <p className="text-sm font-semibold text-ink">
+                {Number(year.enrollment_fee?.amount_bif) > 0
+                  ? `Payante — ${Number(year.enrollment_fee.amount_bif).toLocaleString('fr-BI')} BIF, règlement BurundiPay pendant l’inscription`
+                  : 'Gratuite — le dossier est envoyé sans paiement'}
+              </p>
               {(year.open_tracks || []).length > 0 && (
                 <div className="space-y-2 text-sm text-ink-muted">
                   {(year.open_tracks || []).map((code) => {

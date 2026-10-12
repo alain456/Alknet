@@ -378,6 +378,11 @@ class AdmissionCampaign(models.Model):
         help_text='Ex. test de sélection, entretien. Chaque ligne : kind, label, date, place, details.',
     )
     is_public = models.BooleanField(default=True)
+    fee_mode = models.CharField(
+        max_length=16, blank=True, default='',
+        choices=(('PAYANT', 'Payante'), ('GRATUIT', 'Gratuite')),
+        help_text='École : une inscription payante et une gratuite peuvent coexister pour la même année.',
+    )
 
     class Meta:
         ordering = ['-opens_on']
@@ -386,9 +391,21 @@ class AdmissionCampaign(models.Model):
                 fields=['program', 'academic_year'], name='uniq_education_campaign_year',
             ),
             models.UniqueConstraint(
-                fields=['business', 'academic_year'],
-                condition=models.Q(program__isnull=True),
-                name='uniq_education_school_year',
+                fields=['business', 'academic_year', 'fee_mode'],
+                condition=models.Q(program__isnull=True) & ~models.Q(fee_mode=''),
+                name='uniq_education_school_year_mode',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(opens_on__lte=models.F('closes_on')),
+                name='education_campaign_opens_before_close',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(late_opens_on__isnull=True)
+                    | models.Q(late_closes_on__isnull=True)
+                    | models.Q(late_opens_on__lte=models.F('late_closes_on'))
+                ),
+                name='education_campaign_late_window_ordered',
             ),
         ]
 
@@ -507,6 +524,13 @@ class EnrollmentApplication(models.Model):
                 condition=~models.Q(student_email=''),
                 name='uniq_education_application_per_email',
             ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=[
+                    'BROUILLON', 'ENVOYEE', 'EN_INSTRUCTION', 'COMPLEMENT_DEMANDE',
+                    'LISTE_ATTENTE', 'ACCEPTEE', 'REFUSEE', 'CONFIRMEE',
+                ]),
+                name='education_application_status_known',
+            ),
         ]
 
 
@@ -551,11 +575,23 @@ class EducationFee(models.Model):
         EducationProgram, on_delete=models.CASCADE, null=True, blank=True, related_name='fees',
     )
     academic_year = models.CharField(max_length=20, blank=True, default='')
+    campaign = models.ForeignKey(
+        'AdmissionCampaign', on_delete=models.CASCADE, null=True, blank=True,
+        related_name='enrollment_fees',
+    )
     label = models.CharField(max_length=200)
     amount_bif = models.PositiveIntegerField()
     is_required = models.BooleanField(default=True)
     due_date = models.DateField(null=True, blank=True)
     is_public = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(amount_bif__gte=0),
+                name='education_fee_amount_non_negative',
+            ),
+        ]
 
 
 class EducationFeePayment(models.Model):
@@ -588,3 +624,62 @@ class EducationFeePayment(models.Model):
     )
     payment_token = models.CharField(max_length=64, default='', blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=['UNPAID', 'AWAITING_PIN', 'PAID', 'FAILED', 'WAIVED']),
+                name='education_fee_payment_status_known',
+            ),
+            models.UniqueConstraint(
+                fields=['fee', 'application'],
+                condition=models.Q(application__isnull=False),
+                name='uniq_education_fee_payment_per_application',
+            ),
+        ]
+
+
+class SchoolPlanSeat(models.Model):
+    """Place d'une classe, copie typée du plan JSON d'une année scolaire."""
+
+    campaign = models.ForeignKey(
+        AdmissionCampaign, on_delete=models.CASCADE, related_name='plan_seats',
+    )
+    track = models.CharField(max_length=32)
+    year = models.CharField(max_length=16, blank=True, default='')
+    section = models.CharField(max_length=80, blank=True, default='')
+    seats = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campaign', 'track', 'year', 'section'],
+                name='uniq_school_plan_seat',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(seats__gte=0),
+                name='school_plan_seat_non_negative',
+            ),
+        ]
+
+
+class SchoolCriterion(models.Model):
+    """Critère supplémentaire (test, entretien), copie typée du JSON."""
+
+    campaign = models.ForeignKey(
+        AdmissionCampaign, on_delete=models.CASCADE, related_name='criteria_rows',
+    )
+    position = models.PositiveIntegerField(default=0)
+    kind = models.CharField(max_length=32, blank=True, default='')
+    label = models.CharField(max_length=200, blank=True, default='')
+    date = models.CharField(max_length=40, blank=True, default='')
+    place = models.CharField(max_length=200, blank=True, default='')
+    details = models.TextField(blank=True, default='')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campaign', 'position'],
+                name='uniq_school_criterion_position',
+            ),
+        ]

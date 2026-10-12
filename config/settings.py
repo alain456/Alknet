@@ -113,6 +113,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'education.tenant_context.EducationTenantMiddleware',
     'businesses.middleware.ActiveSubscriptionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -272,7 +273,9 @@ REST_FRAMEWORK = {
         'anon': os.environ.get('THROTTLE_ANON', '120/min'),
         'user': os.environ.get('THROTTLE_USER', '600/min'),
         'auth_login': '20/min',
+        'education_public': '30/min',
     },
+    'EXCEPTION_HANDLER': 'config.exceptions.api_exception_handler',
 }
 
 from datetime import timedelta

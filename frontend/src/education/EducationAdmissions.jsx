@@ -201,6 +201,7 @@ export default function EducationAdmissions() {
   const [planState, setPlanState] = useState({});
   const [feeLabel, setFeeLabel] = useState('Frais d’inscription');
   const [feeAmount, setFeeAmount] = useState('');
+  const [feeMode, setFeeMode] = useState('');
   const [queue, setQueue] = useState('wait');
   const [fee, setFee] = useState({ program: '', label: '', amount_bif: '', academic_year: '' });
   const [editingId, setEditingId] = useState(null);
@@ -251,6 +252,7 @@ export default function EducationAdmissions() {
     setPlanState(isSchool ? emptySchoolPlan(profile) : {});
     setFeeLabel('Frais d’inscription');
     setFeeAmount('');
+    setFeeMode('');
   };
 
   const startEdit = (row) => {
@@ -303,7 +305,9 @@ export default function EducationAdmissions() {
       });
       setPlanState(base);
       setFeeLabel(row.enrollment_fee?.label || 'Frais d’inscription');
-      setFeeAmount(row.enrollment_fee ? String(row.enrollment_fee.amount_bif) : '0');
+      const amount = Number(row.enrollment_fee?.amount_bif || 0);
+      setFeeMode(row.enrollment_fee?.fee_mode || (amount > 0 ? 'PAYANT' : 'GRATUIT'));
+      setFeeAmount(amount > 0 ? String(amount) : '');
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -319,14 +323,19 @@ export default function EducationAdmissions() {
         setError('Cochez au moins une année et indiquez le nombre de places.');
         return;
       }
-      if (feeAmount === '' || Number.isNaN(Number(feeAmount)) || Number(feeAmount) < 0) {
-        setError('Fixez le montant des frais d’inscription (0 = gratuit).');
+      if (!feeMode) {
+        setError('Indiquez si l’inscription est payante ou gratuite.');
+        return;
+      }
+      if (feeMode === 'PAYANT' && (!feeAmount || Number(feeAmount) <= 0)) {
+        setError('Une inscription payante exige un montant supérieur à 0.');
         return;
       }
       payload.enrollment_plan = enrollment_plan;
       payload.open_tracks = [...new Set(enrollment_plan.map((row) => row.track))];
-      payload.fee_label = feeLabel.trim() || 'Frais d’inscription';
-      payload.fee_amount_bif = Number(feeAmount);
+      payload.fee_mode = feeMode;
+      payload.fee_label = feeMode === 'GRATUIT' ? 'Inscription gratuite' : (feeLabel.trim() || 'Frais d’inscription');
+      payload.fee_amount_bif = feeMode === 'GRATUIT' ? 0 : Number(feeAmount);
       payload.extra_criteria = (form.extra_criteria || [])
         .map((item) => ({
           kind: item.kind || 'OTHER',
@@ -448,7 +457,7 @@ export default function EducationAdmissions() {
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             {isSchool
-              ? 'Ouvrez une année scolaire : dates, parcours, places et frais BurundiPay.'
+              ? 'Une même année peut avoir deux inscriptions ouvertes en même temps : une payante et une gratuite.'
               : 'Conditions, pièces et calendrier, par formation et par année académique.'}
           </p>
         </div>
@@ -720,27 +729,49 @@ export default function EducationAdmissions() {
               </div>
             )}
 
-            <div className="rounded-xl border-2 border-alert/40 p-3 grid sm:grid-cols-2 gap-3">
-              <p className="sm:col-span-2 text-sm font-extrabold text-ink">Frais d&apos;inscription (BurundiPay)</p>
-              <label className="text-xs font-bold text-ink">
-                Libellé
-                <input className={`${input} mt-1`} value={feeLabel} onChange={(e) => setFeeLabel(e.target.value)} placeholder="Frais d’inscription" required />
-              </label>
-              <label className="text-xs font-bold text-ink">
-                Montant (BIF)
-                <input
-                  className={`${input} mt-1`}
-                  type="number"
-                  min="0"
-                  value={feeAmount}
-                  onChange={(e) => setFeeAmount(e.target.value)}
-                  placeholder="Ex. 25000 (0 = gratuit)"
-                  required
-                />
-              </label>
-              <p className="sm:col-span-2 text-xs text-ink-muted font-medium">
-                L&apos;élève paie via BurundiPay avant de finaliser le formulaire d&apos;inscription (comme pour un rendez-vous).
+            <div className="rounded-xl border-2 border-alert/40 p-3 space-y-3">
+              <p className="text-sm font-extrabold text-ink">Mode de cette inscription</p>
+              <p className="text-xs text-ink-muted">
+                Payante et gratuite sont deux inscriptions distinctes. Les deux peuvent être ouvertes pour la même année scolaire.
               </p>
+              <div className="grid sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFeeMode('PAYANT')}
+                  className={`text-left rounded-xl border-2 p-3 ${feeMode === 'PAYANT' ? 'border-accent bg-primary/5' : 'border-border'}`}
+                >
+                  <p className="text-sm font-extrabold">Payante</p>
+                  <p className="text-xs text-ink-muted mt-1">L&apos;élève règle les frais via BurundiPay avant d&apos;envoyer le dossier.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setFeeMode('GRATUIT'); setFeeAmount(''); }}
+                  className={`text-left rounded-xl border-2 p-3 ${feeMode === 'GRATUIT' ? 'border-accent bg-primary/5' : 'border-border'}`}
+                >
+                  <p className="text-sm font-extrabold">Gratuite</p>
+                  <p className="text-xs text-ink-muted mt-1">L&apos;élève envoie le dossier. Aucun paiement n&apos;est demandé.</p>
+                </button>
+              </div>
+              {feeMode === 'PAYANT' && (
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="text-xs font-bold text-ink">
+                    Libellé
+                    <input className={`${input} mt-1`} value={feeLabel} onChange={(e) => setFeeLabel(e.target.value)} placeholder="Frais d’inscription" required />
+                  </label>
+                  <label className="text-xs font-bold text-ink">
+                    Montant (BIF)
+                    <input
+                      className={`${input} mt-1`}
+                      type="number"
+                      min="1"
+                      value={feeAmount}
+                      onChange={(e) => setFeeAmount(e.target.value)}
+                      placeholder="Ex. 25000"
+                      required
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -787,7 +818,11 @@ export default function EducationAdmissions() {
           <article key={row.id} className={card}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-bold text-ink">{isSchool ? `Année scolaire ${row.academic_year}` : row.program_title}</p>
+                <p className="font-bold text-ink">
+                  {isSchool
+                    ? `Année scolaire ${row.academic_year}${row.fee_mode === 'GRATUIT' ? ' · Gratuite' : row.fee_mode === 'PAYANT' ? ' · Payante' : ''}`
+                    : row.program_title}
+                </p>
                 <p className="text-sm text-ink-muted">{row.academic_year} · {row.opens_on} → {row.closes_on}</p>
                 <p className={`mt-1 inline-flex text-xs font-bold px-2 py-0.5 rounded-lg border-2 ${
                   row.is_public ? 'border-accent text-ink bg-primary/10' : 'border-alert text-alert'
@@ -838,7 +873,9 @@ export default function EducationAdmissions() {
             )}
             {row.enrollment_fee && (
               <p className="mt-1 text-sm font-semibold text-ink">
-                Frais : {row.enrollment_fee.label} — {Number(row.enrollment_fee.amount_bif).toLocaleString('fr-BI')} BIF
+                {Number(row.enrollment_fee.amount_bif) > 0
+                  ? `Payante — ${row.enrollment_fee.label} — ${Number(row.enrollment_fee.amount_bif).toLocaleString('fr-BI')} BIF`
+                  : 'Gratuite — aucun paiement'}
               </p>
             )}
             {row.required_diploma && <p className="mt-1 text-sm text-ink">{row.required_diploma}</p>}

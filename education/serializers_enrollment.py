@@ -32,6 +32,10 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
     enrollment_plan = serializers.ListField(required=False, allow_empty=True)
     fee_label = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=200)
     fee_amount_bif = serializers.IntegerField(required=False, allow_null=True, write_only=True, min_value=0)
+    fee_mode = serializers.ChoiceField(
+        choices=(('PAYANT', 'Payante'), ('GRATUIT', 'Gratuite'), ('', '')),
+        required=False, allow_blank=True,
+    )
     documents_by_track = serializers.SerializerMethodField()
     post_sections = serializers.SerializerMethodField()
     enrollment_options = serializers.SerializerMethodField()
@@ -49,7 +53,7 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
             'extra_criteria',
             'documents_by_track', 'post_sections', 'enrollment_options', 'enrollment_fee',
             'seat_summary',
-            'fee_label', 'fee_amount_bif', 'is_public', 'open_today',
+            'fee_label', 'fee_amount_bif', 'fee_mode', 'is_public', 'open_today',
         ]
         read_only_fields = ['business']
         validators = []
@@ -65,23 +69,6 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'academic_year': 'Une campagne existe déjà pour cette formation et cette année.',
                 })
-        elif program is None and year:
-            request = self.context.get('request')
-            business = self.instance.business if self.instance is not None else None
-            if business is None and request and getattr(request, 'user', None):
-                from .permissions import education_tenant_business
-                business = education_tenant_business(request.user)
-            if business is not None:
-                taken = AdmissionCampaign.objects.filter(
-                    business=business, program__isnull=True, academic_year__iexact=year,
-                )
-                if self.instance is not None:
-                    taken = taken.exclude(pk=self.instance.pk)
-                if taken.exists():
-                    raise serializers.ValidationError({
-                        'academic_year': 'Cette année scolaire est déjà ouverte.',
-                    })
-
         request = self.context.get('request')
         business = None
         if self.instance is not None:
@@ -122,15 +109,54 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
             attrs['enrollment_plan'] = plan
             attrs['open_tracks'] = open_tracks_from_plan(plan)
 
+            fee_mode = (attrs.get('fee_mode') or '').strip().upper()
             fee_amount = attrs.get('fee_amount_bif', serializers.empty)
-            if fee_amount is serializers.empty and self.instance is None:
-                raise serializers.ValidationError({
-                    'fee_amount_bif': 'Fixez le montant des frais d’inscription (0 = gratuit).',
-                })
-            if fee_amount is not serializers.empty and fee_amount is not None and int(fee_amount) < 0:
-                raise serializers.ValidationError({
-                    'fee_amount_bif': 'Le montant des frais ne peut pas être négatif.',
-                })
+            touches_fee = (
+                self.instance is None
+                or 'fee_mode' in attrs
+                or fee_amount is not serializers.empty
+            )
+            if touches_fee:
+                if not fee_mode:
+                    if fee_amount is serializers.empty or fee_amount is None:
+                        if self.instance is None:
+                            raise serializers.ValidationError({
+                                'fee_mode': 'Indiquez si l’inscription est payante ou gratuite.',
+                            })
+                    else:
+                        fee_mode = 'PAYANT' if int(fee_amount) > 0 else 'GRATUIT'
+                if fee_mode and fee_mode not in ('PAYANT', 'GRATUIT'):
+                    raise serializers.ValidationError({
+                        'fee_mode': 'Choisissez une inscription payante ou gratuite.',
+                    })
+                if fee_mode == 'GRATUIT':
+                    attrs['fee_mode'] = 'GRATUIT'
+                    attrs['fee_amount_bif'] = 0
+                elif fee_mode == 'PAYANT':
+                    amount = 0 if fee_amount is serializers.empty or fee_amount is None else int(fee_amount)
+                    if amount <= 0:
+                        raise serializers.ValidationError({
+                            'fee_amount_bif': 'Une inscription payante exige un montant supérieur à 0.',
+                        })
+                    attrs['fee_mode'] = 'PAYANT'
+                    attrs['fee_amount_bif'] = amount
+                mode = attrs.get('fee_mode') or getattr(self.instance, 'fee_mode', '')
+                if mode and business and year:
+                    taken = AdmissionCampaign.objects.filter(
+                        business=business, program__isnull=True,
+                        academic_year__iexact=year, fee_mode=mode,
+                    )
+                    if self.instance is not None:
+                        taken = taken.exclude(pk=self.instance.pk)
+                    if taken.exists():
+                        label = 'payante' if mode == 'PAYANT' else 'gratuite'
+                        other = 'gratuite' if mode == 'PAYANT' else 'payante'
+                        raise serializers.ValidationError({
+                            'fee_mode': (
+                                f'Une inscription {label} est déjà ouverte pour {year}. '
+                                f'L’inscription {other} peut rester ouverte en même temps.'
+                            ),
+                        })
         elif program is not None:
             attrs['open_tracks'] = []
             attrs['enrollment_plan'] = []
@@ -156,30 +182,34 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
         return campaign
 
     def _upsert_school_fee(self, campaign, label, amount_bif, previous_year=None):
-        existing = EducationFee.objects.filter(
-            business=campaign.business,
-            program__isnull=True,
-            academic_year__iexact=campaign.academic_year,
-        ).first()
-        if existing is None and previous_year and previous_year.lower() != campaign.academic_year.lower():
-            existing = EducationFee.objects.filter(
+        existing = EducationFee.objects.filter(campaign=campaign).first()
+        if existing is None:
+            loose = EducationFee.objects.filter(
                 business=campaign.business,
                 program__isnull=True,
-                academic_year__iexact=previous_year,
-            ).first()
+                campaign__isnull=True,
+                academic_year__iexact=previous_year or campaign.academic_year,
+            )
+            if campaign.fee_mode == 'PAYANT':
+                loose = loose.filter(amount_bif__gt=0)
+            elif campaign.fee_mode == 'GRATUIT':
+                loose = loose.filter(amount_bif=0)
+            existing = loose.first()
         if existing:
             existing.label = label[:200]
             existing.amount_bif = amount_bif
             existing.academic_year = campaign.academic_year
+            existing.campaign = campaign
             existing.is_public = True
             existing.is_required = True
             existing.save(update_fields=[
-                'label', 'amount_bif', 'academic_year', 'is_public', 'is_required',
+                'label', 'amount_bif', 'academic_year', 'campaign', 'is_public', 'is_required',
             ])
             return existing
         return EducationFee.objects.create(
             business=campaign.business,
             program=None,
+            campaign=campaign,
             academic_year=campaign.academic_year,
             label=label[:200],
             amount_bif=amount_bif,
@@ -190,7 +220,12 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
     def get_program_title(self, obj):
         if obj.program_id:
             return obj.program.title
-        return f'Année scolaire {obj.academic_year}'
+        title = f'Année scolaire {obj.academic_year}'
+        if obj.fee_mode == 'PAYANT':
+            return f'{title} · Inscription payante'
+        if obj.fee_mode == 'GRATUIT':
+            return f'{title} · Inscription gratuite'
+        return title
 
     def get_program_level(self, obj):
         return obj.program.level if obj.program_id else ''
@@ -264,6 +299,7 @@ class AdmissionCampaignSerializer(serializers.ModelSerializer):
             'label': fee.label,
             'amount_bif': fee.amount_bif,
             'academic_year': fee.academic_year,
+            'fee_mode': 'PAYANT' if int(fee.amount_bif or 0) > 0 else 'GRATUIT',
         }
 
 

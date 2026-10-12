@@ -52,6 +52,19 @@ def road_distance(from_lat, from_lon, to_lat, to_lon):
     import json
     import urllib.request
 
+    from django.core.cache import cache
+
+    from config.feature_flags import enabled
+
+    cache_key = (
+        f'osrm:{round(float(from_lat), 4)}:{round(float(from_lon), 4)}:'
+        f'{round(float(to_lat), 4)}:{round(float(to_lon), 4)}'
+    )
+    if enabled('OSRM_CACHE'):
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
     url = (
         'https://router.project-osrm.org/route/v1/driving/'
         f'{from_lon},{from_lat};{to_lon},{to_lat}?overview=false'
@@ -60,11 +73,14 @@ def road_distance(from_lat, from_lon, to_lat, to_lon):
     with urllib.request.urlopen(request, timeout=8) as response:
         payload = json.loads(response.read().decode())
     route = payload['routes'][0]
-    return {
+    result = {
         'distance_km': round(route['distance'] / 1000, 2),
         'duration_minutes': max(1, round(route['duration'] / 60)),
         'kind': 'driving',
     }
+    if enabled('OSRM_CACHE'):
+        cache.set(cache_key, result, 60 * 60)
+    return result
 
 
 def travel_minutes(distance_km):

@@ -27,6 +27,7 @@ from .serializers_enrollment import (
     AdmissionCampaignSerializer, EducationFeePaymentSerializer, EducationFeeSerializer,
     EnrollmentApplicationSerializer,
 )
+from .throttling import EducationPublicThrottle
 from .views import require_education_tenant
 
 logger = logging.getLogger(__name__)
@@ -116,11 +117,18 @@ class AdmissionCampaignViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Droit admissions requis.')
         if instance.business_id != business.id:
             raise PermissionDenied('Année d’un autre établissement.')
-        fees = EducationFee.objects.filter(
-            business=instance.business,
-            program__isnull=True,
-            academic_year__iexact=instance.academic_year,
-        )
+        fees = EducationFee.objects.filter(campaign=instance)
+        if not fees.exists() and instance.program_id is None:
+            fees = EducationFee.objects.filter(
+                business=instance.business,
+                program__isnull=True,
+                campaign__isnull=True,
+                academic_year__iexact=instance.academic_year,
+            )
+            if instance.fee_mode == 'PAYANT':
+                fees = fees.filter(amount_bif__gt=0)
+            elif instance.fee_mode == 'GRATUIT':
+                fees = fees.filter(amount_bif=0)
         EducationFeePayment.objects.filter(fee__in=fees).delete()
         EducationFeePayment.objects.filter(application__campaign=instance).delete()
         instance.applications.all().delete()
@@ -160,7 +168,11 @@ class EnrollmentApplicationViewSet(viewsets.ModelViewSet):
             'detail': 'Utilisez le formulaire d’inscription public (/applications/apply/).',
         })
 
-    @action(detail=False, methods=['post'], url_path='apply', permission_classes=[AllowAny])
+    @action(
+        detail=False, methods=['post'], url_path='apply',
+        permission_classes=[AllowAny],
+        throttle_classes=[EducationPublicThrottle],
+    )
     def apply(self, request):
         """Candidature one-shot (comme une prise de RDV) : pièces + envoi + paiement optionnel."""
         campaign_id = (request.data.get('campaign') or '').strip()
@@ -232,6 +244,8 @@ class EnrollmentApplicationViewSet(viewsets.ModelViewSet):
             )
             payment_payload = EducationFeePaymentSerializer(payment).data
 
+        from config.metrics import incr
+        incr('education_applications_created')
         return Response({
             'ok': bool(pay_result.get('ok', True)),
             'message': pay_result.get('message') or (
@@ -338,6 +352,7 @@ class EnrollmentApplicationViewSet(viewsets.ModelViewSet):
 class EnrollmentTrackView(APIView):
     """Suivi public du dossier via le jeton envoyé par e-mail."""
     permission_classes = [AllowAny]
+    throttle_classes = [EducationPublicThrottle]
 
     def get(self, request):
         application = application_by_access_token(request.query_params.get('token'))
@@ -431,8 +446,10 @@ class SchoolFeeLedgerView(APIView):
             payment = payments[-1] if payments else None
             if amount <= 0:
                 pay_status = 'WAIVED'
+                fee_mode = 'GRATUIT'
             else:
                 pay_status = payment.status if payment else 'UNPAID'
+                fee_mode = 'PAYANT'
                 expected += amount
                 if pay_status == 'PAID':
                     collected += amount
@@ -459,14 +476,17 @@ class SchoolFeeLedgerView(APIView):
                 'classroom': classroom,
                 'academic_year': application.campaign.academic_year,
                 'status': application.status,
-                'fee_label': fee.label if fee else '',
+                'fee_label': fee.label if fee else ('Inscription gratuite' if fee_mode == 'GRATUIT' else ''),
+                'fee_mode': fee_mode,
                 'amount_bif': amount,
                 'payment_status': pay_status,
                 'payer_phone': payment.payer_phone if payment else '',
                 'paid_at': payment.paid_at if payment else None,
             })
+        from businesses import burundipay
         return Response({
             'school_name': business.name,
+            'simulation': burundipay.is_stub_mode(),
             'students': students,
             'totals': {
                 'students': len(students),
@@ -474,6 +494,9 @@ class SchoolFeeLedgerView(APIView):
                 'collected_bif': collected,
                 'paid_count': sum(1 for row in students if row['payment_status'] == 'PAID'),
                 'unpaid_count': sum(1 for row in students if row['payment_status'] == 'UNPAID'),
+                'awaiting_count': sum(1 for row in students if row['payment_status'] == 'AWAITING_PIN'),
+                'failed_count': sum(1 for row in students if row['payment_status'] == 'FAILED'),
+                'free_count': sum(1 for row in students if row['payment_status'] == 'WAIVED'),
             },
         })
 

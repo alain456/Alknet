@@ -254,7 +254,7 @@ export default function PublicSchoolEnrollment() {
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-surface">S&apos;inscrire à une école</h1>
           <p className="text-sm text-surface/80 max-w-xl mx-auto">
-            Parcours guidé — pièces selon le niveau, paiement BurundiPay avant envoi (comme un rendez-vous), confirmation par e-mail.
+            Pièces selon le niveau. Une inscription payante se règle via BurundiPay avant l&apos;envoi. Une inscription gratuite part sans paiement.
           </p>
         </div>
       </div>
@@ -299,6 +299,11 @@ export default function PublicSchoolEnrollment() {
             </h2>
             <p className="text-sm text-ink-muted font-medium">
               Année scolaire {campaign.academic_year} · {campaign.opens_on} → {campaign.closes_on}
+            </p>
+            <p className="text-sm font-bold text-ink">
+              {feeAmount > 0
+                ? `Inscription payante — ${feeLabel}. Le règlement BurundiPay se fait à la dernière étape.`
+                : 'Inscription gratuite — le dossier part sans paiement.'}
             </p>
             {!campaign.open_today && (
               <p className="text-sm text-alert font-medium">Les inscriptions ne sont pas ouvertes aujourd&apos;hui.</p>
@@ -535,8 +540,8 @@ export default function PublicSchoolEnrollment() {
                   amountLabel={feeLabel}
                 />
               ) : (
-                <div className="rounded-xl border-2 border-alert/40 bg-accent/10 p-3 text-xs text-ink font-medium">
-                  Aucun frais d&apos;inscription publié pour cette année — aucun paiement requis.
+                <div className="rounded-xl border-2 border-accent bg-accent/10 p-3 text-sm text-ink font-medium">
+                  Inscription gratuite. Envoyez le dossier : aucun paiement n&apos;est demandé.
                 </div>
               )}
               {error && (
@@ -566,7 +571,9 @@ export default function PublicSchoolEnrollment() {
             <h2 className="text-2xl font-extrabold">Candidature enregistrée</h2>
             <p className="text-sm text-ink-muted max-w-md mx-auto">
               Un e-mail de confirmation a été envoyé à {done.application?.student_email || studentEmail}.
-              Vous pouvez suivre le dossier, déposer un complément ou payer depuis ce lien.
+              {feeAmount > 0
+                ? 'Vous pouvez suivre le dossier ou terminer le paiement depuis ce lien.'
+                : 'Vous pouvez suivre le dossier depuis ce lien. Aucun paiement n’est demandé.'}
             </p>
             {done.application?.suivi_url && (
               <a

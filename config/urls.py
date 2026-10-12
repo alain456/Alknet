@@ -3,9 +3,17 @@ URL configuration for config project.
 """
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.http import HttpResponse
+
 from config.media_access import protected_media
+from config.metrics import render_prometheus
+
+
+def prometheus_metrics(_request):
+    return HttpResponse(render_prometheus(), content_type='text/plain; version=0.0.4')
 
 urlpatterns = [
+    path('metrics/', prometheus_metrics),
     path('admin/', admin.site.urls),
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/roles/', include('roles.urls')),

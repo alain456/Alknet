@@ -854,6 +854,55 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         )
         self.assertEqual(len(response.data['enrollment_plan']), 3)
         self.assertEqual(response.data['enrollment_fee']['amount_bif'], 15000)
+        self.assertEqual(response.data['enrollment_fee']['fee_mode'], 'PAYANT')
+        same_year_free = client.post('/api/v1/education/campaigns/', {
+            'academic_year': '2026-2027',
+            'opens_on': '2026-06-01',
+            'closes_on': '2026-09-01',
+            'enrollment_plan': [
+                {'track': 'PRESCOLAIRE', 'year': '', 'section': '', 'seats': 10},
+            ],
+            'fee_mode': 'GRATUIT',
+        }, format='json')
+        self.assertEqual(same_year_free.status_code, 201, same_year_free.content)
+        self.assertEqual(same_year_free.data['enrollment_fee']['fee_mode'], 'GRATUIT')
+        self.assertEqual(same_year_free.data['enrollment_fee']['amount_bif'], 0)
+        self.assertNotEqual(same_year_free.data['enrollment_fee']['id'], response.data['enrollment_fee']['id'])
+        duplicate_paid = client.post('/api/v1/education/campaigns/', {
+            'academic_year': '2026-2027',
+            'opens_on': '2026-06-01',
+            'closes_on': '2026-09-01',
+            'enrollment_plan': [
+                {'track': 'PRESCOLAIRE', 'year': '', 'section': '', 'seats': 10},
+            ],
+            'fee_mode': 'PAYANT',
+            'fee_amount_bif': 10000,
+        }, format='json')
+        self.assertEqual(duplicate_paid.status_code, 400, duplicate_paid.content)
+        free = client.post('/api/v1/education/campaigns/', {
+            'academic_year': '2027-2028',
+            'opens_on': '2027-06-01',
+            'closes_on': '2027-09-01',
+            'enrollment_plan': [
+                {'track': 'PRESCOLAIRE', 'year': '', 'section': '', 'seats': 40},
+            ],
+            'fee_mode': 'GRATUIT',
+            'fee_amount_bif': 15000,
+        }, format='json')
+        self.assertEqual(free.status_code, 201, free.content)
+        self.assertEqual(free.data['enrollment_fee']['fee_mode'], 'GRATUIT')
+        self.assertEqual(free.data['enrollment_fee']['amount_bif'], 0)
+        refused = client.post('/api/v1/education/campaigns/', {
+            'academic_year': '2028-2029',
+            'opens_on': '2028-06-01',
+            'closes_on': '2028-09-01',
+            'enrollment_plan': [
+                {'track': 'PRESCOLAIRE', 'year': '', 'section': '', 'seats': 40},
+            ],
+            'fee_mode': 'PAYANT',
+            'fee_amount_bif': 0,
+        }, format='json')
+        self.assertEqual(refused.status_code, 400, refused.content)
         self.assertIn('PRESCOLAIRE', response.data['documents_by_track'])
         self.assertEqual(
             [doc['label'] for doc in response.data['documents_by_track']['PRESCOLAIRE']['documents']],
@@ -897,6 +946,10 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         )
         deleted = client.delete(f"/api/v1/education/campaigns/{response.data['id']}/")
         self.assertEqual(deleted.status_code, 204, deleted.content)
+        deleted_same = client.delete(f"/api/v1/education/campaigns/{same_year_free.data['id']}/")
+        self.assertEqual(deleted_same.status_code, 204, deleted_same.content)
+        deleted_free = client.delete(f"/api/v1/education/campaigns/{free.data['id']}/")
+        self.assertEqual(deleted_free.status_code, 204, deleted_free.content)
         self.assertFalse(
             client.get('/api/v1/education/campaigns/?mine=1').data,
         )
@@ -1647,8 +1700,63 @@ class SchoolAccountantLedgerTests(EducationBaseTests):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(response.data['students'][0]['student_name'], 'Nitanga Didace')
         self.assertEqual(response.data['students'][0]['payment_status'], 'PAID')
+        self.assertEqual(response.data['students'][0]['fee_mode'], 'PAYANT')
         self.assertEqual(response.data['totals']['collected_bif'], 50000)
 
         stranger = APIClient()
         stranger.force_authenticate(self.student)
         self.assertEqual(stranger.get('/api/v1/education/accounting/').status_code, 403)
+
+
+class ProductionGuardTests(EducationBaseTests):
+    def test_confirm_payment_twice_keeps_the_first_timestamp(self):
+        from datetime import date
+
+        from education.enrollment import confirm_fee_stub
+        from education.models import AdmissionCampaign, EnrollmentApplication
+
+        campaign = AdmissionCampaign.objects.create(
+            business=self.school_a, academic_year='2026-2027',
+            opens_on=date(2026, 9, 1), closes_on=date(2026, 11, 1),
+        )
+        fee = EducationFee.objects.create(
+            business=self.school_a, academic_year='2026-2027', label='Frais', amount_bif=1000,
+        )
+        application = EnrollmentApplication.objects.create(
+            business=self.school_a, campaign=campaign, student_name='Aline',
+            student_email='aline-guard@edu.test', status='LISTE_ATTENTE',
+        )
+        payment = EducationFeePayment.objects.create(
+            fee=fee, application=application, status='AWAITING_PIN',
+        )
+        first = confirm_fee_stub(payment)
+        second = confirm_fee_stub(first)
+        self.assertEqual(second.status, 'PAID')
+        self.assertEqual(first.paid_at, second.paid_at)
+
+    def test_json_copy_can_be_run_twice(self):
+        from datetime import date
+
+        from django.core.management import call_command
+
+        from education.models import AdmissionCampaign, SchoolCriterion, SchoolPlanSeat
+
+        AdmissionCampaign.objects.create(
+            business=self.school_a, academic_year='2027-2028',
+            opens_on=date(2027, 9, 1), closes_on=date(2027, 11, 1),
+            enrollment_plan=[{'track': 'ECOFO', 'year': '1', 'section': '', 'seats': 40}],
+            extra_criteria=[{'kind': 'TEST', 'label': 'Français', 'date': '', 'place': '', 'details': ''}],
+        )
+        call_command('migrate_school_json')
+        call_command('migrate_school_json')
+        self.assertEqual(SchoolPlanSeat.objects.count(), 1)
+        self.assertEqual(SchoolPlanSeat.objects.get().seats, 40)
+        self.assertEqual(SchoolCriterion.objects.count(), 1)
+
+    def test_unhandled_error_does_not_leak(self):
+        from config.exceptions import api_exception_handler
+
+        response = api_exception_handler(RuntimeError('secret stack'), {})
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.data['detail'], 'Erreur interne.')
+        self.assertNotIn('secret', str(response.data))

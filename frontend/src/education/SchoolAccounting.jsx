@@ -57,30 +57,40 @@ export default function SchoolAccounting() {
           <Wallet className="w-7 h-7 text-accent" /> Frais d’inscription
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Élèves de {data.school_name} et suivi des paiements.
+          Élèves de {data.school_name}. Une inscription gratuite n’a pas de paiement. Une inscription payante reste non payée, en attente du code, ou payée.
         </p>
+        {data.simulation && (
+          <p className="text-sm font-medium text-ink mt-3 rounded-xl border-2 border-accent bg-accent/10 p-3">
+            Mode simulation : « Payé » veut dire que le code de simulation a été confirmé. Ce n’est pas encore un encaissement BurundiPay.
+          </p>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           ['Élèves', totals.students],
           ['Payés', totals.paid_count],
+          ['En attente du code', totals.awaiting_count],
           ['Non payés', totals.unpaid_count],
-          ['Encaissé', money(totals.collected_bif)],
+          ['Gratuits', totals.free_count],
         ].map(([label, value]) => (
           <div key={label} className="rounded-2xl border-2 border-accent bg-surface p-4">
             <p className="text-xs font-bold text-gray-500">{label}</p>
-            <p className="text-xl font-extrabold mt-1">{value}</p>
+            <p className="text-xl font-extrabold mt-1">{value ?? 0}</p>
           </div>
         ))}
       </div>
-      <p className="text-sm text-gray-500">Attendu : {money(totals.expected_bif)}</p>
+      <p className="text-sm text-gray-500">
+        Attendu sur les inscriptions payantes : {money(totals.expected_bif)}. Marqué encaissé en simulation : {money(totals.collected_bif)}.
+      </p>
 
       <div className="flex flex-wrap gap-2">
         {[
           ['ALL', 'Tous'],
           ['PAID', 'Payés'],
+          ['AWAITING_PIN', 'En attente du code'],
           ['UNPAID', 'Non payés'],
+          ['FAILED', 'Échoués'],
           ['WAIVED', 'Gratuits'],
         ].map(([value, label]) => (
           <button
@@ -122,10 +132,14 @@ export default function SchoolAccounting() {
                 <td className="px-4 py-3">{row.academic_year}</td>
                 <td className="px-4 py-3">{STATUS_LABEL[row.status] || row.status}</td>
                 <td className="px-4 py-3">
-                  <p>{row.fee_label || 'Frais d’inscription'}</p>
-                  <p className="font-bold">{money(row.amount_bif)}</p>
+                  <p className="font-bold">{row.fee_mode === 'GRATUIT' ? 'Gratuite' : 'Payante'}</p>
+                  <p>{row.fee_label || (row.fee_mode === 'GRATUIT' ? 'Aucun paiement' : 'Frais d’inscription')}</p>
+                  <p className="font-bold">{row.fee_mode === 'GRATUIT' ? '0 BIF' : money(row.amount_bif)}</p>
                 </td>
-                <td className="px-4 py-3 font-bold">{PAYMENT_LABEL[row.payment_status] || row.payment_status}</td>
+                <td className="px-4 py-3">
+                  <p className="font-bold">{PAYMENT_LABEL[row.payment_status] || row.payment_status}</p>
+                  {row.payer_phone && <p className="text-xs text-gray-500">{row.payer_phone}</p>}
+                </td>
               </tr>
             ))}
           </tbody>

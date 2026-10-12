@@ -223,17 +223,25 @@ def _application_title(application):
 
 
 def enrollment_fee_for_campaign(campaign):
-    """Frais public d'inscription pour cette année (école : sans formation)."""
+    """Frais de cette inscription. Une année scolaire peut en avoir deux : payante et gratuite."""
+    linked = EducationFee.objects.filter(campaign=campaign).order_by('-is_required').first()
+    if linked:
+        return linked
     qs = EducationFee.objects.filter(
         business_id=campaign.business_id,
         is_public=True,
         is_required=True,
         academic_year__iexact=campaign.academic_year,
+        campaign__isnull=True,
     )
     if campaign.program_id:
-        qs = qs.filter(program_id=campaign.program_id)
-    else:
-        qs = qs.filter(program__isnull=True)
+        return qs.filter(program_id=campaign.program_id).order_by('amount_bif').first()
+    qs = qs.filter(program__isnull=True)
+    mode = (getattr(campaign, 'fee_mode', '') or '').upper()
+    if mode == 'PAYANT':
+        qs = qs.filter(amount_bif__gt=0)
+    elif mode == 'GRATUIT':
+        qs = qs.filter(amount_bif=0)
     return qs.order_by('amount_bif').first()
 
 
@@ -666,22 +674,34 @@ def start_fee_payment(fee, applicant, payer_phone, application=None):
     phone = burundipay.normalize_phone(payer_phone)
     merchant = education_merchant_account(fee.business)
 
-    payment = None
-    if application is not None:
-        payment = EducationFeePayment.objects.filter(fee=fee, application=application).first()
-    elif applicant is not None:
-        payment = EducationFeePayment.objects.filter(fee=fee, applicant=applicant, application__isnull=True).first()
-
-    if payment is None:
-        payment = EducationFeePayment.objects.create(
-            fee=fee,
-            applicant=applicant,
-            application=application,
-            status='UNPAID',
-            payment_token=issue_payment_token(),
-        )
-    if payment.status == 'PAID':
-        return payment, {'ok': True, 'already_paid': True, 'message': 'Déjà payé.'}
+    with transaction.atomic():
+        payment = _lock_fee_payment(fee, applicant, application)
+        if payment is None:
+            try:
+                with transaction.atomic():
+                    payment = EducationFeePayment.objects.create(
+                        fee=fee,
+                        applicant=applicant,
+                        application=application,
+                        status='UNPAID',
+                        payment_token=issue_payment_token(),
+                    )
+            except IntegrityError:
+                payment = _lock_fee_payment(fee, applicant, application)
+                if payment is None:
+                    raise
+        if payment.status == 'PAID':
+            return payment, {'ok': True, 'already_paid': True, 'message': 'Déjà payé.'}
+        if (
+            payment.status == 'AWAITING_PIN'
+            and payment.payer_phone == phone
+            and payment.provider_reference
+        ):
+            return payment, {
+                'ok': True,
+                'already_started': True,
+                'message': 'Paiement déjà lancé. Confirmez le code reçu.',
+            }
 
     result = burundipay.initiate_collection(
         amount_bif=int(fee.amount_bif),
@@ -690,31 +710,58 @@ def start_fee_payment(fee, applicant, payer_phone, application=None):
         description=fee.label[:80],
         merchant=merchant,
     )
-    payment.payer_phone = phone
-    payment.merchant_account = merchant
-    if not payment.payment_token:
-        payment.payment_token = issue_payment_token()
-    if result.get('ok'):
-        payment.status = result.get('status') or 'AWAITING_PIN'
-        payment.provider_reference = result.get('provider_reference') or ''
-    else:
-        payment.status = 'FAILED'
-    payment.save(update_fields=[
-        'payer_phone', 'merchant_account', 'status',
-        'provider_reference', 'payment_token', 'applicant', 'application',
-    ])
-    return payment, result
+    with transaction.atomic():
+        locked = EducationFeePayment.objects.select_for_update().get(pk=payment.pk)
+        if locked.status == 'PAID':
+            return locked, {'ok': True, 'already_paid': True, 'message': 'Déjà payé.'}
+        locked.payer_phone = phone
+        locked.merchant_account = merchant
+        if not locked.payment_token:
+            locked.payment_token = issue_payment_token()
+        if result.get('ok'):
+            locked.status = result.get('status') or 'AWAITING_PIN'
+            locked.provider_reference = result.get('provider_reference') or ''
+        else:
+            locked.status = 'FAILED'
+        locked.save(update_fields=[
+            'payer_phone', 'merchant_account', 'status',
+            'provider_reference', 'payment_token', 'applicant', 'application',
+        ])
+    return locked, result
+
+
+def _lock_fee_payment(fee, applicant, application):
+    """Une seule ligne de paiement par dossier, verrouillée le temps de l'écriture."""
+    if application is not None:
+        return (
+            EducationFeePayment.objects.select_for_update()
+            .filter(fee=fee, application=application)
+            .order_by('id')
+            .first()
+        )
+    if applicant is not None:
+        return (
+            EducationFeePayment.objects.select_for_update()
+            .filter(fee=fee, applicant=applicant, application__isnull=True)
+            .order_by('id')
+            .first()
+        )
+    return None
 
 
 def confirm_fee_stub(payment):
     if not burundipay.is_stub_mode():
         raise ValidationError({'detail': 'Confirmation manuelle réservée au mode simulation.'})
-    if payment.status == 'PAID':
-        return payment
-    payment.status = 'PAID'
-    payment.paid_at = timezone.now()
-    payment.save(update_fields=['status', 'paid_at'])
-    return payment
+    with transaction.atomic():
+        locked = EducationFeePayment.objects.select_for_update().get(pk=payment.pk)
+        if locked.status == 'PAID':
+            return locked
+        locked.status = 'PAID'
+        locked.paid_at = timezone.now()
+        locked.save(update_fields=['status', 'paid_at'])
+    from config.metrics import incr
+    incr('education_payments_confirmed')
+    return locked
 
 
 def payment_by_token(payment_id, payment_token):

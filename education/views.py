@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 from businesses.subscription import subscription_access_q
 
 from .models import EducationProfile, EducationProgram, EducationUnit, PublicationStatus
+from .throttling import EducationPublicThrottle
 from .school_tracks import remember_school_tracks
 from .permissions import (
     EducationTenantOwnedMixin,
@@ -468,6 +469,7 @@ class EducationDistanceView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [EducationPublicThrottle]
 
     def get(self, request):
         from .geo import road_distance
