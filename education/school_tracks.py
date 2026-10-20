@@ -68,17 +68,12 @@ def apply_registration_tracks(business):
     profile = ensure_education_profile(business)
     if profile.offers_prescolaire or profile.offers_ecofo or profile.offers_post_fondamental or profile.post_fondamental_sections:
         return profile
-    from .school_years import ecofo_years_from_cycles, normalize_class_list, year_label
+    from .school_years import normalize_class_list
 
     allowed_cycles = {code for code, _label in EducationProfile.ECOFO_CYCLE_CHOICES}
     allowed_orientations = {code for code, _label in EducationProfile.POST_ORIENTATION_CHOICES}
     cycles = [code for code in (tracks.get('ecofo_cycles') or []) if code in allowed_cycles]
     classes = normalize_class_list(tracks.get('ecofo_classes') or [])
-    if not classes and cycles:
-        classes = [
-            {'value': str(year), 'label': year_label(year)}
-            for year in ecofo_years_from_cycles(cycles)
-        ]
     sections = []
     for section in tracks.get('post_fondamental_sections') or []:
         if not isinstance(section, dict):
@@ -86,9 +81,8 @@ def apply_registration_tracks(business):
         name = (section.get('name') or '').strip()
         orientation = section.get('orientation') or ''
         if name and orientation in allowed_orientations:
-            class_rows = normalize_class_list(
-                section.get('classes') or section.get('years') or [1, 2, 3],
-            )
+            raw_classes = section.get('classes') if section.get('classes') is not None else section.get('years')
+            class_rows = normalize_class_list(raw_classes or [])
             sections.append({
                 'orientation': orientation,
                 'name': name,

@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { Mail, Phone, Share2 } from 'lucide-react';
 
 const DEFAULT_COLUMN_TITLES = {
-  COMPANY: 'Company',
-  SUPPORT: 'Help',
-  LEGAL: 'Legal',
-  OTHER: 'More',
+  COMPANY: 'Entreprise',
+  SUPPORT: 'Aide',
+  LEGAL: 'Mentions',
+  OTHER: 'Plus',
 };
 
 /** Icônes sociales en SVG (lucide n’embarque plus les marques). */
@@ -89,8 +89,8 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
     || `© ${new Date().getFullYear()} ${brand}. All Rights Reserved.`;
   const contactEmail = settings?.footer_contact_email || '';
   const contactPhone = settings?.footer_contact_phone || '';
-  const contactTitle = settings?.footer_contact_title || 'Contact information';
-  const followTitle = settings?.footer_follow_title || 'Follow us';
+  const contactTitle = settings?.footer_contact_title || 'Contact';
+  const followTitle = settings?.footer_follow_title || 'Nous suivre';
   const socialLinks = (Array.isArray(settings?.footer_social_links) ? settings.footer_social_links : [])
     .map((s) => ({
       network: s?.network || s?.name || 'website',
@@ -236,7 +236,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
         {showPartners && (
           <div className="pt-2">
             <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-surface/55 mb-4">
-              Partners
+              Partenaires
             </h4>
             <div className="flex flex-wrap items-center gap-4">
               {partners.map((partner) => {

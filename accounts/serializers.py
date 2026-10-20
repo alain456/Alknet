@@ -30,18 +30,8 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'role', 'is_email_verified', 'created_at')
 
     def get_avatar(self, obj):
-        profile = getattr(obj, 'profile', None)
-        if not profile:
-            return ''
-        v = (profile.avatar or '').strip()
-        if not v:
-            return ''
-        if v.startswith('http') or v.startswith('data:image/'):
-            # Limite payload admin : images trop lourdes → signaler présence sans renvoyer
-            if v.startswith('data:image/') and len(v) > 500_000:
-                return ''
-            return v
-        return ''
+        from profiles.images import display_person_photo
+        return display_person_photo(obj)
 
     def get_platform_permissions(self, obj):
         from .platform_access import permissions_for_user
@@ -185,18 +175,9 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 def _save_user_avatar(user, avatar_value):
-    """Enregistre l'avatar sur le profil (URL ou data:image). Chaîne vide = effacer."""
-    from profiles.models import Profile
-    profile, _ = Profile.objects.get_or_create(user=user)
-    value = (avatar_value or '').strip()
-    if value and not (
-        value.startswith('http://')
-        or value.startswith('https://')
-        or value.startswith('data:image/')
-    ):
-        raise serializers.ValidationError({'avatar': 'Image invalide (URL ou fichier image).'})
-    profile.avatar = value
-    profile.save(update_fields=['avatar'])
+    """Enregistre la photo de la personne (profil + fiche médecin). Chaîne vide = effacer."""
+    from profiles.images import assign_person_photo
+    assign_person_photo(user, avatar_value)
 
 
 class AdminUserCreateSerializer(serializers.ModelSerializer):

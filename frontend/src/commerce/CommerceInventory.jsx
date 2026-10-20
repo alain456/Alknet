@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Package } from 'lucide-react';
 import commerceService from './commerceService';
+import InventoryCount from '../shared/InventoryCount';
+import MarginBoard from '../shared/MarginBoard';
 
 const normalize = (data) => (Array.isArray(data) ? data : data?.results || []);
 const dateTime = (value) => (value ? new Date(value).toLocaleString('fr-BI') : '—');
@@ -104,6 +106,9 @@ export default function CommerceInventory() {
           {' '}— ici vous ajustez les quantités et consultez l&apos;historique.
         </p>
       </div>
+
+      <MarginBoard />
+      <InventoryCount onDone={load} />
 
       {message && <div className="p-3 bg-green-50 text-emerald-700 rounded-xl text-sm">{message}</div>}
       {error && <div className="p-3 bg-red-50 text-red-600 rounded-xl text-sm">{error}</div>}

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import retailService, { STOCK_STATUS_LABELS } from './retailService';
+import InventoryCount from '../shared/InventoryCount';
+import MarginBoard from '../shared/MarginBoard';
 
 const normalize = (data) => (Array.isArray(data) ? data : data?.results || []);
 const dateTime = (value) => (value ? new Date(value).toLocaleString('fr-FR') : '—');
@@ -55,6 +57,8 @@ export default function RetailInventory() {
         <h1 className="text-2xl font-bold text-ink">Stock</h1>
         <p className="text-sm text-ink-muted">Quantités disponibles, lots et mouvements.</p>
       </div>
+      <MarginBoard />
+      <InventoryCount onDone={load} />
       {message && <div className="p-3 bg-green-50 text-success rounded-xl text-sm">{message}</div>}
       {error && <div className="p-3 bg-red-50 text-error rounded-xl text-sm">{error}</div>}
 

@@ -34,6 +34,8 @@ class EducationEnumChoicesView(APIView):
             'operational_statuses': _pairs(EducationProfile.OPERATIONAL_STATUS_CHOICES),
             'publication_statuses': _pairs(PublicationStatus.choices),
             'levels': _pairs(EducationProgram.LEVEL_CHOICES),
+            'degree_types': _pairs(EducationProgram.DEGREE_TYPE_CHOICES),
+            'admission_selectivities': _pairs(EducationProgram.ADMISSION_SELECTIVITY_CHOICES),
             'unit_kinds': _pairs(EducationUnit.UNIT_KIND_CHOICES),
             'particularities': _pairs(EducationProfile.PARTICULARITY_FIELDS),
             'application_statuses': _pairs(EnrollmentApplication.STATUS),
@@ -43,6 +45,11 @@ class EducationEnumChoicesView(APIView):
             'ecofo_cycles': _pairs(EducationProfile.ECOFO_CYCLE_CHOICES),
             'post_orientations': _pairs(EducationProfile.POST_ORIENTATION_CHOICES),
             'boarding_regimes': _pairs(EducationProfile.BOARDING_REGIME_CHOICES),
+            'accreditation_levels': _pairs([
+                ('NATIONAL', 'Nationale (MESRS)'),
+                ('REGIONAL', 'Régionale (CAMES, IUCEA)'),
+                ('INTERNATIONAL', 'Internationale (HCERES, AACSB, etc.)'),
+            ]),
             'post_filieres': {
                 'intro': 'Il se divise en plusieurs filières après le cycle fondamental.',
                 'families': [

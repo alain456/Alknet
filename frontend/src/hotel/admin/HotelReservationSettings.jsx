@@ -4,7 +4,6 @@ import { Mail, Save, RefreshCw } from 'lucide-react';
 import hotelService from '../hotelService';
 import { HotelPage, Panel, fieldClass, btnPrimary, btnGhost } from '../ui';
 import { useAuth } from '../../context/AuthContext';
-import { ROLES } from '../../auth/roleAccess';
 import { useHotelPerm } from '../useHotelPerm';
 
 const PLACEHOLDERS = [
@@ -48,7 +47,7 @@ const FIELDS = [
 
 const emptyForm = () => Object.fromEntries(FIELDS.map((f) => [f.key, '']));
 
-export default function HotelReservationSettings({ focus = 'all' }) {
+export default function HotelReservationSettings({ focus = 'all', embedded = false }) {
   const { user } = useAuth();
   const { canUpdate } = useHotelPerm();
   const canEdit = canUpdate('reservations');
@@ -81,15 +80,14 @@ export default function HotelReservationSettings({ focus = 'all' }) {
   };
 
   useEffect(() => {
-    if (user?.role === ROLES.BUSINESS_OWNER) return;
+    if (!user) return;
     load();
-  }, [user?.role]);
+  }, [user?.id]);
 
-  // Propriétaire : menu masqué ; staff sans update : lecture seule / redirection
-  if (user?.role === ROLES.BUSINESS_OWNER) {
-    return <Navigate to="/hotel/dashboard" replace />;
-  }
   if (!canEdit) {
+    if (embedded) {
+      return <p className="text-sm text-ink-muted font-medium">Ces messages sont réservés à un compte autorisé à modifier les réservations.</p>;
+    }
     return <Navigate to="/hotel/dashboard" replace />;
   }
 
@@ -114,17 +112,8 @@ export default function HotelReservationSettings({ focus = 'all' }) {
     }
   };
 
-  return (
-    <HotelPage
-      title="Paramètres"
-      subtitle={
-        focus === 'front'
-          ? 'Messages email check-in / check-out (réception)'
-          : focus === 'reservations'
-            ? 'Messages email réservation (demande, confirmation, refus)'
-            : 'Messages email prédéfinis (réservation + réception)'
-      }
-    >
+  const body = (
+    <>
       <Panel>
         <div className="flex items-start gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-primary/10 border-2 border-accent flex items-center justify-center shrink-0">
@@ -180,6 +169,22 @@ export default function HotelReservationSettings({ focus = 'all' }) {
           </form>
         )}
       </Panel>
+    </>
+  );
+
+  if (embedded) return body;
+  return (
+    <HotelPage
+      title="Messages réservation"
+      subtitle={
+        focus === 'front'
+          ? 'Messages email check-in / check-out (réception)'
+          : focus === 'reservations'
+            ? 'Messages email réservation (demande, confirmation, refus)'
+            : 'Messages email prédéfinis (réservation + réception)'
+      }
+    >
+      {body}
     </HotelPage>
   );
 }

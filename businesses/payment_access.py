@@ -21,6 +21,12 @@ TOKEN_BODY_KEYS = ('payment_token', 'paymentToken')
 TOKEN_BYTES = 32
 
 
+def attach_payment_token(payload: dict, order) -> dict:
+    """Le jeton ne sort que dans la réponse du paiement en cours, jamais dans une liste."""
+    payload['payment_token'] = getattr(order, 'payment_token', '') or ''
+    return payload
+
+
 def issue_payment_token() -> str:
     """Jeton opaque, 256 bits d'entropie, unique par commande."""
     return secrets.token_urlsafe(TOKEN_BYTES)

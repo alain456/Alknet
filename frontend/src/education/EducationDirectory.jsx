@@ -28,8 +28,6 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 export default function EducationDirectory() {
   const [params, setParams] = useSearchParams();
   const [rows, setRows] = useState([]);
-  const [programs, setPrograms] = useState([]);
-  const [facets, setFacets] = useState({ domains: [], levels: [], faculties: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [term, setTerm] = useState(params.get('q') || '');
@@ -44,9 +42,6 @@ export default function EducationDirectory() {
   const province = params.get('province') || '';
   const commune = params.get('commune') || '';
   const q = params.get('q') || '';
-  const faculty = params.get('faculty') || '';
-  const domain = params.get('domain') || '';
-  const level = params.get('level') || '';
 
   useEffect(() => {
     api.get('business-categories/').then((data) => {
@@ -72,21 +67,15 @@ export default function EducationDirectory() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, offer, facetData] = await Promise.all([
-        educationService.listEstablishments({ category: type, q, province, commune, track }),
-        educationService.listPublicPrograms({ q, province, commune, faculty, domain, level }),
-        educationService.programFacets({ province, commune }),
-      ]);
+      const data = await educationService.listEstablishments({ category: type, q, province, commune, track });
       setRows(Array.isArray(data) ? data : (data?.results || []));
-      setPrograms(Array.isArray(offer) ? offer : (offer?.results || []));
-      setFacets(facetData || { domains: [], levels: [], faculties: [] });
       setError('');
     } catch (e) {
       setError(e.message || 'Annuaire indisponible');
     } finally {
       setLoading(false);
     }
-  }, [type, q, province, commune, faculty, domain, level, track]);
+  }, [type, q, province, commune, track]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -123,37 +112,41 @@ export default function EducationDirectory() {
     setParams(next);
   };
 
-  return (
-    <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 space-y-8">
-      <div className="bg-gradient-to-r from-primary to-secondary p-6 sm:p-8 rounded-3xl text-white shadow-lg">
-        <div className="flex items-center gap-3">
-          <span className="p-3 rounded-2xl bg-white/15">
-            <GraduationCap className="w-8 h-8" />
-          </span>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Établissements d&apos;enseignement</h1>
-            <p className="text-green-100 text-sm mt-1">
-              Universités, écoles, centres de formation et cours particuliers au Burundi.
-            </p>
-          </div>
-        </div>
+  const fieldClass = 'px-3 py-3 rounded-xl text-sm bg-white text-ink border border-border focus:outline-none focus:border-primary';
 
-        <form onSubmit={submit} className="mt-6 flex flex-col lg:flex-row gap-2">
+  return (
+    <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 space-y-6">
+      <div className="rounded-3xl bg-white ring-1 ring-border p-5 sm:p-7">
+        <p className="text-xs font-bold uppercase tracking-wide text-accent">Annuaire</p>
+        <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-ink">Établissements d&apos;enseignement</h1>
+        <p className="mt-1 text-sm text-ink-muted">
+          Universités, écoles, centres de formation et cours particuliers au Burundi.
+        </p>
+
+        <form onSubmit={submit} className="mt-5 flex flex-col lg:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-primary" />
             <input
               type="search"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-              placeholder="Rechercher un établissement, une formation…"
-              className="w-full pl-9 pr-3 py-3 rounded-xl text-sm text-ink bg-surface focus:outline-none"
+              placeholder="Rechercher un établissement…"
+              className={`w-full pl-9 pr-3 ${fieldClass}`}
             />
           </div>
+          <button
+            type="submit"
+            className="px-6 py-3 rounded-xl bg-accent text-ink text-sm font-bold"
+          >
+            Rechercher
+          </button>
+        </form>
+        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           <select
             value={type}
             onChange={(e) => setParam('category', e.target.value)}
             aria-label="Catégorie"
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none lg:min-w-[220px]"
+            className={fieldClass}
           >
             <option value="">Toutes les catégories</option>
             {categories.map((c) => (
@@ -164,7 +157,7 @@ export default function EducationDirectory() {
             value={track}
             onChange={(e) => setParam('track', e.target.value)}
             aria-label="Parcours scolaire"
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none lg:min-w-[220px]"
+            className={fieldClass}
           >
             <option value="">Tous les parcours</option>
             <option value="prescolaire">Enseignement préscolaire</option>
@@ -172,19 +165,11 @@ export default function EducationDirectory() {
             <option value="post">Post-fondamental</option>
             <option value="both">Les deux</option>
           </select>
-          <button
-            type="submit"
-            className="px-6 py-3 rounded-xl bg-green-500 hover:bg-green-400 text-emerald-950 text-sm font-bold"
-          >
-            Rechercher
-          </button>
-        </form>
-        <div className="mt-2 flex flex-col sm:flex-row gap-2">
           <select
             value={province}
             onChange={(e) => setProvince(e.target.value)}
             aria-label="Province"
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none flex-1"
+            className={fieldClass}
           >
             <option value="">Toutes les provinces</option>
             {places.map((p) => (
@@ -196,7 +181,7 @@ export default function EducationDirectory() {
             onChange={(e) => setParam('commune', e.target.value)}
             aria-label="Commune"
             disabled={!province}
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none flex-1 disabled:opacity-60"
+            className={`${fieldClass} disabled:opacity-60`}
           >
             <option value="">Toutes les communes</option>
             {communes.map((c) => (
@@ -206,45 +191,10 @@ export default function EducationDirectory() {
           <button
             type="button"
             onClick={locate}
-            className="px-4 py-3 rounded-xl bg-white/15 text-sm font-semibold"
+            className={`${fieldClass} font-semibold text-primary`}
           >
             {locating ? 'Localisation…' : 'Depuis ma position'}
           </button>
-        </div>
-        <div className="mt-2 flex flex-col sm:flex-row gap-2">
-          <select
-            value={faculty}
-            onChange={(e) => setParam('faculty', e.target.value)}
-            aria-label="Faculté"
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none flex-1"
-          >
-            <option value="">Toutes les facultés</option>
-            {(facets.faculties || []).map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-          <select
-            value={domain}
-            onChange={(e) => setParam('domain', e.target.value)}
-            aria-label="Domaine"
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none flex-1"
-          >
-            <option value="">Tous les domaines</option>
-            {(facets.domains || []).map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-          <select
-            value={level}
-            onChange={(e) => setParam('level', e.target.value)}
-            aria-label="Niveau"
-            className="px-3 py-3 rounded-xl text-sm bg-surface text-ink focus:outline-none flex-1"
-          >
-            <option value="">Tous les niveaux</option>
-            {(facets.levels || []).map((row) => (
-              <option key={row.value} value={row.value}>{row.label}</option>
-            ))}
-          </select>
         </div>
       </div>
 
@@ -270,13 +220,13 @@ export default function EducationDirectory() {
             return (
               <article
                 key={row.id}
-                className={`flex flex-col rounded-3xl border border-border dark:border-white/10 bg-surface overflow-hidden shadow-sm hover:shadow-md hover:border-primary/40 transition ${rows.length === 1 ? 'md:col-span-2 md:flex-row' : ''}`}
+                className="flex flex-col rounded-3xl border border-border bg-white overflow-hidden shadow-sm"
               >
-                <div className={`relative bg-gradient-to-br from-primary to-secondary flex items-center justify-center ${rows.length === 1 ? 'md:w-72 min-h-[160px]' : 'h-36'}`}>
+                <div className="h-40 bg-surface flex items-center justify-center border-b border-border">
                   {row.business_logo ? (
-                    <img src={row.business_logo} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={row.business_logo} alt="" className="w-full h-full object-contain p-4" />
                   ) : (
-                    <Icon className="w-12 h-12 text-white/80" />
+                    <Icon className="w-12 h-12 text-primary/70" />
                   )}
                 </div>
                 <div className="flex flex-col flex-1 p-5">
@@ -318,7 +268,7 @@ export default function EducationDirectory() {
                       {row.short_description}
                     </p>
                   )}
-                  {tags.some((tag) => row[tag.value]) && (
+                  {row.category_slug !== 'ecole' && row.category_slug !== 'universite' && tags.some((tag) => row[tag.value]) && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {tags.filter((tag) => row[tag.value]).map((tag) => (
                         <span key={tag.value} className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary">
@@ -329,7 +279,7 @@ export default function EducationDirectory() {
                   )}
                   <Link
                     to={`/education/establishment/${row.business || row.id}`}
-                    className="mt-4 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary hover:bg-secondary text-white text-sm font-semibold"
+                    className="mt-4 inline-flex w-full items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-accent text-ink text-sm font-bold"
                   >
                     Voir l&apos;établissement
                     <ArrowRight className="w-4 h-4" />
@@ -340,38 +290,6 @@ export default function EducationDirectory() {
           })}
         </div>
       )}
-
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <h2 className="text-xl font-bold text-primary">Formations</h2>
-          <p className="text-sm text-ink-muted">
-            {loading ? 'Recherche…' : `${programs.length} formation${programs.length !== 1 ? 's' : ''}`}
-          </p>
-        </div>
-        {!loading && programs.length === 0 ? (
-          <div className="p-8 text-center rounded-3xl border border-dashed border-border text-ink-muted text-sm">
-            Aucune formation ne correspond à cette recherche.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {programs.map((p) => (
-              <Link
-                key={p.id}
-                to={`/education/establishment/${p.business}`}
-                className="block p-4 rounded-2xl border border-border bg-surface hover:border-primary/40"
-              >
-                <p className="text-xs font-semibold text-primary">
-                  {[p.faculty_name, p.unit_name, p.domain, p.level_label].filter(Boolean).join(' · ')}
-                </p>
-                <h3 className="mt-1 font-bold text-ink">{p.title}</h3>
-                <p className="mt-1 text-sm text-ink-muted">
-                  {[p.business_name, p.business_commune, p.business_province].filter(Boolean).join(' · ')}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }

@@ -11,7 +11,11 @@ from .models import (
 class WholesaleProfileSerializer(serializers.ModelSerializer):
     business_name = serializers.CharField(source='business.name', read_only=True)
     business_id = serializers.UUIDField(source='business.id', read_only=True)
-    logo = serializers.CharField(source='business.logo', read_only=True)
+    logo = serializers.SerializerMethodField()
+
+    def get_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj.business)
     phone = serializers.CharField(source='business.phone', read_only=True)
     email = serializers.EmailField(source='business.email', read_only=True)
     address = serializers.CharField(source='business.address', read_only=True)
@@ -24,6 +28,7 @@ class WholesaleProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'business_id', 'business_name', 'commercial_name', 'license_number',
             'status', 'order_reference_prefix', 'acceptance_email_message',
+            'submission_email_message', 'rejection_email_message',
             'logo', 'phone', 'email', 'address', 'commune', 'description', 'website',
             'created_at', 'updated_at',
         ]
@@ -41,12 +46,24 @@ class WholesaleProductSerializer(serializers.ModelSerializer):
             'id', 'wholesale_business', 'name', 'active_ingredient', 'dosage',
             'pharmaceutical_form', 'administration_route', 'manufacturer',
             'packaging', 'wholesale_unit', 'min_order_quantity',
-            'wholesale_price', 'currency', 'quantity_real', 'quantity_reserved',
+            'wholesale_price', 'purchase_price', 'currency', 'quantity_real', 'quantity_reserved',
             'quantity_available', 'low_stock_threshold', 'batch_number',
             'expiration_date', 'status', 'description', 'therapeutic_class', 'image_url', 'stock_status',
             'price_display', 'created_at', 'updated_at',
         ]
         read_only_fields = ('id', 'wholesale_business', 'quantity_reserved', 'created_at', 'updated_at')
+
+    def create(self, validated_data):
+        from .order_workflow import adjust_stock
+        qty = int(validated_data.pop('quantity_real', 0) or 0)
+        product = super().create(validated_data)
+        if qty:
+            adjust_stock(product, qty, 'Stock initial')
+        return product
+
+    def update(self, instance, validated_data):
+        validated_data.pop('quantity_real', None)
+        return super().update(instance, validated_data)
 
     def get_price_display(self, obj):
         return f'{obj.wholesale_price} {obj.currency} / {obj.packaging}'
@@ -69,6 +86,8 @@ class WholesaleProductPublicSerializer(serializers.ModelSerializer):
         ]
 
     def get_availability(self, obj):
+        if obj.stock_status == 'EXPIRED':
+            return 'Périmé'
         if obj.status != 'ACTIVE' or obj.quantity_available <= 0:
             return 'Rupture'
         if obj.stock_status == 'LOW_STOCK':
@@ -185,15 +204,18 @@ class WholesaleOrderSerializer(serializers.ModelSerializer):
             'total_amount', 'currency', 'refusal_reason', 'refusal_comment',
             'notification_email', 'accepted_by', 'accepted_at', 'refused_by',
             'refused_at', 'submitted_at', 'items', 'events', 'notification_logs',
-            'proforma', 'email_status', 'items_count', 'payment_token',
+            'proforma', 'email_status', 'items_count',
             'created_at', 'updated_at',
         ]
         read_only_fields = (
-            'id', 'reference', 'total_amount', 'accepted_by', 'accepted_at',
+            'id', 'reference', 'wholesale_business', 'client_business',
+            'buyer_type', 'buyer_name', 'buyer_email', 'buyer_phone', 'created_by',
+            'status', 'currency', 'refusal_reason', 'refusal_comment', 'notification_email',
+            'total_amount', 'accepted_by', 'accepted_at',
             'refused_by', 'refused_at', 'submitted_at', 'created_at', 'updated_at',
             'payment_status', 'payment_method', 'payer_phone',
             'payment_merchant_account', 'payment_provider_reference', 'payment_note',
-            'paid_at', 'paid_by', 'payment_token',
+            'paid_at', 'paid_by',
         )
 
     def get_items_count(self, obj):

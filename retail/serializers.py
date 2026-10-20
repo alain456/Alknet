@@ -20,7 +20,11 @@ from .models import (
 class RetailProfileSerializer(serializers.ModelSerializer):
     business_id = serializers.UUIDField(source='business.id', read_only=True)
     business_name = serializers.CharField(source='business.name', read_only=True)
-    logo = serializers.CharField(source='business.logo', read_only=True)
+    logo = serializers.SerializerMethodField()
+
+    def get_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj.business)
     phone = serializers.CharField(source='business.phone', read_only=True)
     email = serializers.EmailField(source='business.email', read_only=True)
     address = serializers.CharField(source='business.address', read_only=True)
@@ -33,6 +37,7 @@ class RetailProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'business_id', 'business_name', 'commercial_name', 'license_number',
             'status', 'order_reference_prefix', 'acceptance_email_message',
+            'submission_email_message', 'rejection_email_message',
             'is_open_for_orders', 'logo',
             'phone', 'email', 'address', 'commune', 'description', 'website',
             'created_at', 'updated_at',
@@ -50,7 +55,7 @@ class RetailProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'retail_business', 'name', 'active_ingredient', 'dosage',
             'pharmaceutical_form', 'administration_route', 'manufacturer',
-            'packaging', 'sales_unit', 'retail_price', 'currency',
+            'packaging', 'sales_unit', 'retail_price', 'purchase_price', 'currency',
             'prescription_required', 'quantity_real', 'quantity_reserved',
             'quantity_available', 'low_stock_threshold', 'batch_number',
             'expiration_date', 'status', 'description', 'therapeutic_class',
@@ -62,6 +67,18 @@ class RetailProductSerializer(serializers.ModelSerializer):
 
     def get_price_display(self, obj):
         return f'{obj.retail_price} {obj.currency} / {obj.sales_unit}'
+
+    def create(self, validated_data):
+        from .order_workflow import adjust_stock
+        qty = int(validated_data.pop('quantity_real', 0) or 0)
+        product = super().create(validated_data)
+        if qty:
+            adjust_stock(product, qty, 'Stock initial')
+        return product
+
+    def update(self, instance, validated_data):
+        validated_data.pop('quantity_real', None)
+        return super().update(instance, validated_data)
 
 
 class RetailProductPublicSerializer(serializers.ModelSerializer):
@@ -82,6 +99,8 @@ class RetailProductPublicSerializer(serializers.ModelSerializer):
         ]
 
     def get_availability(self, obj):
+        if obj.stock_status == 'EXPIRED':
+            return 'Périmé'
         if obj.status != 'ACTIVE' or obj.quantity_available <= 0:
             return 'Rupture'
         return 'Stock faible' if obj.stock_status == 'LOW_STOCK' else 'Disponible'
@@ -197,7 +216,7 @@ class RetailOrderSerializer(serializers.ModelSerializer):
             'rejection_comment', 'clarification_comment', 'notification_email',
             'accepted_by', 'accepted_at', 'rejected_by', 'rejected_at',
             'submitted_at', 'items', 'items_count', 'events', 'prescriptions',
-            'notification_logs', 'proforma', 'payment_token',
+            'notification_logs', 'proforma',
             'created_at', 'updated_at',
         ]
         read_only_fields = [
@@ -207,7 +226,6 @@ class RetailOrderSerializer(serializers.ModelSerializer):
             'paid_at', 'paid_by',
             'total_amount', 'accepted_by', 'accepted_at', 'rejected_by',
             'rejected_at', 'submitted_at', 'created_at', 'updated_at',
-            'payment_token',
         ]
 
     def get_items_count(self, obj):

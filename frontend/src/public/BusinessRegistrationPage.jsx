@@ -12,6 +12,7 @@ export default function BusinessRegistrationPage() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [publicHost, setPublicHost] = useState('');
   const [error, setError] = useState(null);
   const [formData, setFormData] = useState(() => emptyBusinessRegistrationForm());
   const categoriesQuery = useQuery({
@@ -55,6 +56,7 @@ export default function BusinessRegistrationPage() {
           || 'Erreur lors de la soumission.';
         throw new Error(String(detail));
       }
+      setPublicHost(data.public_host || '');
       setSuccess(true);
     } catch (err) {
       setError(err.message);
@@ -74,6 +76,11 @@ export default function BusinessRegistrationPage() {
           <p className="text-base text-ink font-medium mb-6">
             Votre demande d&apos;inscription pour l&apos;entreprise <strong>{formData.name}</strong> a été soumise avec succès.
             Elle est actuellement <strong>en attente de validation</strong> par nos administrateurs.
+            {publicHost ? (
+              <>
+                {' '}Après validation, elle sera accessible à l&apos;adresse <strong>{publicHost}</strong>.
+              </>
+            ) : null}
           </p>
           <Link
             to="/"

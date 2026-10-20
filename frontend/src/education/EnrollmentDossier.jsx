@@ -159,7 +159,7 @@ export default function EnrollmentDossier() {
             {PAY_LABEL[payStatus] || payStatus}
             {payment.amount_bif > 0 ? ` · ${Number(payment.amount_bif).toLocaleString('fr-BI')} BIF` : ''}
           </p>
-          {payStatus !== 'PAID' && payStatus !== 'WAIVED' && (
+          {payStatus !== 'PAID' && payStatus !== 'WAIVED' && payStatus !== 'BORDEREAU_RECU' && (
             <div className="space-y-2">
               <BurundiPayPayerField
                 value={payerPhone}

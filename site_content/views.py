@@ -23,20 +23,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_FOOTER_LINKS = [
-    ("COMPANY", "Company", "About Us", "/pages/about", 1),
-    ("COMPANY", "Company", "Careers", "/pages/careers", 2),
-    ("SUPPORT", "Support", "Help Center", "/pages/help", 1),
-    ("SUPPORT", "Support", "Contact Us", "/pages/contact", 2),
-    ("LEGAL", "Legal", "Terms of Service", "/pages/terms", 1),
-    ("LEGAL", "Legal", "CGV", "/pages/cgv", 2),
-    ("LEGAL", "Legal", "Privacy Policy", "/pages/privacy", 3),
-    ("LEGAL", "Legal", "SLA", "/pages/sla", 4),
+    ("COMPANY", "Entreprise", "À propos", "/pages/about", 1),
+    ("COMPANY", "Entreprise", "Carrières", "/pages/careers", 2),
+    ("SUPPORT", "Aide", "Centre d’aide", "/pages/help", 1),
+    ("SUPPORT", "Aide", "Nous contacter", "/pages/contact", 2),
+    ("LEGAL", "Mentions", "Conditions d’utilisation", "/pages/terms", 1),
+    ("LEGAL", "Mentions", "CGV", "/pages/cgv", 2),
+    ("LEGAL", "Mentions", "Politique de confidentialité", "/pages/privacy", 3),
+    ("LEGAL", "Mentions", "Engagement de service", "/pages/sla", 4),
 ]
 
 DEFAULT_PAGES = [
-    ("about", "About Us", "Isoko Hub connects Burundi to trusted services, businesses and healthcare."),
-    ("careers", "Careers", "Join the Isoko Hub team. Open roles will be listed here."),
-    ("help", "Help Center", "Need help? Contact support or browse our guides."),
+    ("about", "À propos", "Isoko Hub relie les habitants du Burundi à des services, des entreprises et des soins de confiance."),
+    ("careers", "Carrières", "Rejoignez l’équipe Isoko Hub. Les postes ouverts seront indiqués ici."),
+    ("help", "Centre d’aide", "Une question ? Écrivez au support ou consultez les guides."),
     (
         "contact",
         "Nous contacter",
@@ -85,8 +85,58 @@ LEGAL_BODIES = {
 }
 
 
+ENGLISH_SETTINGS = {
+    "services_page_title": ("Find Services", "Trouver un service"),
+    "services_page_subtitle": ("Discover trusted professionals for any job", "Des professionnels de confiance pour chaque besoin"),
+    "footer_tagline": (
+        "Everything you need, in one platform. Connecting Burundi to the world.",
+        "Tout ce qu’il vous faut, en une seule plateforme.",
+    ),
+    "footer_copyright": ("© Isoko Hub. All rights reserved.", "© Isoko Hub. Tous droits réservés."),
+    "footer_contact_title": ("Contact information", "Contact"),
+    "footer_follow_title": ("Follow us", "Nous suivre"),
+    "hero_title": ("Everything you need,\nin one platform.", "Tout ce qu’il vous faut,\nen une seule plateforme."),
+    "hero_subtitle": (
+        "Find trusted professionals, book services, order from the best businesses, and discover new opportunities in Burundi.",
+        "Trouvez un professionnel, réservez un service ou commandez auprès d’une entreprise, au Burundi.",
+    ),
+    "hero_cta_secondary_label": ("Explore Services", "Explorer les services"),
+    "search_placeholder": ("Profession, Business, Restaurant, Product...", "Métier, entreprise, restaurant, produit…"),
+    "search_location_placeholder": ("Location", "Lieu"),
+    "categories_title": ("Explore Categories", "Catégories"),
+    "professionals_title": ("Featured Professionals", "Professionnels"),
+    "businesses_title": ("Top Businesses", "Entreprises"),
+    "services_title": ("Popular Services", "Services"),
+    "why_title": ("Why choose Isoko Hub?", "Pourquoi Isoko Hub ?"),
+    "app_banner_title": ("Take Isoko Hub everywhere", "Isoko Hub partout avec vous"),
+    "app_banner_subtitle": (
+        "The official Isoko Hub mobile app is currently under development.",
+        "L’application mobile Isoko Hub est en préparation.",
+    ),
+    "app_banner_badge": ("COMING SOON", "Bientôt"),
+}
+
+FRENCH_WHY = [
+    {"title": "Professionnels vérifiés", "description": "Chaque prestataire est contrôlé avant d’apparaître.", "icon": "CheckCircle2"},
+    {"title": "Paiements protégés", "description": "Le règlement reste suivi jusqu’à la prestation.", "icon": "ShieldCheck"},
+    {"title": "Entreprises de confiance", "description": "Les fiches publiées sont celles de la communauté.", "icon": "Briefcase"},
+    {"title": "Recherche guidée", "description": "La recherche propose ce qui correspond à votre besoin.", "icon": "Laptop"},
+]
+
+
 def ensure_defaults():
     settings = SiteSettings.get_solo()
+    changed = []
+    for field, (old, new) in ENGLISH_SETTINGS.items():
+        if getattr(settings, field, None) == old:
+            setattr(settings, field, new)
+            changed.append(field)
+    why = settings.why_items or []
+    if why and why[0].get("title") == "Verified Professionals":
+        settings.why_items = FRENCH_WHY
+        changed.append("why_items")
+    if changed:
+        settings.save(update_fields=changed)
     if not FooterLink.objects.exists():
         for column, title, label, url, order in DEFAULT_FOOTER_LINKS:
             FooterLink.objects.create(
@@ -122,6 +172,47 @@ def ensure_defaults():
             page.body = legal
             page.is_published = True
             page.save(update_fields=["title", "body", "is_published"])
+    # Anciens libellés anglais livrés par défaut : on les passe en français
+    # seulement s’ils n’ont pas été réécrits par l’administrateur.
+    english_footer = {
+        "/pages/about": ("Entreprise", "À propos"),
+        "/pages/careers": ("Entreprise", "Carrières"),
+        "/pages/help": ("Aide", "Centre d’aide"),
+        "/pages/contact": ("Aide", "Nous contacter"),
+        "/pages/terms": ("Mentions", "Conditions d’utilisation"),
+        "/pages/cgv": ("Mentions", "CGV"),
+        "/pages/privacy": ("Mentions", "Politique de confidentialité"),
+        "/pages/sla": ("Mentions", "Engagement de service"),
+    }
+    english_labels = {
+        "About Us", "Careers", "Help Center", "Contact Us",
+        "Terms of Service", "Privacy Policy", "SLA", "Company", "Support", "Legal",
+    }
+    for link in FooterLink.objects.all():
+        mapped = english_footer.get(link.url)
+        if mapped and (link.label in english_labels or link.column_title in english_labels or link.column_title == "Legal"):
+            link.column_title, link.label = mapped
+            link.save(update_fields=["column_title", "label"])
+    english_pages = {
+        "about": ("About Us", "À propos", "Isoko Hub relie les habitants du Burundi à des services, des entreprises et des soins de confiance."),
+        "careers": ("Careers", "Carrières", "Rejoignez l’équipe Isoko Hub. Les postes ouverts seront indiqués ici."),
+        "help": ("Help Center", "Centre d’aide", "Une question ? Écrivez au support ou consultez les guides."),
+    }
+    old_bodies = {
+        "Isoko Hub connects Burundi to trusted services, businesses and healthcare.",
+        "Join the Isoko Hub team. Open roles will be listed here.",
+        "Need help? Contact support or browse our guides.",
+    }
+    for slug, old_title, new_title, new_body in (
+        (slug, old, title, body) for slug, (old, title, body) in english_pages.items()
+    ):
+        page = ContentPage.objects.filter(slug=slug, title=old_title).first()
+        if not page:
+            continue
+        page.title = new_title
+        if (page.body or "") in old_bodies:
+            page.body = new_body
+        page.save(update_fields=["title", "body"])
     return settings
 
 
@@ -195,8 +286,16 @@ def public_site_content(request):
     settings = ensure_defaults()
     footer_links = FooterLink.objects.filter(is_active=True)
     partners = Partner.objects.filter(is_active=True)
+    public_settings = SiteSettingsSerializer(settings).data
+    public_settings.pop('processing_register', None)
+    for private_key in (
+        'business_received_message',
+        'business_approved_message',
+        'business_rejected_message',
+    ):
+        public_settings.pop(private_key, None)
     return Response({
-        "settings": SiteSettingsSerializer(settings).data,
+        "settings": public_settings,
         "footer_links": FooterLinkSerializer(footer_links, many=True).data,
         "partners": PartnerSerializer(partners, many=True).data,
     })

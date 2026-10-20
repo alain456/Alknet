@@ -2,23 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { Mail, Save, RefreshCw } from 'lucide-react';
 import api from '../shared/api';
 
-const FIELDS = [
-  {
-    key: 'received',
-    label: 'Dossier enregistré',
-    help: 'Envoyé à l’élève dès que le dossier arrive en liste d’attente.',
-  },
-  {
-    key: 'accepted',
-    label: 'Confirmation',
-    help: 'Envoyé tel quel quand l’école accepte le dossier.',
-  },
-  {
-    key: 'refusal',
-    label: 'Refus',
-    help: 'Envoyé tel quel quand l’école refuse le dossier.',
-  },
-];
+function fieldsFor(audience) {
+  const person = audience === 'universite' ? 'candidat' : 'élève';
+  const place = audience === 'universite' ? 'l’université' : 'l’école';
+  return [
+    {
+      key: 'received',
+      label: 'Dossier enregistré',
+      help: `Envoyé au ${person} dès que le dossier arrive.`,
+    },
+    {
+      key: 'accepted',
+      label: 'Confirmation',
+      help: `Envoyé tel quel quand ${place} accepte le dossier.`,
+    },
+    {
+      key: 'refusal',
+      label: 'Refus',
+      help: `Envoyé tel quel quand ${place} refuse le dossier.`,
+    },
+  ];
+}
 
 export default function SchoolMessageSettings() {
   const [settings, setSettings] = useState(null);
@@ -69,16 +73,19 @@ export default function SchoolMessageSettings() {
     return <div className="text-sm text-gray-500">Chargement des messages…</div>;
   }
 
+  const university = settings?.audience === 'universite';
+  const fields = fieldsFor(settings?.audience);
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-gray-900 dark:text-white border-b border-gray-100 dark:border-gray-800 pb-2">
-        Messages d’inscription (école)
+        {university ? 'Messages d’inscription (université)' : 'Messages d’inscription (école)'}
       </h2>
       <form onSubmit={save} className="bg-white rounded-2xl border border-teal-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 bg-teal-50 border-b border-teal-100 flex items-center gap-2">
           <Mail className="w-5 h-5 text-teal-700" />
           <div>
-            <h3 className="font-bold text-gray-900 text-sm">Textes envoyés à l’élève</h3>
+            <h3 className="font-bold text-gray-900 text-sm">{university ? 'Textes envoyés au candidat' : 'Textes envoyés à l’élève'}</h3>
             <p className="text-xs text-gray-500">
               Dossier enregistré, confirmation et refus. Accepter ou refuser envoie ce texte, sans le retaper.
             </p>
@@ -93,7 +100,7 @@ export default function SchoolMessageSettings() {
               <code key={item} className="text-[10px] bg-white px-2 py-0.5 rounded border text-teal-800">{item}</code>
             ))}
           </div>
-          {FIELDS.map((field) => (
+          {fields.map((field) => (
             <div key={field.key}>
               <div className="flex items-center justify-between gap-2 mb-1">
                 <label className="text-xs font-bold text-gray-700">{field.label}</label>

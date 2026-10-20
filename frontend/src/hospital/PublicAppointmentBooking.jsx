@@ -290,7 +290,7 @@ export default function PublicAppointmentBooking() {
                     type="button"
                     onClick={() => handleSelectHospital(h)}
                     className={`text-left bg-surface p-5 sm:p-6 rounded-2xl border-2 transition hover:bg-primary/5 ${
-                      idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                      'border-border'
                     }`}
                   >
                     <h3 className="font-bold text-lg text-ink">{h.name}</h3>
@@ -327,7 +327,7 @@ export default function PublicAppointmentBooking() {
                     type="button"
                     onClick={() => handleSelectService(s)}
                     className={`text-left p-5 bg-surface rounded-xl border-2 transition hover:bg-primary/5 ${
-                      idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                      'border-border'
                     }`}
                   >
                     <p className="font-bold text-ink">{s.name}</p>
@@ -361,7 +361,7 @@ export default function PublicAppointmentBooking() {
                     type="button"
                     onClick={() => { setSelectedSlot(slot); setStep(3); }}
                     className={`w-full text-left p-5 rounded-xl border-2 bg-surface hover:bg-primary/5 transition ${
-                      idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                      'border-border'
                     }`}
                   >
                     <div className="flex justify-between items-start gap-4">

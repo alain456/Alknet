@@ -418,7 +418,16 @@ export default function ManageReservations({
                       <p className="text-xs text-ink-muted mt-0.5">
                         {r.room_type_name || 'Type —'}
                         {r.room_number ? ` · Ch. ${r.room_number}` : ''}
+                        {` · ${Number(r.adults) || 1} ad.`}
+                        {Number(r.children) > 0 ? ` · ${Number(r.children)} enf.` : ''}
                       </p>
+                      {(r.guest_phone || r.guest_email) && (
+                        <p className="text-xs text-ink mt-0.5">
+                          {r.guest_phone || ''}
+                          {r.guest_phone && r.guest_email ? ' · ' : ''}
+                          {r.guest_email || ''}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wide text-ink-muted">Séjour</p>

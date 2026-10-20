@@ -278,25 +278,25 @@ export default function PublicHotelBook() {
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
-            <a href="#infos" className="px-4 py-2 rounded-xl border border-surface/30 text-sm font-bold text-surface hover:bg-surface/10 backdrop-blur-sm">
+            <a href="#infos" className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink">
               Infos
             </a>
-            <a href="#galerie" className="px-4 py-2 rounded-xl border border-surface/30 text-sm font-bold text-surface hover:bg-surface/10 backdrop-blur-sm">
+            <a href="#galerie" className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink">
               Galerie
             </a>
-            <a href="#chambres" className="px-4 py-2 rounded-xl border border-surface/30 text-sm font-bold text-surface hover:bg-surface/10 backdrop-blur-sm">
+            <a href="#chambres" className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink">
               Chambres
             </a>
             <Link
               to={`/hotels/${id}/historique`}
-              className="px-4 py-2 rounded-xl border border-surface/30 text-sm font-bold text-surface hover:bg-surface/10 inline-flex items-center gap-1.5 backdrop-blur-sm"
+              className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink inline-flex items-center gap-1.5"
             >
               <History className="w-4 h-4" /> Historique
             </Link>
             <button
               type="button"
               onClick={() => openBook()}
-              className="px-5 py-2 rounded-xl bg-accent text-surface text-sm font-extrabold border border-accent shadow-md hover:opacity-95"
+              className="px-5 py-2 rounded-xl bg-accent text-ink text-sm font-extrabold border border-accent shadow-md hover:opacity-95"
             >
               Réserver un séjour
             </button>
@@ -575,7 +575,7 @@ export default function PublicHotelBook() {
           <button
             type="button"
             onClick={() => openBook()}
-            className="shrink-0 px-5 py-3 rounded-xl bg-accent text-surface text-sm font-extrabold border-2 border-primary/20 shadow"
+            className="shrink-0 px-5 py-3 rounded-xl bg-accent text-ink text-sm font-extrabold border-2 border-primary/20 shadow"
           >
             Réserver
           </button>

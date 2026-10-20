@@ -46,11 +46,14 @@ def export_business_data(business):
         'business': {
             'id': str(business.id),
             'name': business.name,
+            'slug': business.slug,
+            'custom_domain': business.custom_domain,
             'description': business.description,
             'province': business.province,
             'commune': business.commune,
             'phone': business.phone,
             'email': business.email,
+            'is_active': business.is_active,
         },
         'services': [
             {**row, 'id': str(row['id']), 'price': str(row['price']) if row['price'] is not None else None}

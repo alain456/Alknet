@@ -7,7 +7,7 @@ from business_categories.models import BusinessCategory
 from businesses.models import Business
 
 from .models import WholesaleOrder, WholesaleOrderItem, WholesaleProduct
-from .order_workflow import accept_order
+from .order_workflow import accept_order, complete_order, reject_order
 
 User = get_user_model()
 
@@ -82,3 +82,57 @@ class WholesaleAcceptTests(TestCase):
         self.assertEqual(self.product.quantity_reserved, 2)
         self.assertIn(result.get('status'), ('SENT', 'SKIPPED', 'FAILED'))
         self.assertGreaterEqual(len(mail.outbox), 0)
+
+    def test_delivery_consumes_real_stock(self):
+        order = WholesaleOrder.objects.create(
+            reference='CMD-PG-3',
+            wholesale_business=self.business,
+            buyer_name='Officine',
+            buyer_email='buyer@test.bi',
+            status='SUBMITTED',
+            payment_status='PAID',
+            total_amount='3000',
+            notification_email='buyer@test.bi',
+        )
+        WholesaleOrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_name_snapshot=self.product.name,
+            packaging_snapshot='Boite',
+            unit_price_snapshot='1500',
+            quantity=2,
+            line_total='3000',
+        )
+        accept_order(order, self.owner)
+        complete_order(order, self.owner)
+        self.product.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'COMPLETED')
+        self.assertEqual(self.product.quantity_real, 18)
+        self.assertEqual(self.product.quantity_reserved, 0)
+
+    def test_reject_does_not_free_another_reservation(self):
+        self.product.quantity_reserved = 5
+        self.product.save(update_fields=['quantity_reserved'])
+        order = WholesaleOrder.objects.create(
+            reference='CMD-PG-4',
+            wholesale_business=self.business,
+            buyer_name='Officine',
+            buyer_email='buyer@test.bi',
+            status='SUBMITTED',
+            payment_status='UNPAID',
+            total_amount='1500',
+            notification_email='buyer@test.bi',
+        )
+        WholesaleOrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_name_snapshot=self.product.name,
+            packaging_snapshot='Boite',
+            unit_price_snapshot='1500',
+            quantity=2,
+            line_total='3000',
+        )
+        reject_order(order, self.owner, 'Produit indisponible')
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.quantity_reserved, 5)

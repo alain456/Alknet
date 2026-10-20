@@ -34,6 +34,25 @@ class WholesalePharmacyProfile(models.Model):
             'Cordialement,\n{wholesale_name}'
         ),
     )
+    submission_email_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {client_name},\n\n'
+            'Votre commande {reference} a bien été enregistrée par {wholesale_name}.\n'
+            'Montant total : {total_amount} {currency}.\n\n'
+            'Vous recevrez un e-mail dès que le grossiste aura accepté ou refusé votre commande.\n\n'
+            'Cordialement,\n{wholesale_name}'
+        ),
+    )
+    rejection_email_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {client_name},\n\n'
+            'Votre commande {reference} a été refusée par {wholesale_name}.\n'
+            'Motif : {reason}\n\n'
+            'Cordialement,\n{wholesale_name}'
+        ),
+    )
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -62,6 +81,7 @@ class WholesaleProduct(models.Model):
     wholesale_unit = models.CharField(max_length=120, default='Boite')
     min_order_quantity = models.PositiveIntegerField(default=1)
     wholesale_price = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
+    purchase_price = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     currency = models.CharField(max_length=10, default='BIF')
     quantity_real = models.PositiveIntegerField(default=0)
     quantity_reserved = models.PositiveIntegerField(default=0)
@@ -123,6 +143,7 @@ class WholesaleOrder(models.Model):
         ('SUBMITTED', 'Envoyee'),
         ('PROCESSING', 'En cours de traitement'),
         ('ACCEPTED', 'Acceptee'),
+        ('COMPLETED', 'Livree'),
         ('REJECTED', 'Refusee'),
         ('CANCELLED', 'Annulee'),
     )

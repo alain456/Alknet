@@ -33,6 +33,15 @@ class RetailPharmacyProfile(models.Model):
             'Cordialement,\n{pharmacy_name}'
         ),
     )
+    rejection_email_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {patient_name},\n\n'
+            'Votre commande {reference} a été refusée par {pharmacy_name}.\n'
+            'Motif : {reason}\n\n'
+            'Cordialement,\n{pharmacy_name}'
+        ),
+    )
     submission_email_message = models.TextField(
         blank=True,
         default=(
@@ -73,6 +82,7 @@ class RetailProduct(models.Model):
     packaging = models.CharField(max_length=255)
     sales_unit = models.CharField(max_length=120, default='Boite')
     retail_price = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
+    purchase_price = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal('0'))
     currency = models.CharField(max_length=10, default='BIF')
     prescription_required = models.BooleanField(default=False)
     quantity_real = models.PositiveIntegerField(default=0)
@@ -117,6 +127,7 @@ class RetailOrder(models.Model):
         ('PROCESSING', 'En cours de traitement'),
         ('CLARIFICATION_REQUESTED', 'Clarification demandee'),
         ('ACCEPTED', 'Acceptee'),
+        ('COMPLETED', 'Livree'),
         ('REJECTED', 'Refusee'),
         ('CANCELLED', 'Annulee'),
     )

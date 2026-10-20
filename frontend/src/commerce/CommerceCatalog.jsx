@@ -12,12 +12,15 @@ const money = (n, c = 'BIF') => `${Number(n || 0).toLocaleString('fr-BI')} ${c}`
 const emptyForm = {
   name: '',
   description: '',
+  purchase_price: '',
   price: '',
   stock: '0',
   sku: '',
+  category_name: '',
   image_url: '',
   is_active: true,
   low_stock_threshold: '5',
+  colors: [],
 };
 
 function stockLabel(p) {
@@ -47,11 +50,18 @@ export default function CommerceCatalog() {
   const [productModal, setProductModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [shopCategories, setShopCategories] = useState([]);
 
   const load = () => {
     setLoading(true);
-    commerceService.listProducts()
-      .then((data) => setProducts(Array.isArray(data) ? data : data.results || []))
+    Promise.all([
+      commerceService.listProducts(),
+      commerceService.listShopCategories().catch(() => []),
+    ])
+      .then(([data, cats]) => {
+        setProducts(Array.isArray(data) ? data : data.results || []);
+        setShopCategories(Array.isArray(cats) ? cats : cats.results || []);
+      })
       .catch((e) => setError(e.message || 'Erreur'))
       .finally(() => setLoading(false));
   };
@@ -87,6 +97,25 @@ export default function CommerceCatalog() {
     }
   };
 
+  const pickColorImage = async (index, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setImageError('');
+    setUploading(true);
+    try {
+      const dataUrl = await readImageAsDataUrl(file, { maxSize: 900, quality: 0.8 });
+      setForm((prev) => ({
+        ...prev,
+        colors: prev.colors.map((row, at) => (at === index ? { ...row, image_url: dataUrl } : row)),
+      }));
+    } catch (err) {
+      setImageError(err.message || 'Image invalide');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const openCreate = () => {
     setEditingId(null);
     setForm(emptyForm);
@@ -99,12 +128,22 @@ export default function CommerceCatalog() {
     setForm({
       name: p.name || '',
       description: p.description || '',
+      purchase_price: String(p.purchase_price ?? ''),
       price: String(p.price ?? ''),
       stock: String(p.stock ?? 0),
       sku: p.sku || '',
+      category_name: p.shop_category_name || '',
       image_url: (p.image_urls || [])[0] || '',
       is_active: p.is_active !== false,
       low_stock_threshold: String(p.low_stock_threshold ?? 5),
+      colors: (p.variant_rows || [])
+        .filter((row) => String(row.color || '').trim())
+        .map((row) => ({
+          id: row.id,
+          color: row.color,
+          stock: String(row.stock ?? 0),
+          image_url: row.image_url || '',
+        })),
     });
     setImageError('');
     setProductModal(true);
@@ -125,28 +164,73 @@ export default function CommerceCatalog() {
     }
     setBusy(true);
     setError('');
-    const payload = {
-      name: form.name.trim(),
-      description: form.description.trim(),
-      price: form.price,
-      sku: form.sku.trim(),
-      image_urls: form.image_url ? [form.image_url] : [],
-      is_active: form.is_active,
-      low_stock_threshold: Number(form.low_stock_threshold) || 5,
-    };
-    // Stock initial uniquement à la création — les ajustements passent par /commerce/inventory
-    if (!editingId) {
-      payload.stock = Number(form.stock) || 0;
-      payload.business = businessId;
-    }
     try {
+      const categoryName = form.category_name.trim();
+      let shopCategoryId = null;
+      if (categoryName) {
+        const known = shopCategories.find(
+          (row) => String(row.name || '').trim().toLowerCase() === categoryName.toLowerCase(),
+        );
+        if (known) {
+          shopCategoryId = known.id;
+        } else {
+          const created = await commerceService.createShopCategory({ name: categoryName });
+          shopCategoryId = created.id;
+          setShopCategories((prev) => [...prev, created]);
+        }
+      }
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        purchase_price: form.purchase_price,
+        price: form.price,
+        sku: form.sku.trim(),
+        shop_category: shopCategoryId,
+        image_urls: form.image_url ? [form.image_url] : [],
+        is_active: form.is_active,
+        low_stock_threshold: Number(form.low_stock_threshold) || 5,
+      };
+      if (!editingId) {
+        payload.stock = Number(form.stock) || 0;
+        payload.business = businessId;
+      }
+      let productId = editingId;
       if (editingId) {
         await commerceService.updateProduct(editingId, payload);
-        setMessage('Produit mis à jour');
       } else {
-        await commerceService.createProduct(payload);
-        setMessage('Produit créé — gérez les quantités dans Stock');
+        const created = await commerceService.createProduct(payload);
+        productId = created.id;
       }
+      const previous = editingId
+        ? (products.find((item) => item.id === editingId)?.variant_rows || [])
+          .filter((row) => String(row.color || '').trim())
+          .map((row) => row.id)
+        : [];
+      const kept = new Set();
+      for (const color of form.colors) {
+        const name = color.color.trim();
+        if (!name) continue;
+        const body = {
+          product: productId,
+          color: name,
+          size: '',
+          stock: Number(color.stock) || 0,
+          image_url: color.image_url || '',
+          is_active: true,
+        };
+        if (color.id) {
+          const { stock: _stock, ...colorUpdate } = body;
+          await commerceService.updateVariant(color.id, colorUpdate);
+          kept.add(color.id);
+        } else {
+          const createdColor = await commerceService.createVariant(body);
+          kept.add(createdColor.id);
+        }
+      }
+      for (const id of previous) {
+        if (!kept.has(id)) await commerceService.deleteVariant(id);
+      }
+      setMessage(editingId ? 'Produit mis à jour' : 'Produit créé');
       closeProductModal();
       load();
     } catch (err) {
@@ -351,12 +435,32 @@ export default function CommerceCatalog() {
               <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border rounded-lg px-3 py-2" placeholder="Ex: Chemise lin beige" />
             </div>
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
+              <input
+                value={form.category_name}
+                onChange={(e) => setForm({ ...form, category_name: e.target.value })}
+                className="w-full border rounded-lg px-3 py-2"
+                placeholder="Ex. Téléphones"
+                list="shop-categories"
+              />
+              <datalist id="shop-categories">
+                {shopCategories.map((row) => (
+                  <option key={row.id} value={row.name} />
+                ))}
+              </datalist>
+              <p className="text-[11px] text-gray-400 mt-1">Affichée sur la fiche à la place du tiret.</p>
+            </div>
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full border rounded-lg px-3 py-2" rows={3} placeholder="Détails visibles en boutique…" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prix (BIF) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prix d’achat (BIF) *</label>
+                <input required type="number" min="0" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} className="w-full border rounded-lg px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prix de vente (BIF) *</label>
                 <input required type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full border rounded-lg px-3 py-2" />
               </div>
               <div>
@@ -383,6 +487,61 @@ export default function CommerceCatalog() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Seuil stock faible</label>
                 <input type="number" min="0" value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })} className="w-full border rounded-lg px-3 py-2" />
               </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm font-medium text-gray-700">Couleurs</label>
+                <button
+                  type="button"
+                  onClick={() => setForm((prev) => ({
+                    ...prev,
+                    colors: [...prev.colors, { id: '', color: '', stock: '0', image_url: '' }],
+                  }))}
+                  className="text-sm font-semibold text-primary"
+                >
+                  Ajouter une couleur
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-400">Chaque couleur a sa photo et son stock. Le client les fait défiler sur la fiche.</p>
+              {form.colors.map((color, index) => (
+                <div key={color.id || `new-${index}`} className="grid grid-cols-[72px_1fr_88px_auto] gap-2 items-center">
+                  <label className="h-16 rounded-lg border border-dashed border-gray-300 bg-gray-50 overflow-hidden flex items-center justify-center cursor-pointer">
+                    {color.image_url
+                      ? <img src={color.image_url} alt="" className="w-full h-full object-cover" />
+                      : <ImageIcon className="w-5 h-5 text-gray-300" />}
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/jpg" className="hidden" onChange={(event) => pickColorImage(index, event)} />
+                  </label>
+                  <input
+                    value={color.color}
+                    onChange={(event) => setForm((prev) => ({
+                      ...prev,
+                      colors: prev.colors.map((row, at) => (at === index ? { ...row, color: event.target.value } : row)),
+                    }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder="Nom de la couleur"
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    value={color.stock}
+                    disabled={Boolean(color.id)}
+                    onChange={(event) => setForm((prev) => ({
+                      ...prev,
+                      colors: prev.colors.map((row, at) => (at === index ? { ...row, stock: event.target.value } : row)),
+                    }))}
+                    className="w-full border rounded-lg px-2 py-2 text-sm disabled:bg-gray-100"
+                    title={color.id ? 'Stock ajusté depuis la page Stock' : 'Stock'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, colors: prev.colors.filter((_, at) => at !== index) }))}
+                    className="text-red-600 p-1"
+                    aria-label="Retirer la couleur"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
             {editingId && (
               <label className="flex items-center gap-2 text-sm text-gray-700">

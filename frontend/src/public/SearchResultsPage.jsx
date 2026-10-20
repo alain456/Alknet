@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Building2, MapPin, Package, Search, Stethoscope, Briefcase, ArrowRight } from 'lucide-react';
 import api from '../shared/api';
+import { visitorPosition } from './visitorPlace';
 
 const GROUPS = [
   { key: 'businesses', label: 'Entreprises', icon: Building2 },
@@ -14,8 +15,11 @@ export default function SearchResultsPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get('q') || '';
   const location = params.get('location') || '';
+  const lat = params.get('lat') || '';
+  const lng = params.get('lng') || '';
   const [draftQ, setDraftQ] = useState(q);
   const [draftLocation, setDraftLocation] = useState(location);
+  const [near, setNear] = useState(lat && lng ? { lat, lng } : null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +29,22 @@ export default function SearchResultsPage() {
     setDraftQ(q);
     setDraftLocation(location);
   }, [q, location]);
+
+  useEffect(() => {
+    if (location.trim()) {
+      setNear(null);
+      return undefined;
+    }
+    if (lat && lng) {
+      setNear({ lat, lng });
+      return undefined;
+    }
+    let cancelled = false;
+    visitorPosition().then((point) => {
+      if (!cancelled && point) setNear(point);
+    });
+    return () => { cancelled = true; };
+  }, [location, lat, lng]);
 
   useEffect(() => {
     if (!q.trim() && !location.trim()) {
@@ -37,18 +57,30 @@ export default function SearchResultsPage() {
     const qs = new URLSearchParams();
     if (q.trim()) qs.set('q', q.trim());
     if (location.trim()) qs.set('location', location.trim());
+    else if (near?.lat != null && near?.lng != null) {
+      qs.set('lat', String(near.lat));
+      qs.set('lng', String(near.lng));
+    }
     api.get(`businesses/search/?${qs.toString()}`)
       .then((payload) => { if (!cancelled) setData(payload); })
       .catch((err) => { if (!cancelled) setError(err.message || 'Recherche impossible'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [q, location]);
+  }, [q, location, near]);
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     const next = new URLSearchParams();
     if (draftQ.trim()) next.set('q', draftQ.trim());
-    if (draftLocation.trim()) next.set('location', draftLocation.trim());
+    if (draftLocation.trim()) {
+      next.set('location', draftLocation.trim());
+    } else {
+      const point = await visitorPosition();
+      if (point) {
+        next.set('lat', String(point.lat));
+        next.set('lng', String(point.lng));
+      }
+    }
     setTab('all');
     setParams(next);
   };
@@ -116,6 +148,9 @@ export default function SearchResultsPage() {
           ))}
           {data?.location && (
             <span className="text-sm text-[#4A6FA3] ml-1">Lieu : {data.location}</span>
+          )}
+          {!data?.location && data?.near && (
+            <span className="text-sm text-[#4A6FA3] ml-1">Classé selon votre position</span>
           )}
         </div>
 

@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org",
+    "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org https://images.unsplash.com",
     "font-src 'self' data:",
     "connect-src 'self' ws: wss: http: https:",
     "object-src 'none'",
@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       host: true,
+      allowedHosts: true,
       headers: { 'Content-Security-Policy': csp },
       proxy: {
         '/api': {
@@ -46,7 +47,7 @@ export default defineConfig(({ mode }) => {
           "default-src 'self'",
           "script-src 'self'",
           "style-src 'self' 'unsafe-inline'",
-          "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org",
+          "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org https://images.unsplash.com",
           "font-src 'self' data:",
           "connect-src 'self'",
           "object-src 'none'",

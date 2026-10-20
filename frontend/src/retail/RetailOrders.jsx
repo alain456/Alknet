@@ -189,7 +189,8 @@ function OrderDetail({ id, clientMode }) {
   const canMarkPaid = !clientMode
     && order.payment_status !== 'PAID'
     && ['SUBMITTED', 'PROCESSING', 'CLARIFICATION_REQUESTED', 'ACCEPTED'].includes(order.status);
-  const canClearPaid = !clientMode && order.payment_status === 'PAID' && order.status !== 'ACCEPTED';
+  const canDeliver = !clientMode && order.status === 'ACCEPTED';
+  const canClearPaid = !clientMode && order.payment_status === 'PAID' && !['ACCEPTED', 'COMPLETED'].includes(order.status);
   const proforma = order.proforma;
 
   return (
@@ -228,6 +229,16 @@ function OrderDetail({ id, clientMode }) {
               <button type="button" onClick={() => setModal('clarify')} className="px-4 py-2 border border-border rounded-xl font-semibold">Demander des précisions</button>
               <button type="button" onClick={() => setModal('reject')} className="px-4 py-2 bg-red-600 text-white rounded-xl font-semibold">Refuser</button>
             </>
+          )}
+          {canDeliver && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(() => retailService.completeOrder(id), 'Commande marquée livrée. Le stock réel a été déduit.')}
+              className="px-4 py-2 bg-primary text-white rounded-xl font-semibold disabled:opacity-40"
+            >
+              Marquer livrée
+            </button>
           )}
           {canMarkPaid && (
             <button type="button" onClick={() => setModal('paid')} className="px-4 py-2 bg-teal-700 text-white rounded-xl font-semibold">

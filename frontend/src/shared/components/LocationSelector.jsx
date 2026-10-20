@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Navigation, Globe, CheckCircle2, Link2, HelpCircle } from 'lucide-react';
+import { extractMapCoordinates, looksLikeMapsLink } from '../mapLink';
 
 const FALLBACK_BURUNDI_LOCATIONS = {
   "Bujumbura Mairie": {
@@ -51,6 +52,7 @@ export default function LocationSelector({
   // Smart Extractor Input
   const [pastedMapLink, setPastedMapLink] = useState('');
   const [extractSuccess, setExtractSuccess] = useState(false);
+  const [extractError, setExtractError] = useState('');
 
   useEffect(() => {
     const fetchTree = async () => {
@@ -233,42 +235,46 @@ export default function LocationSelector({
     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
   };
 
-  // Smart Extractor logic: extracts coordinates from pasted URL or string
-  const handleSmartPaste = (text) => {
-    setPastedMapLink(text);
-    if (!text) return;
-
-    // Pattern 1: URL format like https://www.google.com/maps/place/.../@-3.3791592,29.3746811,17z...
-    const urlMatch = text.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    // Pattern 2: Direct coordinates like -3.3791592, 29.3746811 or -3.3791592 29.3746811
-    const coordMatch = text.match(/(-?\d+\.\d+)[\s,]+(-?\d+\.\d+)/);
-
-    let foundLat = null;
-    let foundLng = null;
-
-    if (urlMatch) {
-      foundLat = urlMatch[1];
-      foundLng = urlMatch[2];
-    } else if (coordMatch) {
-      foundLat = coordMatch[1];
-      foundLng = coordMatch[2];
-    }
-
-    if (foundLat && foundLng) {
-      onChange({
-        province,
-        commune,
-        zone,
-        quartier,
-        avenue,
-        address,
-        latitude: foundLat,
-        longitude: foundLng
-      });
-      setExtractSuccess(true);
-      setTimeout(() => setExtractSuccess(false), 4000);
-    }
+  const applyCoordinates = (latitude, longitude) => {
+    onChange({
+      province,
+      commune,
+      zone,
+      quartier,
+      avenue,
+      address,
+      latitude,
+      longitude,
+    });
+    setExtractError('');
+    setExtractSuccess(true);
+    setTimeout(() => setExtractSuccess(false), 4000);
   };
+
+  useEffect(() => {
+    const text = pastedMapLink.trim();
+    if (!text) return undefined;
+    const local = extractMapCoordinates(text);
+    if (local) {
+      applyCoordinates(local.latitude, local.longitude);
+      return undefined;
+    }
+    if (!looksLikeMapsLink(text)) return undefined;
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/v1/locations/maps-link/?url=${encodeURIComponent(text)}`);
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.latitude || !body.longitude) {
+          setExtractError(body.detail || 'Aucune coordonnée dans ce lien.');
+          return;
+        }
+        applyCoordinates(String(body.latitude), String(body.longitude));
+      } catch {
+        setExtractError('Ce lien court n’a pas pu être lu. Collez l’adresse complète de Google Maps.');
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [pastedMapLink]);
 
   return (
     <div className="space-y-4 bg-paper/60 dark:bg-black/20 p-4 border border-border dark:border-white/10 rounded-xl">
@@ -455,9 +461,12 @@ export default function LocationSelector({
           type="text"
           placeholder="Collez ici l'URL complète Google Maps ou les coordonnées (ex: https://www.google.com/maps/.../@-3.3791592,29.3746811...)"
           value={pastedMapLink}
-          onChange={(e) => handleSmartPaste(e.target.value)}
+          onChange={(e) => { setExtractError(''); setPastedMapLink(e.target.value); }}
           className="w-full px-3 py-1.5 text-xs bg-white dark:bg-black/40 border border-blue-200 dark:border-blue-800 rounded-md text-ink dark:text-white outline-none focus:ring-1 focus:ring-blue-500 font-mono"
         />
+        {extractError && (
+          <p className="text-[11px] font-medium text-alert">{extractError}</p>
+        )}
         <p className="text-[10px] text-blue-700/80 dark:text-blue-300/70 flex items-center gap-1">
           <HelpCircle className="w-3 h-3 shrink-0" />
           Astuce : Copiez l'adresse web (URL) depuis Google Maps et collez-la ci-dessus. La latitude et la longitude s'extraient instantanément !

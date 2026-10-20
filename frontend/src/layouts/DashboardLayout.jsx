@@ -3,12 +3,14 @@ import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-d
 import { 
   LayoutDashboard, Compass, MessageSquare, Heart, 
   Calendar, ShoppingBag, CreditCard, Bell, User, 
-  Crown, Settings, Menu, X, Search, LogOut, FlaskConical,
+  Crown, Settings, Menu, X, Search, LogOut, FlaskConical, GraduationCap,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canAccessZone, ZONE_ACCESS } from '../auth/roleAccess';
 import api from '../shared/api';
 import ThemeToggle from '../shared/components/ThemeToggle';
+import PersonAvatar from '../shared/components/PersonAvatar';
+import SkipLink from '../shared/components/SkipLink';
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
@@ -46,21 +48,22 @@ export default function DashboardLayout() {
   }
 
   const navItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Explore', icon: Compass, path: '/dashboard/explore' },
+    { name: 'Tableau de bord', icon: LayoutDashboard, path: '/dashboard' },
+    { name: 'Explorer', icon: Compass, path: '/dashboard/explore' },
     { name: 'Messages', icon: MessageSquare, path: '/dashboard/messages' },
-    { name: 'Favorites', icon: Heart, path: '/dashboard/favorites' },
-    { name: 'Bookings', icon: Calendar, path: '/dashboard/bookings' },
-    { name: 'Lab results', icon: FlaskConical, path: '/dashboard/lab-results' },
-    { name: 'Orders', icon: ShoppingBag, path: '/dashboard/orders' },
-    { name: 'Payments', icon: CreditCard, path: '/dashboard/payments' },
+    { name: 'Favoris', icon: Heart, path: '/dashboard/favorites' },
+    { name: 'Rendez-vous', icon: Calendar, path: '/dashboard/bookings' },
+    { name: 'Inscriptions', icon: GraduationCap, path: '/dashboard/inscriptions' },
+    { name: 'Résultats de labo', icon: FlaskConical, path: '/dashboard/lab-results' },
+    { name: 'Commandes', icon: ShoppingBag, path: '/dashboard/orders' },
+    { name: 'Paiements', icon: CreditCard, path: '/dashboard/payments' },
     { name: 'Notifications', icon: Bell, path: '/dashboard/notifications' },
   ];
 
   const bottomNavItems = [
-    { name: 'Profile', icon: User, path: '/dashboard/profile' },
-    { name: 'Subscription', icon: Crown, path: '/dashboard/subscription' },
-    { name: 'Settings', icon: Settings, path: '/dashboard/settings' },
+    { name: 'Profil', icon: User, path: '/dashboard/profile' },
+    { name: 'Abonnement', icon: Crown, path: '/dashboard/subscription' },
+    { name: 'Paramètres', icon: Settings, path: '/dashboard/settings' },
   ];
 
   const closeSidebar = () => setIsSidebarOpen(false);
@@ -71,6 +74,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">
+      <SkipLink />
       
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -124,7 +128,7 @@ export default function DashboardLayout() {
             );
           })}
 
-          <div className="mt-8 mb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Account</div>
+          <div className="mt-8 mb-2 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Compte</div>
           
           {bottomNavItems.map((item) => {
             const isActive = location.pathname === item.path;
@@ -152,13 +156,13 @@ export default function DashboardLayout() {
             className="flex items-center gap-3 px-3 py-2 w-full rounded-md font-medium transition cursor-pointer"
           >
             <LogOut className="w-5 h-5" />
-            Log out
+            Déconnexion
           </button>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <main id="contenu" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Topbar */}
         <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 sm:px-6 lg:px-8 shrink-0">
           <div className="flex items-center gap-4 flex-1">
@@ -192,9 +196,11 @@ export default function DashboardLayout() {
                 </span>
               )}
             </Link>
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm cursor-pointer shadow-sm border-2 border-white dark:border-gray-800">
-              {user?.first_name ? user.first_name[0].toUpperCase() : 'U'}
-            </div>
+            <PersonAvatar
+              src={user?.avatar}
+              name={`${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.email}
+              className="h-8 w-8 text-sm border-2 border-white"
+            />
           </div>
         </header>
 

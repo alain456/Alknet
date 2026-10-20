@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MapPin, Filter, HeartPulse, Phone, Clock, Stethoscope, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../shared/api';
+import { categoryKeyFromLabels, getBusinessRecordCategoryKey } from '../auth/roleAccess';
 
 const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical', 'pharmac', 'laboratoire'];
 
@@ -15,15 +16,44 @@ function isSanteBusiness(b) {
   return labels.some((label) => HEALTH_TERMS.some((term) => label.includes(term)));
 }
 
-function pharmacyPath(category) {
-  const name = String(category || '').toLowerCase();
-  if (!name.includes('pharmac')) return '';
-  if (name.includes('gros')) return 'catalog';
-  return 'pharmacy';
+function healthKind(business) {
+  const key = getBusinessRecordCategoryKey(business);
+  if (key === 'wholesale') return 'wholesale';
+  if (key === 'retail_pharmacy') return 'retail';
+  const name = String(business.primary_category_name || business.category_name || '').toLowerCase();
+  if (name.includes('laboratoire') || name.includes('labo')) return 'lab';
+  return 'hospital';
 }
+
+function isSectorLabel(name) {
+  const key = categoryKeyFromLabels(name, '', '');
+  return key === 'wholesale' || key === 'retail_pharmacy' || key === 'hospital';
+}
+
+const KIND_LABEL = {
+  hospital: 'Hôpital',
+  retail: 'Pharmacie de détail',
+  wholesale: 'Pharmacie de gros',
+  lab: 'Laboratoire',
+};
+
+const KIND_PATH = {
+  hospital: (id) => `/hospitals/${id}`,
+  retail: (id) => `/businesses/${id}/pharmacy`,
+  wholesale: (id) => `/businesses/${id}/catalog`,
+  lab: (id) => `/hospitals/${id}`,
+};
+
+const KIND_CTA = {
+  hospital: 'Voir l’hôpital',
+  retail: 'Voir la pharmacie de détail',
+  wholesale: 'Voir la pharmacie de gros',
+  lab: 'Voir le laboratoire',
+};
 
 export default function HospitalDirectory() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [kindFilter, setKindFilter] = useState('all');
   const [selectedSpecialty, setSelectedSpecialty] = useState('All');
   const [selectedCity, setSelectedCity] = useState('All');
   const [hospitals, setHospitals] = useState([]);
@@ -41,14 +71,14 @@ export default function HospitalDirectory() {
           name: h.name,
           logo: h.logo || null,
           category: { name: h.primary_category_name || h.category_name || 'Santé' },
-          pharmacyPath: pharmacyPath(h.primary_category_name || h.category_name),
+          kind: healthKind(h),
           address: h.address || h.province || h.commune || 'Burundi',
           city: h.commune || h.province || 'Burundi',
           description: h.description || h.short_description || 'Établissement de santé.',
           phone: h.phone || 'Non renseigné',
           hours: h.opening_hours ? 'Voir horaires' : 'Contactez l\'établissement',
           hasEmergency: !!h.emergency_available || !!h.extra_attributes?.is_24_7,
-          specialties: (h.categories_detail || []).map((c) => c.name).filter(Boolean),
+          specialties: (h.categories_detail || []).map((c) => c.name).filter((name) => name && !isSectorLabel(name)),
           insurances: Array.isArray(h.accepted_insurances)
             ? h.accepted_insurances
             : (h.extra_attributes?.insurances || []),
@@ -78,15 +108,41 @@ export default function HospitalDirectory() {
     const matchesSearch = h.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCity = selectedCity === 'All' || h.city === selectedCity || h.address.includes(selectedCity);
     const matchesSpecialty = selectedSpecialty === 'All' || h.specialties.includes(selectedSpecialty);
-    return matchesSearch && matchesCity && matchesSpecialty;
+    const matchesKind = kindFilter === 'all' || h.kind === kindFilter;
+    return matchesSearch && matchesCity && matchesSpecialty && matchesKind;
   });
 
+  const kindCounts = {
+    hospital: hospitals.filter((h) => h.kind === 'hospital').length,
+    retail: hospitals.filter((h) => h.kind === 'retail').length,
+    wholesale: hospitals.filter((h) => h.kind === 'wholesale').length,
+  };
+  const kindChoices = [
+    { id: 'hospital', label: 'Hôpitaux' },
+    { id: 'retail', label: 'Pharmacies de détail' },
+    { id: 'wholesale', label: 'Pharmacies de gros' },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-teal-700 text-white border-b border-teal-900/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <h1 className="text-4xl font-bold text-white mb-3">Santé</h1>
-          <p className="text-teal-100 text-lg">Hôpitaux, cliniques, laboratoires et pharmacies enregistrés sur Isoko Hub</p>
+    <div className="min-h-screen bg-surface">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+        <h1 className="text-4xl font-extrabold text-ink">Santé</h1>
+        <p className="mt-2 text-ink-muted">Choisissez un hôpital, une pharmacie de détail ou une pharmacie de gros.</p>
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {kindChoices.map((choice) => {
+            const active = kindFilter === choice.id;
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                onClick={() => setKindFilter(active ? 'all' : choice.id)}
+                className={`rounded-2xl px-5 py-4 text-left ring-1 ${active ? 'bg-accent text-ink ring-accent' : 'bg-white text-ink ring-border'}`}
+              >
+                <p className="text-sm font-semibold">{choice.label}</p>
+                <p className={`mt-1 text-2xl font-extrabold ${active ? 'text-ink' : 'text-ink'}`}>{kindCounts[choice.id]}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -105,7 +161,7 @@ export default function HospitalDirectory() {
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input
                     type="text"
-                    placeholder="Nom de l'hôpital..."
+                    placeholder="Nom de l'établissement..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-600 focus:border-transparent outline-none"
@@ -141,7 +197,7 @@ export default function HospitalDirectory() {
 
               <button
                 type="button"
-                onClick={() => { setSearchTerm(''); setSelectedSpecialty('All'); setSelectedCity('All'); }}
+                onClick={() => { setSearchTerm(''); setSelectedSpecialty('All'); setSelectedCity('All'); setKindFilter('all'); }}
                 className="w-full text-teal-600 hover:text-teal-800 font-medium py-2 text-sm"
               >
                 Réinitialiser les filtres
@@ -163,19 +219,21 @@ export default function HospitalDirectory() {
                 ))
               ) : filteredHospitals.map((hospital) => (
                 <div key={hospital.id} className="bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md transition p-6 flex flex-col md:flex-row gap-6">
-                  <div className="w-24 h-24 rounded-xl bg-teal-50 flex items-center justify-center shrink-0 border border-teal-100 overflow-hidden">
+                  <div className="w-24 h-24 rounded-xl bg-surface flex items-center justify-center shrink-0 ring-1 ring-border overflow-hidden">
                     {hospital.logo ? (
-                      <img src={hospital.logo} alt={hospital.name} className="w-full h-full object-cover" />
+                      <img src={hospital.logo} alt="" className="w-full h-full object-contain p-2" />
                     ) : (
-                      <HeartPulse className="text-teal-600 w-10 h-10" />
+                      <HeartPulse className="text-primary w-10 h-10" />
                     )}
                   </div>
 
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="font-bold text-gray-900 text-xl">{hospital.name}</h3>
-                        <p className="text-sm text-gray-500 mt-1">{hospital.category.name}</p>
+                        <h3 className="font-bold text-ink text-xl">{hospital.name}</h3>
+                        <span className="mt-2 inline-flex px-3 py-1 rounded-full bg-accent text-ink text-xs font-bold">
+                          {KIND_LABEL[hospital.kind]}
+                        </span>
                       </div>
                       {hospital.hasEmergency && (
                         <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-md border border-red-200">Urgences</span>
@@ -234,10 +292,10 @@ export default function HospitalDirectory() {
                         Historique
                       </Link>
                       <Link
-                        to={hospital.pharmacyPath ? `/businesses/${hospital.id}/${hospital.pharmacyPath}` : `/hospitals/${hospital.id}`}
-                        className="bg-teal-600 hover:bg-teal-700 text-white font-medium py-2 px-6 rounded-lg transition flex items-center gap-2"
+                        to={KIND_PATH[hospital.kind](hospital.id)}
+                        className="bg-accent text-ink font-bold py-2 px-6 rounded-xl transition flex items-center gap-2"
                       >
-                        {hospital.pharmacyPath ? 'Voir la pharmacie' : 'Voir le profil et Médecins'}
+                        {KIND_CTA[hospital.kind]}
                       </Link>
                     </div>
                   </div>
@@ -248,7 +306,7 @@ export default function HospitalDirectory() {
             {!loading && filteredHospitals.length === 0 && (
               <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
                 <HeartPulse className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-lg">Aucun hôpital trouvé avec ces critères</p>
+                <p className="text-ink-muted text-lg">Aucun établissement trouvé avec ces critères</p>
               </div>
             )}
           </div>

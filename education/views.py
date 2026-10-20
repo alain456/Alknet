@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 
 from businesses.subscription import subscription_access_q
 
+from .audit import audit_education
 from .models import EducationProfile, EducationProgram, EducationUnit, PublicationStatus
 from .throttling import EducationPublicThrottle
 from .school_tracks import remember_school_tracks
@@ -37,6 +38,7 @@ from .permission_catalog import (
     STRUCTURE_MANAGE,
     education_perm,
 )
+from .rls import allow_write
 from .serializers import (
     EducationProfileListSerializer,
     EducationProfileSerializer,
@@ -47,14 +49,14 @@ from .serializers import (
 )
 
 
-def require_education_tenant(user):
+def require_education_tenant(user, request=None):
     """Établissement Éducation du tenant, sinon refus explicite.
 
     Un compte sans établissement Éducation — ou rattaché à plusieurs — ne peut
     pas créer de contenu : deviner l'établissement rendrait l'isolation
     silencieusement fausse.
     """
-    business = education_tenant_business(user)
+    business = education_tenant_business(user, request)
     if not business:
         raise PermissionDenied(
             "Aucun établissement Éducation unique n'est rattaché à ce compte."
@@ -124,6 +126,25 @@ class EducationProfileViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
                 queryset = queryset.filter(
                     establishment_type=self.request.query_params['type']
                 )
+            # University-specific filters
+            if self.request.query_params.get('accreditation_level'):
+                queryset = queryset.filter(
+                    accreditation_level=self.request.query_params['accreditation_level']
+                )
+            if self.request.query_params.get('has_research_centers') == 'true':
+                queryset = queryset.filter(has_research_centers=True)
+            if self.request.query_params.get('founding_year_before'):
+                try:
+                    year = int(self.request.query_params['founding_year_before'])
+                    queryset = queryset.filter(founding_year__lte=year)
+                except ValueError:
+                    pass
+            if self.request.query_params.get('founding_year_after'):
+                try:
+                    year = int(self.request.query_params['founding_year_after'])
+                    queryset = queryset.filter(founding_year__gte=year)
+                except ValueError:
+                    pass
             for param, field in (
                 ('province', 'business__province'),
                 ('commune', 'business__commune'),
@@ -152,13 +173,21 @@ class EducationProfileViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
         return EducationProfile.objects.filter(business_id__in=ids).first()
 
     def perform_create(self, serializer):
-        serializer.save(
-            business=require_education_tenant(self.request.user),
+        profile = serializer.save(
+            business=require_education_tenant(self.request.user, self.request),
             publication_status=PublicationStatus.DRAFT,
+        )
+        audit_education(
+            'EDUCATION_PROFILE_CREATE', profile.business,
+            f'education.profile:{profile.pk}', user=self.request.user, request=self.request,
         )
 
     def perform_update(self, serializer):
         serializer.save()
+        audit_education(
+            'EDUCATION_PROFILE_UPDATE', serializer.instance.business,
+            f'education.profile:{serializer.instance.pk}', user=self.request.user, request=self.request,
+        )
 
     def get_object(self):
         """Accepte l'id de la fiche ou l'id Business, sans requête 404 intermédiaire."""
@@ -178,7 +207,11 @@ class EducationProfileViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        self._assert_own(kwargs.get('pk'))
+        profile = self._assert_own(kwargs.get('pk'))
+        audit_education(
+            'EDUCATION_PROFILE_DELETE', profile.business,
+            f'education.profile:{profile.pk}', user=request.user, request=request,
+        )
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], url_path='by-business/(?P<business_id>[^/.]+)')
@@ -249,7 +282,7 @@ class EducationProfileViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
                 {'detail': "Aucune fiche Éducation pour cet établissement."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        from .enrollment import ENROLLMENT_MESSAGE_PLACEHOLDERS, school_message_defaults
+        from .enrollment import ENROLLMENT_MESSAGE_PLACEHOLDERS, message_defaults
         if request.method == 'PATCH':
             self._assert_own(profile.id)
             if not education_perm(request.user, profile.business, PROFILE_UPDATE):
@@ -267,7 +300,8 @@ class EducationProfileViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
                     setattr(profile, field, str(request.data.get(key) or ''))
                     update_fields.append(field)
             profile.save(update_fields=update_fields)
-        defaults = school_message_defaults()
+        defaults = message_defaults(profile.business)
+        audience = getattr(getattr(profile.business, 'primary_category', None), 'slug', '')
         return Response({
             'received_message': profile.enrollment_received_message or '',
             'refusal_message': profile.enrollment_refusal_message or '',
@@ -276,6 +310,7 @@ class EducationProfileViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
             'default_refusal_message': defaults['refusal'],
             'default_accepted_message': defaults['accepted'],
             'placeholders': ENROLLMENT_MESSAGE_PLACEHOLDERS,
+            'audience': audience,
         })
 
     @action(detail=False, methods=['post'], url_path='submit-for-review')
@@ -302,7 +337,14 @@ class EducationUnitViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
         return [HasEducationPermission()]
 
     def get_queryset(self):
-        queryset = EducationUnit.objects.select_related('business')
+        from .scope import faculty_scope_for_user, restrict_units
+        queryset = EducationUnit.objects.select_related('business', 'parent')
+        if self.request.query_params.get('mine') == '1' and getattr(self.request.user, 'is_authenticated', False):
+            if education_business_ids(self.request.user):
+                return restrict_units(
+                    scope_to_education_tenant(self.request.user, queryset),
+                    faculty_scope_for_user(self.request.user),
+                )
         if self.action in ('list', 'retrieve'):
             published = EducationProfile.objects.filter(
                 publication_status=PublicationStatus.PUBLISHED,
@@ -314,20 +356,33 @@ class EducationUnitViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
             if self.request.query_params.get('business'):
                 queryset = queryset.filter(business_id=self.request.query_params['business'])
             return queryset
-        return scope_to_education_tenant(self.request.user, queryset)
+        return restrict_units(
+            scope_to_education_tenant(self.request.user, queryset),
+            faculty_scope_for_user(self.request.user),
+        )
 
     def perform_create(self, serializer):
         business = require_education_tenant(self.request.user)
         parent = serializer.validated_data.get('parent')
         if parent and parent.business_id != business.id:
             raise ValidationError({'parent': 'Cette unité appartient à un autre établissement.'})
-        serializer.save(business=business)
+        allow_write(business.id)
+        unit = serializer.save(business=business)
+        audit_education(
+            'EDUCATION_UNIT_CREATE', unit.business, f'education.unit:{unit.pk}',
+            user=self.request.user, request=self.request, name=unit.name,
+        )
 
     def perform_update(self, serializer):
         parent = serializer.validated_data.get('parent', serializer.instance.parent)
         if parent and parent.business_id != serializer.instance.business_id:
             raise ValidationError({'parent': 'Cette unité appartient à un autre établissement.'})
+        allow_write(serializer.instance.business_id)
         serializer.save()
+        audit_education(
+            'EDUCATION_UNIT_UPDATE', serializer.instance.business,
+            f'education.unit:{serializer.instance.pk}', user=self.request.user, request=self.request,
+        )
 
     def _assert_own(self, pk):
         return self.owned_object(EducationUnit, pk)
@@ -337,7 +392,11 @@ class EducationUnitViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        self._assert_own(kwargs.get('pk'))
+        unit = self._assert_own(kwargs.get('pk'))
+        audit_education(
+            'EDUCATION_UNIT_DELETE', unit.business, f'education.unit:{unit.pk}',
+            user=request.user, request=request,
+        )
         return super().destroy(request, *args, **kwargs)
 
 
@@ -408,17 +467,23 @@ class EducationProgramViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if self.action in ('list', 'retrieve') and self.request.query_params.get('mine') == '1':
             if self.request.user.is_authenticated and education_business_ids(self.request.user):
-                return scope_to_education_tenant(
+                from .scope import faculty_scope_for_user, restrict_programs
+                queryset = scope_to_education_tenant(
                     self.request.user,
                     EducationProgram.objects.select_related(
                         'business', 'unit', 'unit__parent',
                     ).prefetch_related('fees', 'campaigns'),
                 )
+                return restrict_programs(queryset, faculty_scope_for_user(self.request.user))
         if self.action in ('list', 'retrieve'):
             return public_programs_queryset(self.request.query_params)
-        return scope_to_education_tenant(
-            self.request.user,
-            EducationProgram.objects.select_related('business', 'unit', 'unit__parent'),
+        from .scope import faculty_scope_for_user, restrict_programs
+        return restrict_programs(
+            scope_to_education_tenant(
+                self.request.user,
+                EducationProgram.objects.select_related('business', 'unit', 'unit__parent'),
+            ),
+            faculty_scope_for_user(self.request.user),
         )
 
     @action(detail=False, methods=['get'])
@@ -436,21 +501,54 @@ class EducationProgramViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
             {'value': value, 'label': level_labels.get(value, value)}
             for value in sorted({v for v in queryset.values_list('level', flat=True) if v})
         ]
+        degree_type_labels = dict(EducationProgram.DEGREE_TYPE_CHOICES)
+        degree_types = [
+            {'value': value, 'label': degree_type_labels.get(value, value)}
+            for value in sorted({v for v in queryset.values_list('degree_type', flat=True) if v})
+        ]
+        selectivity_labels = dict(EducationProgram.ADMISSION_SELECTIVITY_CHOICES)
+        selectivities = [
+            {'value': value, 'label': selectivity_labels.get(value, value)}
+            for value in sorted({v for v in queryset.values_list('admission_selectivity', flat=True) if v})
+        ]
+        languages = sorted({
+            lang.strip()
+            for langs in queryset.exclude(language_of_instruction='').values_list('language_of_instruction', flat=True)
+            for lang in langs.split(',')
+            if lang.strip()
+        })
         faculties = sorted({
             parent or name
             for name, parent in queryset.exclude(unit=None).values_list('unit__name', 'unit__parent__name')
             if parent or name
         })
-        return Response({'domains': domains, 'levels': levels, 'faculties': faculties})
+        return Response({
+            'domains': domains,
+            'levels': levels,
+            'degree_types': degree_types,
+            'admission_selectivities': selectivities,
+            'languages': languages,
+            'faculties': faculties,
+        })
 
     def perform_create(self, serializer):
         business = require_education_tenant(self.request.user)
         _reject_foreign_unit(serializer, business)
-        serializer.save(business=business)
+        allow_write(business.id)
+        program = serializer.save(business=business)
+        audit_education(
+            'EDUCATION_PROGRAM_CREATE', program.business, f'education.program:{program.pk}',
+            user=self.request.user, request=self.request, title=program.title,
+        )
 
     def perform_update(self, serializer):
         _reject_foreign_unit(serializer, serializer.instance.business)
+        allow_write(serializer.instance.business_id)
         serializer.save()
+        audit_education(
+            'EDUCATION_PROGRAM_UPDATE', serializer.instance.business,
+            f'education.program:{serializer.instance.pk}', user=self.request.user, request=self.request,
+        )
 
     def _assert_own(self, pk):
         return self.owned_object(EducationProgram, pk)
@@ -460,7 +558,11 @@ class EducationProgramViewSet(EducationTenantOwnedMixin, viewsets.ModelViewSet):
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
-        self._assert_own(kwargs.get('pk'))
+        program = self._assert_own(kwargs.get('pk'))
+        audit_education(
+            'EDUCATION_PROGRAM_DELETE', program.business, f'education.program:{program.pk}',
+            user=request.user, request=request,
+        )
         return super().destroy(request, *args, **kwargs)
 
 

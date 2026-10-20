@@ -157,6 +157,49 @@ export const EDUCATION_ENUM_FALLBACK = {
 let cache = null;
 let inflight = null;
 
+const UNIVERSITY_LEVEL_ORDER = ['LICENCE', 'MASTER', 'DOCTORATE', 'CERTIFICATE'];
+const UNIVERSITY_LEVEL_LABEL = {
+  LICENCE: 'Baccalauréat',
+  MASTER: 'Master',
+  DOCTORATE: 'Doctorat',
+  CERTIFICATE: 'Formation professionnelle',
+};
+
+/** Cycles d’université : les valeurs viennent des choix du modèle, les libellés du cursus. */
+export function universityCycles(enums = EDUCATION_ENUM_FALLBACK) {
+  const levels = enums?.levels || EDUCATION_ENUM_FALLBACK.levels;
+  return UNIVERSITY_LEVEL_ORDER.map((value) => {
+    const row = levels.find((item) => item.value === value);
+    if (!row) return null;
+    return { value, label: UNIVERSITY_LEVEL_LABEL[value] || row.label };
+  }).filter(Boolean);
+}
+
+export function universityLevelLabel(value, fallback = '') {
+  return UNIVERSITY_LEVEL_LABEL[value] || fallback || value || '';
+}
+
+function foldLabel(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+/** Un seul intitulé : le cycle n’est pas répété s’il est déjà dans le titre. */
+export function programHeadline(title, cycleLabel) {
+  const name = String(title || '').trim();
+  const cycle = String(cycleLabel || '').trim();
+  if (!name) return cycle || 'Programme';
+  if (!cycle) return name;
+  const foldedName = foldLabel(name);
+  const foldedCycle = foldLabel(cycle);
+  const stem = foldedCycle.slice(0, Math.min(6, foldedCycle.length));
+  if (foldedName.includes(foldedCycle) || (stem && foldedName.startsWith(stem))) return name;
+  return `${cycle} — ${name}`;
+}
+
 /** Chargé une seule fois : les choix changent au déploiement, pas à la volée. */
 export function loadEducationEnums() {
   if (cache) return Promise.resolve(cache);

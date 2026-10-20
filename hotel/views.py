@@ -1379,6 +1379,16 @@ def dashboard_stats(request):
         return round(((cur - prev) / prev) * 100, 1)
 
     revenue_7d_change_pct = _pct_change(revenue_7d, revenue_prev_7d)
+    guests_total = Guest.objects.filter(hotel=hotel).count()
+    guests_new_30d = Guest.objects.filter(
+        hotel=hotel, created_at__date__gte=month_start,
+    ).count()
+    checked_in_today = Stay.objects.filter(
+        hotel=hotel, actual_check_in__date=today,
+    ).exclude(status='CANCELLED').count()
+    checked_out_today = Stay.objects.filter(
+        hotel=hotel, actual_check_out__date=today,
+    ).count()
 
     from .client_messages import client_message_pending, last_client_message
     msg_candidates = (
@@ -1467,6 +1477,10 @@ def dashboard_stats(request):
         'pending_confirm': pending_confirm,
         'pending_payment': pending_payment,
         'occupancy_trend': occupancy_trend,
+        'guests_total': guests_total,
+        'guests_new_30d': guests_new_30d,
+        'checked_in_today': checked_in_today,
+        'checked_out_today': checked_out_today,
         'client_messages_pending': client_messages_pending_count,
         'client_messages': client_messages_pending_list,
         'reschedule_pending': reschedule_pending_count,
@@ -1539,7 +1553,8 @@ def _hotel_cover_and_gallery(business, profile=None, room_types=None):
             if len(gallery) >= 8:
                 break
 
-    logo = (getattr(business, 'logo', None) or '').strip()
+    from profiles.images import display_business_logo
+    logo = display_business_logo(business)
     cover = gallery[0] if gallery else logo
     if logo and logo not in gallery and not gallery:
         gallery = [logo]
@@ -2003,11 +2018,12 @@ def public_hotels(request):
         if not from_price and types:
             from_price = float(min((t.base_price for t in types), default=0) or 0)
         cover, gallery = _hotel_cover_and_gallery(b, profile, types)
+        from profiles.images import display_business_logo
         hotels.append({
             'id': str(b.id),
             'name': b.name,
             'trade_name': getattr(profile, 'trade_name', '') if profile else '',
-            'logo': b.logo or '',
+            'logo': display_business_logo(b),
             'cover_photo': cover,
             'gallery': gallery,
             'description': (b.description or '')[:280],
@@ -2051,12 +2067,13 @@ def public_hotel_detail(request, hotel_id):
     amenities = _public_amenities(profile, extras)
     display_stars = profile.display_stars if profile else extras.get('stars_rating')
     cover, gallery = _hotel_cover_and_gallery(b, profile, list(types))
+    from profiles.images import display_business_logo
     return Response({
         'id': str(b.id),
         'name': b.name,
         'trade_name': getattr(profile, 'trade_name', '') if profile else '',
         'establishment_type': getattr(profile, 'establishment_type', 'HOTEL') if profile else 'HOTEL',
-        'logo': b.logo or '',
+        'logo': display_business_logo(b),
         'cover_photo': cover,
         'gallery': gallery,
         'description': b.description or '',
@@ -2147,7 +2164,11 @@ def public_book(request, hotel_id):
         user=auth_user,
         first_name=first,
         last_name=last,
-        phone=data.get('phone') or (getattr(auth_user, 'phone_number', None) or ''),
+        phone=(
+            (data.get('phone') or '').strip()
+            or (data.get('payer_phone') or '').strip()
+            or (getattr(auth_user, 'phone_number', None) or '')
+        ),
         email=email,
         notes=data.get('notes') or '',
     )

@@ -53,13 +53,34 @@ def education_business_ids(user):
     return [b.id for b in candidates if is_education_business(b)]
 
 
-def education_tenant_business(user):
+def education_tenant_business(user, request=None):
     """L'établissement Éducation du tenant, ou None.
+
+    Priority:
+    1. Subdomain-resolved tenant (request.tenant) - for API calls via custom domain
+    2. Header-based tenant (X-Education-Business) - for multi-tenant owners
+    3. User-based resolution - for staff accessing their own business
 
     Si plusieurs établissements Éducation sont rattachés au même compte, la
     création est refusée plutôt que de deviner : le payload ne porte pas encore
     d'identifiant d'établissement.
     """
+    # Priority 1: Subdomain-resolved tenant
+    if request and hasattr(request, 'tenant') and request.tenant:
+        from .permissions import is_education_business
+        if is_education_business(request.tenant):
+            return request.tenant
+    
+    # Priority 2: Header-based tenant (multi-tenant owner)
+    from .tenant_context import education_business_id
+    if request:
+        header_id = request.headers.get('X-Education-Business', '').strip()
+    else:
+        header_id = education_business_id.get()
+    if header_id:
+        return Business.objects.filter(id=header_id).first()
+    
+    # Priority 3: User-based resolution (fallback)
     ids = education_business_ids(user)
     if len(ids) == 1:
         return Business.objects.filter(id=ids[0]).first()
@@ -68,7 +89,6 @@ def education_tenant_business(user):
     from config.feature_flags import enabled
     if not enabled('EDUCATION_MULTI_TENANT_OWNER'):
         return None
-    from .tenant_context import education_business_id
     chosen = education_business_id.get()
     if chosen and chosen in {str(item) for item in ids}:
         return Business.objects.filter(id=chosen).first()
@@ -128,7 +148,7 @@ class HasEducationPermission(BasePermission):
         if not code:
             return False
         return bool(education_business_ids(request.user)) and education_perm(
-            request.user, education_tenant_business(request.user), code,
+            request.user, education_tenant_business(request.user, request), code,
         )
 
     def has_object_permission(self, request, view, obj):

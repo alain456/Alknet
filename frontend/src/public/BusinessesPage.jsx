@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MapPin, Filter, Building2, Phone, Clock, Eye, Package, History, Globe, GraduationCap } from 'lucide-react';
+import { Search, MapPin, Filter, Phone, Clock, Eye, Package, History, Globe, GraduationCap, Mail } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
 import api from '../shared/api';
@@ -20,6 +20,39 @@ function categoryName(business) {
     || business?.primary_category_detail?.name
     || ''
   );
+}
+
+const COMMERCE_KINDS = {
+  boutique: 'Boutique',
+  mode: 'Mode',
+  quincaillerie: 'Quincaillerie',
+  supermarche: 'Supermarché',
+  electronique: 'Électronique',
+};
+
+function plainLabel(value) {
+  return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
+function commerceKindLabel(business) {
+  const rows = [
+    ...(business?.categories_detail || []),
+    business?.primary_category_detail,
+  ].filter(Boolean);
+  for (const row of rows) {
+    const known = COMMERCE_KINDS[plainLabel(row.slug)] || COMMERCE_KINDS[plainLabel(row.name)];
+    if (known) return row.name || known;
+  }
+  const extra = business?.extra_attributes?.shop_type;
+  const fromExtra = COMMERCE_KINDS[plainLabel(extra)];
+  return fromExtra ? (extra || fromExtra) : '';
+}
+
+function badgeLabel(business) {
+  if (getBusinessRecordCategoryKey(business) === 'commerce') {
+    return commerceKindLabel(business) || 'Commerce';
+  }
+  return categoryName(business) || 'Entreprise';
 }
 
 /** Match exact ou via catégorie parente (Explore Categories = racines). */
@@ -65,6 +98,11 @@ function isCommerceBusiness(business) {
 
 function isEducationBusiness(business) {
   return getBusinessRecordCategoryKey(business) === 'education';
+}
+
+function openingHoursLabel(business) {
+  const hours = business?.extra_attributes?.opening_hours || business?.hours || '';
+  return String(hours).trim();
 }
 
 function locationLabel(business) {
@@ -284,7 +322,9 @@ export default function BusinessesPage() {
                       {business.logo ? (
                         <img src={business.logo} alt={business.name} className="w-full h-full object-cover" />
                       ) : (
-                        <Building2 className="text-gray-400 w-8 h-8" />
+                        <span className="text-lg font-extrabold text-primary">
+                          {(business.name || '?').trim().slice(0, 2).toUpperCase()}
+                        </span>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -293,7 +333,7 @@ export default function BusinessesPage() {
                           <h3 className="font-bold text-gray-900 text-lg truncate">{business.name}</h3>
                         </div>
                         <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full shrink-0">
-                          {categoryName(business) || 'Entreprise'}
+                          {badgeLabel(business)}
                         </span>
                       </div>
                     </div>
@@ -304,17 +344,25 @@ export default function BusinessesPage() {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-sm">
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <MapPin className="w-4 h-4 shrink-0" />
+                    <div className="flex items-center gap-2 text-ink">
+                      <MapPin className="w-4 h-4 shrink-0 text-primary" />
                       <span className="truncate">{locationLabel(business)}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Phone className="w-4 h-4 shrink-0" />
-                      {business.phone || '—'}
+                    <div className="flex items-center gap-2 text-ink font-semibold">
+                      <Phone className="w-4 h-4 shrink-0 text-primary" />
+                      {business.phone ? (
+                        <a href={`tel:${String(business.phone).replace(/\s/g, '')}`}>{business.phone}</a>
+                      ) : '—'}
                     </div>
-                    <div className="flex items-center gap-2 text-gray-500 sm:col-span-2">
-                      <Clock className="w-4 h-4 shrink-0" />
-                      {business.hours || 'Horaires sur demande'}
+                    {isCommerceBusiness(business) && business.email ? (
+                      <a href={`mailto:${business.email}`} className="flex items-center gap-2 text-ink font-semibold sm:col-span-2 min-w-0">
+                        <Mail className="w-4 h-4 shrink-0 text-primary" />
+                        <span className="truncate">{business.email}</span>
+                      </a>
+                    ) : null}
+                    <div className="flex items-center gap-2 text-ink sm:col-span-2">
+                      <Clock className="w-4 h-4 shrink-0 text-primary" />
+                      {openingHoursLabel(business) || 'Horaires sur demande'}
                     </div>
                     {business.website ? (
                       <a
@@ -352,7 +400,7 @@ export default function BusinessesPage() {
                         className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-1.5"
                       >
                         <Package className="w-4 h-4" />
-                        Entrer — Catalogue
+                        Pharmacie de gros
                       </button>
                     ) : isRetailPharmacy(business) ? (
                       <button
@@ -361,7 +409,7 @@ export default function BusinessesPage() {
                         className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-1.5"
                       >
                         <Package className="w-4 h-4" />
-                        Entrer — Catalogue
+                        Pharmacie de détail
                       </button>
                     ) : isEducationBusiness(business) ? (
                       <button
@@ -395,7 +443,7 @@ export default function BusinessesPage() {
                         className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-1.5"
                       >
                         <Package className="w-4 h-4" />
-                        Entrer — Catalogue
+                        Entrer
                       </button>
                     ) : (
                       <button

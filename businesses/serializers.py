@@ -4,6 +4,11 @@ from .subscription import subscription_summary, ensure_business_subscription
 
 from business_categories.serializers import BusinessCategorySerializer
 
+
+def _published_logo(business):
+    from profiles.images import display_business_logo
+    return display_business_logo(business)
+
 class BusinessLiteSerializer(serializers.ModelSerializer):
     """Payload léger pour /businesses/me/ — évite les réponses multi-Mo (502)."""
     primary_category_name = serializers.CharField(
@@ -33,16 +38,7 @@ class BusinessLiteSerializer(serializers.ModelSerializer):
         return bool(obj.logo and str(obj.logo).strip())
 
     def get_logo(self, obj):
-        """Retourne le logo si URL ou data:image compressée (≤ ~300 Ko)."""
-        v = (obj.logo or '').strip()
-        if not v:
-            return ''
-        if v.startswith(('http://', 'https://', '/media/', '/static/')):
-            return v
-        if v.startswith('data:image/') and len(v) <= 400_000:
-            return v
-        # Trop volumineux pour /me/ : le front garde has_logo=True et ne doit pas écraser
-        return ''
+        return _published_logo(obj)
 
     def get_subscription(self, obj):
         ensure_business_subscription(obj)
@@ -82,6 +78,7 @@ class BusinessSerializer(serializers.ModelSerializer):
         )
         parent = getattr(cat, 'parent', None) if cat else None
         data['primary_category_parent_name'] = getattr(parent, 'name', None) or ''
+        data['logo'] = _published_logo(instance)
         return data
 
     @staticmethod
@@ -166,11 +163,16 @@ class AdminBusinessSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('id', 'owner', 'created_at', 'updated_at')
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['logo'] = _published_logo(instance)
+        return data
+
     def get_owner_avatar(self, obj):
-        try:
-            return (obj.owner.profile.avatar or '') if obj.owner_id else ''
-        except Exception:
+        if not obj.owner_id:
             return ''
+        from profiles.images import display_person_photo
+        return display_person_photo(obj.owner)
 
     def get_subscription(self, obj):
         return subscription_summary(obj)
@@ -216,10 +218,8 @@ class AdminBusinessSerializer(serializers.ModelSerializer):
             or avatar.startswith('data:image/')
         ):
             return
-        from profiles.models import Profile
-        profile, _ = Profile.objects.get_or_create(user=user)
-        profile.avatar = avatar
-        profile.save(update_fields=['avatar'])
+        from profiles.images import assign_person_photo
+        assign_person_photo(user, avatar)
 
     def _apply_commerce_if_needed(self, business, raw_data, *, required=True):
         from .commerce import (
@@ -370,6 +370,21 @@ class BusinessEmployeeSerializer(serializers.ModelSerializer):
     # We allow inputting an email and role_id to create an employee
     email = serializers.EmailField(write_only=True, required=False)
     role_id = serializers.UUIDField(write_only=True, required=False)
+
+    def validate_education_scope_unit(self, value):
+        if not value:
+            return None
+        from education.models import EducationUnit
+        from .tenant import get_user_tenant_business
+        unit = EducationUnit.objects.filter(pk=value).first()
+        request = self.context.get('request')
+        business = get_user_tenant_business(request.user) if request else None
+        if (
+            not unit or not business or unit.business_id != business.id
+            or unit.parent_id or unit.kind not in ('FACULTY', 'SCHOOL')
+        ):
+            raise serializers.ValidationError('Choisissez une faculté de cet établissement.')
+        return value
 
     class Meta:
         model = BusinessEmployee

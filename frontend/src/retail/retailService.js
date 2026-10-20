@@ -111,6 +111,7 @@ const retailService = {
   getOrders: (params = {}) => api.get(`retail/orders/${query(params)}`, { auth: true }),
   getOrder: (id) => api.get(`retail/orders/${id}/`, { auth: true }),
   acceptOrder: (id) => api.post(`retail/orders/${id}/accept/`, {}, { auth: true }),
+  completeOrder: (id) => api.post(`retail/orders/${id}/complete/`, {}, { auth: true }),
   rejectOrder: (id, data) => api.post(`retail/orders/${id}/reject/`, data, { auth: true }),
   markOrderPaid: (id, data = {}) => api.post(`retail/orders/${id}/mark-paid/`, data, { auth: true }),
   markOrderUnpaid: (id) => api.post(`retail/orders/${id}/mark-unpaid/`, {}, { auth: true }),
@@ -165,6 +166,7 @@ export const ORDER_STATUS_LABELS = {
   PROCESSING: 'En traitement',
   CLARIFICATION_REQUESTED: 'Précisions demandées',
   ACCEPTED: 'Acceptée',
+  COMPLETED: 'Livrée',
   REJECTED: 'Refusée',
   CANCELLED: 'Annulée',
 };

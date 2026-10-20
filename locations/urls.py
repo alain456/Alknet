@@ -8,6 +8,7 @@ from .views import (
     AvenueListCreateView, AvenueDetailView,
     SeedLocationsAPIView,
     map_tile,
+    maps_link,
 )
 
 urlpatterns = [
@@ -29,4 +30,5 @@ urlpatterns = [
     path('avenues/', AvenueListCreateView.as_view(), name='avenue-list'),
     path('avenues/<uuid:pk>/', AvenueDetailView.as_view(), name='avenue-detail'),
     path('map-tile/<int:z>/<int:x>/<int:y>.png', map_tile, name='map-tile'),
+    path('maps-link/', maps_link, name='maps-link'),
 ]

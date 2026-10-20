@@ -5,7 +5,9 @@ import {
 } from 'lucide-react';
 import { api } from '../shared/api';
 import { useAuth } from '../context/AuthContext';
+import EnrollmentPaymentChoice from './EnrollmentPaymentChoice';
 import BurundiPayPayerField from '../shared/components/BurundiPayPayerField';
+import { downloadApplicationPdf } from './dossierPdf';
 import { isValidBurundiPayPhone, normalizeBurundiPayPhone } from '../shared/components/burundiPayPhone';
 
 const TRACK_META = {
@@ -15,8 +17,9 @@ const TRACK_META = {
 };
 
 const STEPS = ['Parcours', 'Identité', 'Pièces & paiement', 'Confirmation'];
+const fieldClass = 'w-full mt-1.5 px-3 py-2.5 rounded-xl border border-border bg-white text-sm text-ink outline-none focus:border-accent';
 
-const fieldClass = 'w-full mt-1 px-3 py-2 border-2 border-accent rounded-xl text-sm bg-surface text-ink outline-none focus:border-alert';
+import PublicUniversityEnrollment from './PublicUniversityEnrollment';
 
 /**
  * Formulaire public d'inscription — même design que la prise de rendez-vous.
@@ -30,6 +33,7 @@ export default function PublicSchoolEnrollment() {
   const [campaign, setCampaign] = useState(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [done, setDone] = useState(null);
   const [payMsg, setPayMsg] = useState('');
   const [paymentBusy, setPaymentBusy] = useState(false);
@@ -50,6 +54,8 @@ export default function PublicSchoolEnrollment() {
   const [guardianLink, setGuardianLink] = useState('Mère');
   const [files, setFiles] = useState({});
   const [payerPhone, setPayerPhone] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [bordereau, setBordereau] = useState(null);
   const [criteriaAck, setCriteriaAck] = useState(false);
   const [existingLink, setExistingLink] = useState('');
 
@@ -99,8 +105,60 @@ export default function PublicSchoolEnrollment() {
       const year = (block.years || []).find((item) => item.value === ecofoYear);
       return year?.documents || [];
     }
+    if (track === 'POST_FONDAMENTAL') {
+      const section = (block.sections || []).find((item) => item.name === postSection);
+      const year = (section?.years || []).find((item) => item.value === postYear);
+      if (year?.documents) return year.documents;
+    }
     return block.documents || [];
-  }, [campaign, track, ecofoYear]);
+  }, [campaign, track, ecofoYear, postSection, postYear]);
+
+  const buildBody = () => {
+    const body = new FormData();
+    body.append('campaign', campaignId);
+    body.append('student_name', studentName.trim());
+    body.append('student_email', studentEmail.trim());
+    body.append('student_phone', studentPhone.trim());
+    body.append('birth_date', birthDate);
+    body.append('gender', gender);
+    body.append('previous_school', previousSchool.trim());
+    body.append('student_address', studentAddress.trim());
+    body.append('guardian_name', guardianName.trim());
+    body.append('guardian_phone', guardianPhone.trim());
+    body.append('guardian_link', guardianLink.trim());
+    body.append('track', track);
+    if (track === 'ECOFO') body.append('ecofo_year', ecofoYear);
+    if (track === 'POST_FONDAMENTAL') {
+      body.append('post_section', postSection);
+      body.append('post_year', postYear);
+    }
+    if (feeAmount > 0) {
+      body.append('payment_method', paymentMethod);
+      if (paymentMethod === 'BURUNDIPAY') body.append('payer_phone', normalizeBurundiPayPhone(payerPhone));
+      if (paymentMethod === 'BORDEREAU' && bordereau) body.append('bordereau', bordereau);
+    }
+    if (extraCriteria.length > 0) body.append('criteria_ack', '1');
+    requiredDocs.forEach((doc, index) => {
+      body.append(`doc_label_${index}`, doc.label);
+      body.append(`doc_file_${index}`, files[doc.label]);
+    });
+    return body;
+  };
+
+  const downloadDossier = async () => {
+    setError('');
+    setPdfBusy(true);
+    try {
+      await downloadApplicationPdf('education/applications/preview-dossier/', {
+        method: 'POST',
+        body: buildBody(),
+      });
+    } catch (err) {
+      setError(err.message || 'PDF indisponible.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
 
   const canGoIdentity = () => {
     if (!track) return false;
@@ -117,13 +175,26 @@ export default function PublicSchoolEnrollment() {
       return;
     }
     for (const doc of requiredDocs) {
-      if (!files[doc.label]) {
+      const file = files[doc.label];
+      if (!file) {
         setError(`Joignez la pièce : ${doc.label}`);
         return;
       }
+      if (String(doc.label || '').toLowerCase() === 'photo passeport' && !/\.(jpe?g|png|webp)$/i.test(file.name || '')) {
+        setError('La photo passeport doit être une image JPEG, PNG ou WebP.');
+        return;
+      }
     }
-    if (feeAmount > 0 && !isValidBurundiPayPhone(payerPhone)) {
+    if (feeAmount > 0 && paymentMethod !== 'BURUNDIPAY' && paymentMethod !== 'BORDEREAU') {
+      setError('Choisissez BurundiPay ou un bordereau PDF.');
+      return;
+    }
+    if (feeAmount > 0 && paymentMethod === 'BURUNDIPAY' && !isValidBurundiPayPhone(payerPhone)) {
       setError('Numéro BurundiPay invalide : 8 chiffres requis (ex. 79xxxxxx).');
+      return;
+    }
+    if (feeAmount > 0 && paymentMethod === 'BORDEREAU' && !bordereau?.name?.toLowerCase().endsWith('.pdf')) {
+      setError('Le bordereau doit être un PDF.');
       return;
     }
     if (extraCriteria.length > 0 && !criteriaAck) {
@@ -134,32 +205,7 @@ export default function PublicSchoolEnrollment() {
     setSubmitting(true);
     setPayMsg('');
     try {
-      const body = new FormData();
-      body.append('campaign', campaignId);
-      body.append('student_name', studentName.trim());
-      body.append('student_email', studentEmail.trim());
-      body.append('student_phone', studentPhone.trim());
-      body.append('birth_date', birthDate);
-      body.append('gender', gender);
-      body.append('previous_school', previousSchool.trim());
-      body.append('student_address', studentAddress.trim());
-      body.append('guardian_name', guardianName.trim());
-      body.append('guardian_phone', guardianPhone.trim());
-      body.append('guardian_link', guardianLink.trim());
-      body.append('track', track);
-      if (track === 'ECOFO') body.append('ecofo_year', ecofoYear);
-      if (track === 'POST_FONDAMENTAL') {
-        body.append('post_section', postSection);
-        body.append('post_year', postYear);
-      }
-      if (feeAmount > 0) body.append('payer_phone', normalizeBurundiPayPhone(payerPhone));
-      if (extraCriteria.length > 0) body.append('criteria_ack', '1');
-      requiredDocs.forEach((doc, index) => {
-        body.append(`doc_label_${index}`, doc.label);
-        body.append(`doc_file_${index}`, files[doc.label]);
-      });
-
-      const result = await api.post('education/applications/apply/', body, { auth: !!token });
+      const result = await api.post('education/applications/apply/', buildBody(), { auth: !!token });
       setDone({
         application: result.application,
         payment: result.payment,
@@ -238,6 +284,14 @@ export default function PublicSchoolEnrollment() {
     }
   };
 
+  const backTo = campaign?.establishment_id
+    ? `/education/establishment/${campaign.establishment_id}#inscription`
+    : '/education';
+
+  if (campaign?.program) {
+    return <PublicUniversityEnrollment campaign={campaign} campaignId={campaignId} />;
+  }
+
   return (
     <div className="min-h-screen bg-surface text-ink pb-16">
       <div className="bg-primary text-surface relative overflow-hidden">
@@ -248,13 +302,21 @@ export default function PublicSchoolEnrollment() {
               'radial-gradient(ellipse at 15% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 95% 90%, #E1302A 0%, transparent 45%)',
           }}
         />
-        <div className="max-w-4xl mx-auto px-4 pt-10 pb-16 relative text-center space-y-3">
+        <div className="max-w-4xl mx-auto px-4 pt-6 pb-16 relative text-center space-y-3">
+          <div className="text-left">
+            <Link
+              to={backTo}
+              className="inline-flex items-center gap-1 text-sm font-bold text-surface"
+            >
+              <ChevronLeft className="w-4 h-4" /> Retour
+            </Link>
+          </div>
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-surface/10 text-accent border border-accent/50 rounded-lg text-xs font-bold uppercase tracking-wide">
             <Sparkles className="w-3.5 h-3.5" /> Isoko Hub — Inscription scolaire
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-surface">S&apos;inscrire à une école</h1>
           <p className="text-sm text-surface/80 max-w-xl mx-auto">
-            Pièces selon le niveau. Une inscription payante se règle via BurundiPay avant l&apos;envoi. Une inscription gratuite part sans paiement.
+            Pièces selon le niveau. Une inscription payante se règle par BurundiPay ou par un bordereau PDF. Une inscription gratuite part sans paiement.
           </p>
         </div>
       </div>
@@ -302,7 +364,7 @@ export default function PublicSchoolEnrollment() {
             </p>
             <p className="text-sm font-bold text-ink">
               {feeAmount > 0
-                ? `Inscription payante — ${feeLabel}. Le règlement BurundiPay se fait à la dernière étape.`
+                ? `${feeLabel}. Le règlement, BurundiPay ou bordereau, se fait à la dernière étape.`
                 : 'Inscription gratuite — le dossier part sans paiement.'}
             </p>
             {!campaign.open_today && (
@@ -322,7 +384,7 @@ export default function PublicSchoolEnrollment() {
                     setFiles({});
                   }}
                   className={`text-left bg-surface p-5 rounded-2xl border-2 transition hover:bg-primary/5 disabled:opacity-50 ${
-                    track === code ? 'border-primary bg-primary/5' : idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                    track === code ? 'border-primary bg-primary/5' : 'border-border'
                   }`}
                 >
                   <h3 className="font-bold text-lg text-ink">{TRACK_META[code] || code}</h3>
@@ -396,92 +458,106 @@ export default function PublicSchoolEnrollment() {
               </div>
             )}
 
-            <button
-              type="button"
-              disabled={!canGoIdentity() || !campaign.open_today}
-              onClick={() => setStep(1)}
-              className="w-full py-3 bg-primary text-surface font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-accent"
-            >
-              Continuer <ChevronRight className="w-5 h-5" />
-            </button>
+            <div className="flex gap-2">
+              <Link
+                to={backTo}
+                className="flex-1 py-3 rounded-xl border-2 border-accent text-ink font-bold flex items-center justify-center gap-2"
+              >
+                <ChevronLeft className="w-5 h-5" /> Retour
+              </Link>
+              <button
+                type="button"
+                disabled={!canGoIdentity() || !campaign.open_today}
+                onClick={() => setStep(1)}
+                className="flex-1 py-3 bg-primary text-surface font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-accent"
+              >
+                Continuer <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         )}
 
         {campaign && step === 1 && (
-          <div className="space-y-4 bg-surface border-2 border-alert rounded-2xl p-5 sm:p-7 shadow-sm">
-            <button type="button" onClick={() => setStep(0)} className="text-xs text-primary font-bold flex items-center gap-1">
-              <ChevronLeft className="w-4 h-4" /> Changer de parcours
-            </button>
+          <div className="space-y-4 bg-surface border-2 border-border rounded-2xl p-5 sm:p-7 shadow-sm">
             <h2 className="text-xl font-extrabold text-ink flex items-center gap-2">
               <User className="text-accent" /> Identité de l&apos;élève
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-bold text-ink">Nom complet *</label>
+              <label className="block text-sm font-bold text-ink">
+                Nom complet *
                 <input required className={fieldClass} value={studentName} onChange={(e) => setStudentName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Téléphone *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                Téléphone *
                 <input required type="tel" className={fieldClass} value={studentPhone} onChange={(e) => setStudentPhone(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Email *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                E-mail *
                 <input required type="email" className={fieldClass} value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Date de naissance *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                Date de naissance *
                 <input required type="date" className={fieldClass} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Sexe *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                Sexe *
                 <select required className={fieldClass} value={gender} onChange={(e) => setGender(e.target.value)}>
                   <option value="">Choisir</option>
                   <option value="F">Féminin</option>
                   <option value="M">Masculin</option>
                 </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">École précédente</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                École précédente
                 <input className={fieldClass} value={previousSchool} onChange={(e) => setPreviousSchool(e.target.value)} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-ink">Adresse</label>
+              </label>
+              <label className="block text-sm font-bold text-ink sm:col-span-2">
+                Adresse
                 <input className={fieldClass} value={studentAddress} onChange={(e) => setStudentAddress(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Lien du parent *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                Lien du parent *
                 <select className={fieldClass} value={guardianLink} onChange={(e) => setGuardianLink(e.target.value)}>
                   <option>Mère</option>
                   <option>Père</option>
                   <option>Tuteur</option>
                   <option>Tutrice</option>
                 </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Nom du parent ou tuteur *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                Nom du parent ou tuteur *
                 <input required className={fieldClass} value={guardianName} onChange={(e) => setGuardianName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-ink">Téléphone du parent *</label>
+              </label>
+              <label className="block text-sm font-bold text-ink">
+                Téléphone du parent *
                 <input required type="tel" className={fieldClass} value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} />
-              </div>
+              </label>
             </div>
-            <button
-              type="button"
-              disabled={!studentName.trim() || !studentEmail.trim() || !studentPhone.trim() || !birthDate || !gender || !guardianName.trim() || !guardianPhone.trim()}
-              onClick={() => setStep(2)}
-              className="w-full py-3 bg-primary text-surface font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-accent"
-            >
-              Continuer <ChevronRight className="w-5 h-5" />
-            </button>
+            {!(studentName.trim() && studentEmail.trim() && studentPhone.trim() && birthDate && gender && guardianName.trim() && guardianPhone.trim()) && (
+              <p className="text-sm text-ink-muted">Renseignez les champs marqués d’une étoile pour continuer.</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStep(0)}
+                className="flex-1 py-3 rounded-xl border-2 border-accent text-ink font-bold flex items-center justify-center gap-2"
+              >
+                <ChevronLeft className="w-5 h-5" /> Retour
+              </button>
+              <button
+                type="button"
+                disabled={!studentName.trim() || !studentEmail.trim() || !studentPhone.trim() || !birthDate || !gender || !guardianName.trim() || !guardianPhone.trim()}
+                onClick={() => setStep(2)}
+                className="flex-1 py-3 bg-primary text-surface font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-accent"
+              >
+                Continuer <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         )}
 
         {campaign && step === 2 && (
           <form onSubmit={submit} className="space-y-4">
-            <button type="button" onClick={() => setStep(1)} className="text-xs text-primary font-bold flex items-center gap-1">
-              <ChevronLeft className="w-4 h-4" /> Retour
-            </button>
             <div className="bg-primary text-surface p-4 rounded-xl border-2 border-accent text-sm space-y-1">
               <p className="font-bold">{TRACK_META[track]}</p>
               {track === 'ECOFO' && <p className="text-surface/90">Année : {ecofoYear}</p>}
@@ -503,6 +579,7 @@ export default function PublicSchoolEnrollment() {
                   <input
                     type="file"
                     required
+                    accept={String(doc.label || '').toLowerCase() === 'photo passeport' ? 'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp' : undefined}
                     className="mt-1 block w-full text-sm font-medium"
                     onChange={(e) => setFiles((prev) => ({ ...prev, [doc.label]: e.target.files?.[0] }))}
                   />
@@ -534,9 +611,13 @@ export default function PublicSchoolEnrollment() {
                 </div>
               )}
               {feeAmount > 0 ? (
-                <BurundiPayPayerField
-                  value={payerPhone}
-                  onChange={setPayerPhone}
+                <EnrollmentPaymentChoice
+                  method={paymentMethod}
+                  onMethod={setPaymentMethod}
+                  payerPhone={payerPhone}
+                  onPhone={setPayerPhone}
+                  bordereauName={bordereau?.name || ''}
+                  onBordereau={setBordereau}
                   amountLabel={feeLabel}
                 />
               ) : (
@@ -547,20 +628,42 @@ export default function PublicSchoolEnrollment() {
               {error && (
                 <p className="text-sm font-bold text-ink bg-alert/10 border-2 border-alert rounded-xl p-3">{error}</p>
               )}
+              <p className="text-sm text-ink-muted">
+                Vous pouvez télécharger un PDF avec toutes les informations et les pièces. Ce n’est pas obligatoire pour envoyer.
+              </p>
               <button
-                type="submit"
-                disabled={submitting}
-                className="w-full py-3 bg-primary text-surface font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-accent"
+                type="button"
+                disabled={pdfBusy}
+                onClick={downloadDossier}
+                className="w-full py-3 rounded-xl border-2 border-accent text-ink font-bold disabled:opacity-50"
               >
-                {submitting
-                  ? 'Traitement…'
-                  : classFull
-                    ? 'Rejoindre la liste d’attente'
-                    : feeAmount > 0
-                      ? 'Envoyer et payer'
-                      : 'Envoyer ma candidature'}
-                <ChevronRight className="w-5 h-5" />
+                {pdfBusy ? 'Préparation du PDF…' : 'Télécharger le dossier (PDF)'}
               </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="flex-1 py-3 rounded-xl border-2 border-accent text-ink font-bold flex items-center justify-center gap-2"
+                >
+                  <ChevronLeft className="w-5 h-5" /> Retour
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3 bg-primary text-surface font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 border-2 border-accent"
+                >
+                  {submitting
+                    ? 'Traitement…'
+                    : classFull
+                      ? 'Rejoindre la liste d’attente'
+                      : feeAmount > 0 && paymentMethod === 'BURUNDIPAY'
+                        ? 'Envoyer et payer'
+                        : feeAmount > 0
+                          ? 'Envoyer le dossier'
+                          : 'Envoyer ma candidature'}
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </form>
         )}
@@ -570,10 +673,7 @@ export default function PublicSchoolEnrollment() {
             <CheckCircle2 className="w-12 h-12 text-primary mx-auto" />
             <h2 className="text-2xl font-extrabold">Candidature enregistrée</h2>
             <p className="text-sm text-ink-muted max-w-md mx-auto">
-              Un e-mail de confirmation a été envoyé à {done.application?.student_email || studentEmail}.
-              {feeAmount > 0
-                ? 'Vous pouvez suivre le dossier ou terminer le paiement depuis ce lien.'
-                : 'Vous pouvez suivre le dossier depuis ce lien. Aucun paiement n’est demandé.'}
+              {payMsg || `Un e-mail de confirmation a été envoyé à ${done.application?.student_email || studentEmail}.`}
             </p>
             {done.application?.suivi_url && (
               <a
@@ -583,8 +683,7 @@ export default function PublicSchoolEnrollment() {
                 Suivre mon dossier
               </a>
             )}
-            {payMsg && <p className="text-sm font-medium text-primary">{payMsg}</p>}
-            {feeAmount > 0 && done.payment_status !== 'PAID' && done.payment_status !== 'WAIVED' && (
+            {feeAmount > 0 && done.payment_status !== 'PAID' && done.payment_status !== 'WAIVED' && done.payment_status !== 'BORDEREAU_RECU' && (
               <div className="space-y-3 text-left max-w-md mx-auto">
                 <BurundiPayPayerField
                   value={payerPhone}
@@ -611,9 +710,9 @@ export default function PublicSchoolEnrollment() {
                 </div>
               </div>
             )}
-            {(done.payment_status === 'PAID' || done.payment_status === 'WAIVED' || feeAmount === 0) && (
+            {(done.payment_status === 'PAID' || done.payment_status === 'WAIVED' || done.payment_status === 'BORDEREAU_RECU' || feeAmount === 0) && (
               <p className="text-sm font-semibold text-primary">
-                {feeAmount === 0 ? 'Aucun paiement requis.' : 'Paiement validé.'}
+                {feeAmount === 0 ? 'Aucun paiement requis.' : done.payment_status === 'BORDEREAU_RECU' ? 'Bordereau reçu.' : 'Paiement validé.'}
               </p>
             )}
             <Link

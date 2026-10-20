@@ -118,7 +118,7 @@ export default function HotelStaffHome({ mode = 'front' }) {
           )}
           {mode === 'cashier' && (
             <>
-              <Link className="px-3 py-2 font-bold border-2 border-accent rounded-xl text-sm" to="/hotel/cashier">Dashboard caisse</Link>
+              <Link className="px-3 py-2 font-bold border-2 border-accent rounded-xl text-sm" to="/hotel/cashier">Tableau de caisse</Link>
               <Link className="px-3 py-2 font-bold border-2 border-accent rounded-xl text-sm" to="/hotel/staff/cashier/folios">Folios</Link>
               <Link className="px-3 py-2 font-bold border-2 border-accent rounded-xl text-sm" to="/hotel/staff/cashier/invoices">Factures</Link>
             </>

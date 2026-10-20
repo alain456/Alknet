@@ -20,6 +20,7 @@ const wholesaleService = {
   },
   getOrder: (id) => api.get(`wholesale/orders/${id}/`, { auth: true }),
   acceptOrder: (id) => api.post(`wholesale/orders/${id}/accept/`, {}, { auth: true }),
+  completeOrder: (id) => api.post(`wholesale/orders/${id}/complete/`, {}, { auth: true }),
   rejectOrder: (id, data) => api.post(`wholesale/orders/${id}/reject/`, data, { auth: true }),
   markOrderPaid: (id, data = {}) => api.post(`wholesale/orders/${id}/mark-paid/`, data, { auth: true }),
   markOrderUnpaid: (id) => api.post(`wholesale/orders/${id}/mark-unpaid/`, {}, { auth: true }),
@@ -54,6 +55,7 @@ export const ORDER_STATUS_LABELS = {
   SUBMITTED: 'Envoyée',
   PROCESSING: 'En cours de traitement',
   ACCEPTED: 'Acceptée',
+  COMPLETED: 'Livrée',
   REJECTED: 'Refusée',
   CANCELLED: 'Annulée',
 };

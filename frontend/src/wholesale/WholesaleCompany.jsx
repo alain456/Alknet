@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import wholesaleService from './wholesaleService';
+import MerchantAccountCard from '../business/MerchantAccountCard';
 
 /** Mon entreprise — admin pharmacie de gros (profil métier + coords Business). */
 export default function WholesaleCompany() {
@@ -37,6 +38,7 @@ export default function WholesaleCompany() {
     <form onSubmit={save} className="space-y-4 max-w-2xl">
       <h1 className="text-2xl font-bold">Mon entreprise</h1>
       <p className="text-sm text-slate-500">{profile.business_name}</p>
+      <MerchantAccountCard hint="Ce compte reçoit le paiement des commandes. Il est distinct de l’abonnement Isoko Hub." />
       {msg && <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm">{msg}</div>}
       {error && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm">{error}</div>}
       <div className="grid sm:grid-cols-2 gap-3 bg-white border rounded-2xl p-5">

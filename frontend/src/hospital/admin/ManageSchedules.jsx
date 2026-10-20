@@ -773,7 +773,7 @@ export default function ManageSchedules() {
           const daySchedules = schedules.filter((s) => s.day_of_week === day.id);
           return (
             <div key={day.id} className={`bg-white dark:bg-gray-900 rounded-2xl border-2 overflow-hidden shadow-sm flex flex-col ${
-              day.id % 2 === 0 ? 'border-accent' : 'border-alert'
+              'border-border'
             }`}>
               <div className="px-5 py-3.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                 <span className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">

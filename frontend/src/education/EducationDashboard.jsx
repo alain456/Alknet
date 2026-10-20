@@ -1,16 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
-  GraduationCap, Save, Send, Plus, Pencil, Trash2, ExternalLink, EyeOff, Eye, Loader2, ImagePlus,
-  Clock, CheckCircle2, BookOpen, Wallet,
+  GraduationCap, Save, Send, ExternalLink, Loader2, ImagePlus,
+  Wallet,
 } from 'lucide-react';
 import { api } from '../shared/api';
 import educationService from './educationService';
 import SchoolSectionsEditor from './SchoolSectionsEditor';
-import SchoolEcofoClassesEditor, { DEFAULT_ECOFO_CLASSES } from './SchoolEcofoClassesEditor';
+import SchoolEcofoClassesEditor from './SchoolEcofoClassesEditor';
 import { EDUCATION_ENUM_FALLBACK, loadEducationEnums } from './educationEnums';
-import { parseListField, EMPTY_ITEM } from './educationListFields';
 import { readImageAsDataUrl } from '../shared/components/BusinessRegistrationForm';
+import MerchantAccountCard from '../business/MerchantAccountCard';
 
 const inputClass = 'w-full px-3 py-2 text-sm bg-surface border-2 border-accent rounded-xl text-ink outline-none focus:border-alert';
 const actionBtn = 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-accent text-ink hover:opacity-95 disabled:opacity-50';
@@ -18,75 +18,11 @@ const actionBtn = 'inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm
 const WAITING = ['LISTE_ATTENTE', 'ENVOYEE', 'EN_INSTRUCTION', 'COMPLEMENT_DEMANDE'];
 const ACCEPTED = ['ACCEPTEE', 'CONFIRMEE'];
 
-const EMPTY_PROGRAM = {
-  title: '', domain: '', degree_awarded: '', duration_label: '',
-  entry_level: '', exit_level: '', career_outlook: '',
-  semester_organization: '', main_subjects: '', admission_conditions: '',
-  internship_details: '', required_documents: [],
-  unit: '', duration_years: '',
-  level: 'OTHER', is_active: true, is_public: true, display_order: 0,
-};
-
-/** Champ liste éditable : une ligne = libellé + détail. */
-function ListRows({ label, rows, onChange, placeholder }) {
-  return (
-    <div className="md:col-span-2">
-      <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">
-        {label}
-      </label>
-      <div className="space-y-2">
-        {rows.map((row, i) => (
-          <div key={i} className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={row.label}
-              onChange={(e) => {
-                const next = [...rows];
-                next[i] = { ...row, label: e.target.value };
-                onChange(next);
-              }}
-              placeholder={placeholder}
-              className="sm:w-1/3 px-3 py-2 text-sm bg-surface border-2 border-accent rounded-xl text-ink outline-none focus:border-alert"
-            />
-            <input
-              value={row.description}
-              onChange={(e) => {
-                const next = [...rows];
-                next[i] = { ...row, description: e.target.value };
-                onChange(next);
-              }}
-              placeholder="Détail (facultatif)"
-              className="flex-1 px-3 py-2 text-sm bg-surface border-2 border-accent rounded-xl text-ink outline-none focus:border-alert"
-            />
-            {rows.length > 1 && (
-              <button
-                type="button"
-                onClick={() => onChange(rows.filter((_, j) => j !== i))}
-                className="px-2 rounded-xl border-2 border-alert text-alert shrink-0"
-                title="Retirer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => onChange([...rows, { ...EMPTY_ITEM }])}
-          className="inline-flex items-center gap-1 text-xs font-bold text-primary"
-        >
-          <Plus className="w-3.5 h-3.5" /> Ajouter une ligne
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function EducationDashboard() {
+  const location = useLocation();
+  const schoolFiche = location.pathname.endsWith('/ecole');
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState(null);
-  const [programs, setPrograms] = useState([]);
-  const [units, setUnits] = useState([]);
-  const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -108,11 +44,7 @@ export default function EducationDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [p, list, unitList] = await Promise.all([
-        educationService.getMyProfile(),
-        educationService.listPrograms(),
-        educationService.listUnits().catch(() => []),
-      ]);
+      const p = await educationService.getMyProfile();
       setProfile(p);
       setForm({
         operational_status: p.operational_status || 'ACTIVE',
@@ -126,6 +58,19 @@ export default function EducationDashboard() {
         accreditation_body: p.accreditation_body || '',
         accreditation_valid_until: p.accreditation_valid_until || '',
         gallery: (p.gallery || []).map(String).filter(Boolean),
+        library_hours: p.library_hours || '',
+        library_access: p.library_access || '',
+        library_contact: p.library_contact || '',
+        internship_required: !!p.internship_required,
+        internship_duration: p.internship_duration || '',
+        internship_period: p.internship_period || '',
+        internship_contact: p.internship_contact || '',
+        student_services: Array.isArray(p.student_services) ? p.student_services : [],
+        year_start: p.year_start || '',
+        year_break_start: p.year_break_start || '',
+        year_break_end: p.year_break_end || '',
+        year_exam_start: p.year_exam_start || '',
+        year_deliberation: p.year_deliberation || '',
         has_scholarships: !!p.has_scholarships,
         has_boarding: !!p.has_boarding,
         boarding_regime: p.boarding_regime || (p.has_boarding ? 'INTERNAT' : ''),
@@ -136,14 +81,12 @@ export default function EducationDashboard() {
         offers_ecofo: !!p.offers_ecofo,
         offers_post_fondamental: !!p.offers_post_fondamental,
         ecofo_cycles: Array.isArray(p.ecofo_cycles) ? p.ecofo_cycles : [],
-        ecofo_classes: Array.isArray(p.ecofo_classes) && p.ecofo_classes.length
-          ? p.ecofo_classes
-          : (p.offers_ecofo ? DEFAULT_ECOFO_CLASSES.map((row) => ({ ...row })) : []),
+        ecofo_classes: Array.isArray(p.ecofo_classes) ? p.ecofo_classes : [],
         post_fondamental_sections: Array.isArray(p.post_fondamental_sections) ? p.post_fondamental_sections : [],
       });
-      setPrograms(Array.isArray(list) ? list : (list?.results || []));
-      setUnits(Array.isArray(unitList) ? unitList : (unitList?.results || []));
-      if (p?.business_detail?.category_slug === 'ecole') {
+      const slug = p?.business_detail?.category_slug;
+      const kind = p?.establishment_type;
+      if (slug === 'ecole' || slug === 'universite' || kind === 'SCHOOL' || kind === 'UNIVERSITY') {
         const [campaignData, applicationData] = await Promise.all([
           api.get('education/campaigns/?mine=1', { auth: true }).catch(() => []),
           api.get('education/applications/', { auth: true }).catch(() => []),
@@ -235,6 +178,9 @@ export default function EducationDashboard() {
     setNotice('');
     try {
       const payload = { ...form, accreditation_valid_until: form.accreditation_valid_until || null };
+      ['year_start', 'year_break_start', 'year_break_end', 'year_exam_start', 'year_deliberation'].forEach((key) => {
+        if (!payload[key]) payload[key] = null;
+      });
       delete payload.website;
       Object.assign(payload, trackPayload(payload));
       await persistTracks(payload);
@@ -273,57 +219,16 @@ export default function EducationDashboard() {
     }
   };
 
-  const saveProgram = async (e) => {
-    e.preventDefault();
-    if (!editing) return;
-    setBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const { required_documents, ...rest } = editing;
-      const payload = {
-        ...rest,
-        required_documents: required_documents || [],
-        unit: rest.unit || null,
-        duration_years: rest.duration_years === '' ? null : rest.duration_years,
-      };
-      if (editing.id) {
-        await educationService.updateProgram(editing.id, payload);
-        setNotice('Formation mise à jour.');
-      } else {
-        await educationService.createProgram(payload);
-        setNotice('Formation créée.');
-      }
-      setEditing(null);
-      await load();
-    } catch (err) {
-      setError(err.message || 'Enregistrement impossible');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const removeProgram = async (id) => {
-    if (!window.confirm('Supprimer cette formation ?')) return;
-    setBusy(true);
-    setError('');
-    try {
-      await educationService.deleteProgram(id);
-      await load();
-    } catch (err) {
-      setError(err.message || 'Suppression impossible');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (loading) return <div className="p-8 text-center text-gray-500">Chargement…</div>;
   if (error && !form) return <div className="p-8 text-red-600">{error}</div>;
   if (!form) return null;
 
   const status = profile?.publication_status;
   const statusLabel = (enums.publication_statuses || []).find((row) => row.value === status)?.label || status;
-  const isSchool = profile?.business_detail?.category_slug === 'ecole';
+  const isSchool = profile?.business_detail?.category_slug === 'ecole'
+    || profile?.establishment_type === 'SCHOOL';
+  const isUniversity = profile?.business_detail?.category_slug === 'universite'
+    || profile?.establishment_type === 'UNIVERSITY';
   const tracks = [
     profile?.offers_prescolaire && 'Préscolaire',
     profile?.offers_ecofo && 'Fondamental',
@@ -332,104 +237,150 @@ export default function EducationDashboard() {
   const openCampaigns = campaigns.filter((row) => row.open_today);
   const waiting = applications.filter((row) => WAITING.includes(row.status));
   const accepted = applications.filter((row) => ACCEPTED.includes(row.status));
-  const updatedLabel = profile?.updated_at
-    ? new Date(profile.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
-    : '';
-  const stats = [
-    { label: 'Parcours publiés', value: tracks.length ? tracks.join(' · ') : 'Aucun', icon: BookOpen },
-    { label: 'Inscriptions ouvertes', value: String(openCampaigns.length), icon: GraduationCap },
-    { label: 'Liste d’attente', value: String(waiting.length), icon: Clock },
-    { label: 'Acceptés', value: String(accepted.length), icon: CheckCircle2 },
+  const programCount = new Set(campaigns.map((row) => row.program).filter(Boolean)).size;
+  const showOverview = isSchool || isUniversity;
+
+  const unpaid = applications.filter((row) => row.payment_status === 'UNPAID' || row.payment_status === 'AWAITING_PIN').length;
+  const paid = applications.filter((row) => row.payment_status === 'PAID').length;
+  const feeBase = paid + unpaid;
+  const paidShare = feeBase ? Math.round((paid / feeBase) * 100) : 0;
+  const todayLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const queuePath = '/education/dashboard/admissions';
+  const statCards = [
+    { label: 'En attente', value: String(waiting.length), hint: isUniversity ? 'Candidats à instruire' : 'Dossiers à instruire', tone: 'bg-[#FFF4EA]' },
+    { label: 'Acceptés', value: String(accepted.length), hint: 'Inscriptions confirmées ou acceptées', tone: 'bg-[#E7F0F4]' },
+    { label: 'Inscriptions ouvertes', value: String(openCampaigns.length), hint: isUniversity ? `${programCount} programme${programCount > 1 ? 's' : ''}` : (tracks.join(' · ') || 'Parcours non indiqué'), tone: 'bg-white' },
+    { label: 'Paiements en attente', value: String(unpaid), hint: paid ? `${paid} déjà payé${paid > 1 ? 's' : ''}` : 'Aucun paiement confirmé', tone: 'bg-white' },
   ];
 
   return (
     <div className="space-y-6 pb-10 text-ink">
-      {isSchool ? (
-        <section className="rounded-2xl overflow-hidden bg-white shadow-sm ring-1 ring-border">
-          <div className="school-dash-hero bg-ink px-5 py-6 sm:px-7">
-            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-              <div>
-                <p className="school-dash-kicker text-[11px] font-bold uppercase tracking-[0.16em]">École</p>
-                <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold">{profile?.business_name || 'Tableau de bord'}</h1>
-                <p className="mt-2 text-sm opacity-80">
-                  {statusLabel}{updatedLabel ? ` · Mis à jour le ${updatedLabel}` : ''}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link to="/education/dashboard/admissions" className={actionBtn}>
-                  <GraduationCap className="w-4 h-4" /> Admissions
-                </Link>
-                <Link to="/education/accounting" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-surface">
-                  <Wallet className="w-4 h-4" /> Comptabilité
-                </Link>
-                {status === 'PUBLISHED' && (
-                  <Link
-                    to={`/education/establishment/${profile?.id}`}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border border-surface/40"
-                  >
-                    <ExternalLink className="w-4 h-4" /> Page publique
-                  </Link>
-                )}
-                {(status === 'DRAFT' || status === 'REJECTED') && (
-                  <button type="button" onClick={submitForReview} disabled={busy} className={actionBtn}>
-                    <Send className="w-4 h-4" /> Envoyer en validation
-                  </button>
-                )}
-              </div>
+      {showOverview && !schoolFiche && (
+        <section className="space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+            <div>
+              <p className="text-sm text-ink-muted capitalize">{todayLabel}</p>
+              <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold text-ink">{profile?.business_name || 'Tableau de bord'}</h1>
+              <p className="mt-1 text-sm text-ink-muted">
+                {isUniversity ? 'Université' : 'École'} · {statusLabel}
+              </p>
+              {profile?.moderation_note && status === 'REJECTED' && (
+                <p className="mt-2 text-sm font-medium text-alert">Motif du rejet : {profile.moderation_note}</p>
+              )}
             </div>
-            {profile?.moderation_note && status === 'REJECTED' && (
-              <p className="mt-4 text-sm font-medium">Motif du rejet : {profile.moderation_note}</p>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <Link to={queuePath} className={actionBtn}>
+                <GraduationCap className="w-4 h-4" /> {isUniversity ? 'Candidatures' : 'Admissions'}
+              </Link>
+              {isSchool && (
+                <Link to="/education/dashboard/ecole" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border border-border text-ink bg-white">
+                  Mon école
+                </Link>
+              )}
+              <Link to="/education/accounting" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-surface">
+                <Wallet className="w-4 h-4" /> Comptabilité
+              </Link>
+              {status === 'PUBLISHED' && (
+                <Link
+                  to={`/education/establishment/${profile?.id}`}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border border-border text-ink bg-white"
+                >
+                  <ExternalLink className="w-4 h-4" /> Page publique
+                </Link>
+              )}
+              {(status === 'DRAFT' || status === 'REJECTED') && (
+                <button type="button" onClick={submitForReview} disabled={busy} className={actionBtn}>
+                  <Send className="w-4 h-4" /> Envoyer en validation
+                </button>
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map((item) => (
-              <div key={item.label} className="px-5 py-4 border-t border-border sm:border-r last:border-r-0">
-                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-ink-muted">
-                  <item.icon className="w-4 h-4 text-accent" />
-                  {item.label}
-                </div>
-                <p className="mt-2 text-lg font-extrabold text-ink truncate">{item.value}</p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {statCards.map((item) => (
+              <div key={item.label} className={`rounded-2xl ring-1 ring-border px-5 py-4 ${item.tone}`}>
+                <p className="text-xs font-semibold text-ink-muted">{item.label}</p>
+                <p className="mt-2 text-3xl font-extrabold text-ink">{item.value}</p>
+                <p className="mt-1 text-xs text-ink-muted truncate">{item.hint}</p>
               </div>
             ))}
           </div>
-          <div className="px-5 py-4 border-t border-border bg-surface">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <h2 className="text-sm font-extrabold text-ink">Dossiers à traiter</h2>
-              <Link to="/education/dashboard/admissions" className="text-xs font-bold text-primary">Voir la file</Link>
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+            <div className="xl:col-span-2 rounded-2xl bg-white ring-1 ring-border px-5 py-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-sm font-extrabold text-ink">Dossiers à traiter</h2>
+                <Link to={queuePath} className="text-xs font-bold text-primary">Voir la file</Link>
+              </div>
+              {waiting.length === 0 ? (
+                <p className="text-sm text-ink-muted">Aucun dossier en attente.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-ink-muted">
+                        <th className="py-2 pr-3">Nom</th>
+                        <th className="py-2 pr-3">{isUniversity ? 'Programme' : 'Parcours'}</th>
+                        <th className="py-2 pr-3">Année</th>
+                        <th className="py-2">Paiement</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {waiting.slice(0, 6).map((row) => (
+                        <tr key={row.id} className="border-t border-border">
+                          <td className="py-2.5 pr-3 font-bold text-ink">{row.student_name || 'Dossier'}</td>
+                          <td className="py-2.5 pr-3 text-ink-muted">{row.program_title || row.track_label || '—'}</td>
+                          <td className="py-2.5 pr-3 text-ink-muted">{row.academic_year || '—'}</td>
+                          <td className="py-2.5 text-ink">{row.payment_status === 'PAID' ? 'Payé' : row.payment_status === 'WAIVED' ? 'Gratuit' : 'À suivre'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-            {waiting.length === 0 ? (
-              <p className="text-sm text-ink-muted">Aucun dossier en attente.</p>
-            ) : (
-              <ul className="divide-y divide-border">
-                {waiting.slice(0, 4).map((row) => (
-                  <li key={row.id} className="py-2.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-ink truncate">{row.student_name || 'Dossier'}</p>
-                      <p className="text-xs text-ink-muted truncate">{row.program_title || row.applicant_email}</p>
-                    </div>
-                    <span className="shrink-0 text-[11px] font-bold px-2 py-1 rounded-lg bg-accent/15 text-ink">En attente</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+
+            <div className="space-y-3">
+              <div className="rounded-2xl bg-white ring-1 ring-border px-5 py-4">
+                <h2 className="text-sm font-extrabold text-ink">Frais d’inscription</h2>
+                <p className="mt-3 text-3xl font-extrabold text-ink">{paidShare}%</p>
+                <p className="text-xs text-ink-muted">des dossiers payants déjà réglés</p>
+                <div className="mt-3 h-2 rounded-full bg-surface overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${paidShare}%` }} />
+                </div>
+                <p className="mt-3 text-sm text-ink">{paid} payé{paid > 1 ? 's' : ''} · {unpaid} en attente</p>
+                <Link to="/education/accounting" className="mt-3 inline-flex text-xs font-bold text-primary">Ouvrir la comptabilité</Link>
+              </div>
+              <div className="rounded-2xl bg-white ring-1 ring-border px-5 py-4">
+                <h2 className="text-sm font-extrabold text-ink">Inscriptions en cours</h2>
+                {openCampaigns.length === 0 ? (
+                  <p className="mt-3 text-sm text-ink-muted">Aucune inscription ouverte aujourd’hui.</p>
+                ) : (
+                  <ul className="mt-3 space-y-3">
+                    {openCampaigns.slice(0, 4).map((row) => (
+                      <li key={row.id}>
+                        <p className="text-sm font-bold text-ink">{row.program_title || row.academic_year}</p>
+                        <p className="text-xs text-ink-muted">{row.opens_on} → {row.closes_on}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
           </div>
         </section>
-      ) : (
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border-duo bg-surface p-5">
+      )}
+      {!showOverview && !schoolFiche && (
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl bg-white ring-1 ring-border p-5">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-ink flex items-center gap-2">
             <GraduationCap className="w-7 h-7 text-accent" />
             Tableau de bord
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{profile?.business_name}</p>
-          <p className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-bold bg-white dark:bg-gray-900 border-2 border-accent text-ink">
+          <p className="text-ink-muted text-sm mt-1">{profile?.business_name}</p>
+          <p className="mt-2 inline-flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-bold bg-white border border-border text-ink">
             {statusLabel}
           </p>
-          {profile?.updated_at && (
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 font-medium">
-              Dernière mise à jour le {new Date(profile.updated_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
           {profile?.moderation_note && status === 'REJECTED' && (
             <p className="mt-3 text-sm text-alert font-medium">
               Motif du rejet : {profile.moderation_note}
@@ -440,7 +391,7 @@ export default function EducationDashboard() {
           {status === 'PUBLISHED' && (
             <Link
               to={`/education/establishment/${profile?.id}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold bg-primary text-surface"
             >
               <ExternalLink className="w-4 h-4" /> Voir la page publique
             </Link>
@@ -450,7 +401,7 @@ export default function EducationDashboard() {
               type="button"
               onClick={submitForReview}
               disabled={busy}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20 disabled:opacity-50"
+              className={actionBtn}
             >
               <Send className="w-4 h-4" /> Envoyer en validation
             </button>
@@ -462,9 +413,13 @@ export default function EducationDashboard() {
       {error && <div className="rounded-xl border-2 border-alert bg-alert/10 text-ink px-4 py-3 text-sm font-medium">{error}</div>}
       {notice && <div className="rounded-xl border-2 border-accent bg-primary/5 text-ink px-4 py-3 text-sm font-medium">{notice}</div>}
 
+      {((isSchool && schoolFiche) || isUniversity) && (
+        <MerchantAccountCard hint="Ce compte reçoit les frais d’inscription. Il est distinct de l’abonnement Isoko Hub." />
+      )}
+      {( !isSchool || schoolFiche) && (
       <form onSubmit={saveProfile} className={`space-y-5 p-5 sm:p-6 rounded-2xl bg-white dark:bg-gray-900 shadow-sm ${isSchool ? 'ring-1 ring-border' : 'border-2 border-accent'}`}>
         <div>
-          <h2 className="font-extrabold text-ink text-lg">Fiche de l&apos;établissement</h2>
+          <h2 className="font-extrabold text-ink text-lg">{isSchool ? 'Mon école' : 'Fiche de l’établissement'}</h2>
           {isSchool && (
             <p className="text-sm text-ink-muted mt-1">Ce que les familles voient sur la page publique de l&apos;école.</p>
           )}
@@ -503,11 +458,7 @@ export default function EducationDashboard() {
                 checked={!!form.offers_ecofo}
                 onChange={(e) => applyTracks({
                   offers_ecofo: e.target.checked,
-                  ecofo_classes: e.target.checked
-                    ? ((form.ecofo_classes || []).length
-                      ? form.ecofo_classes
-                      : DEFAULT_ECOFO_CLASSES.map((row) => ({ ...row })))
-                    : [],
+                  ecofo_classes: e.target.checked ? (form.ecofo_classes || []) : [],
                 })}
               />
               École fondamentale (ECOFO)
@@ -734,8 +685,9 @@ export default function EducationDashboard() {
         </div>
         )}
 
+        {!isSchool && !isUniversity && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {(enums.particularities || []).filter((tag) => !(profile?.business_detail?.category_slug === 'ecole' && tag.value === 'has_boarding')).map((tag) => (
+          {(enums.particularities || []).map((tag) => (
             <label key={tag.value} className="flex items-center gap-2 text-sm text-ink dark:text-white cursor-pointer">
               <input
                 type="checkbox"
@@ -747,6 +699,50 @@ export default function EducationDashboard() {
             </label>
           ))}
         </div>
+        )}
+
+        {profile?.business_detail?.category_slug === 'universite' && (
+          <div className="md:col-span-2 space-y-3 rounded-2xl ring-1 ring-border p-4">
+            <p className="text-sm font-bold text-ink">Vie du campus</p>
+            <p className="text-xs text-ink-muted">Ces textes sont publiés tels quels. Ce n’est pas un outil de gestion.</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-xs font-semibold">Rentrée<input type="date" className={`${inputClass} mt-1`} value={form.year_start || ''} onChange={(e) => setField('year_start', e.target.value)} /></label>
+              <label className="text-xs font-semibold">Début des examens<input type="date" className={`${inputClass} mt-1`} value={form.year_exam_start || ''} onChange={(e) => setField('year_exam_start', e.target.value)} /></label>
+              <label className="text-xs font-semibold">Début de pause<input type="date" className={`${inputClass} mt-1`} value={form.year_break_start || ''} onChange={(e) => setField('year_break_start', e.target.value)} /></label>
+              <label className="text-xs font-semibold">Fin de pause<input type="date" className={`${inputClass} mt-1`} value={form.year_break_end || ''} onChange={(e) => setField('year_break_end', e.target.value)} /></label>
+              <label className="text-xs font-semibold sm:col-span-2">Date de délibération<input type="date" className={`${inputClass} mt-1`} value={form.year_deliberation || ''} onChange={(e) => setField('year_deliberation', e.target.value)} /></label>
+              <label className="text-xs font-semibold sm:col-span-2">Bibliothèque — horaires<input className={`${inputClass} mt-1`} value={form.library_hours || ''} onChange={(e) => setField('library_hours', e.target.value)} placeholder="Lun–ven, 8h–18h" /></label>
+              <label className="text-xs font-semibold">Accès<input className={`${inputClass} mt-1`} value={form.library_access || ''} onChange={(e) => setField('library_access', e.target.value)} placeholder="Carte étudiante" /></label>
+              <label className="text-xs font-semibold">Contact bibliothèque<input className={`${inputClass} mt-1`} value={form.library_contact || ''} onChange={(e) => setField('library_contact', e.target.value)} /></label>
+              <label className="sm:col-span-2 flex items-center gap-2 text-sm font-semibold">
+                <input type="checkbox" checked={!!form.internship_required} onChange={(e) => setField('internship_required', e.target.checked)} />
+                Stage obligatoire
+              </label>
+              <label className="text-xs font-semibold">Durée du stage<input className={`${inputClass} mt-1`} value={form.internship_duration || ''} onChange={(e) => setField('internship_duration', e.target.value)} placeholder="3 mois" /></label>
+              <label className="text-xs font-semibold">Période<input className={`${inputClass} mt-1`} value={form.internship_period || ''} onChange={(e) => setField('internship_period', e.target.value)} placeholder="Second semestre" /></label>
+              <label className="text-xs font-semibold sm:col-span-2">Contact du service des stages<input className={`${inputClass} mt-1`} value={form.internship_contact || ''} onChange={(e) => setField('internship_contact', e.target.value)} /></label>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold">Services étudiants</p>
+              {(form.student_services || []).map((row, index) => (
+                <div key={index} className="flex gap-2">
+                  <input className={inputClass} value={row.label || ''} placeholder="Internat, infirmerie, restauration…" onChange={(e) => {
+                    const next = [...form.student_services];
+                    next[index] = { ...row, label: e.target.value };
+                    setField('student_services', next);
+                  }} />
+                  <input className={inputClass} value={row.description || ''} placeholder="Contact ou précision" onChange={(e) => {
+                    const next = [...form.student_services];
+                    next[index] = { ...row, description: e.target.value };
+                    setField('student_services', next);
+                  }} />
+                  <button type="button" className="text-xs font-bold text-alert" onClick={() => setField('student_services', form.student_services.filter((_, i) => i !== index))}>Retirer</button>
+                </div>
+              ))}
+              <button type="button" className="text-xs font-bold text-primary" onClick={() => setField('student_services', [...(form.student_services || []), { label: '', description: '' }])}>Ajouter un service</button>
+            </div>
+          </div>
+        )}
 
         <button
           type="submit"
@@ -757,296 +753,8 @@ export default function EducationDashboard() {
           Enregistrer la fiche
         </button>
       </form>
-
-      {isSchool ? null : (
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-extrabold text-ink text-lg">Formations ({programs.length})</h2>
-          <button
-            type="button"
-            onClick={() => setEditing({ ...EMPTY_PROGRAM })}
-            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-md shadow-teal-600/20"
-          >
-            <Plus className="w-4 h-4" /> Nouvelle formation
-          </button>
-        </div>
-
-        {editing && (
-          <form onSubmit={saveProgram} className="space-y-4 p-5 rounded-2xl border-2 border-accent bg-white dark:bg-gray-900 shadow-sm">
-            <h3 className="font-extrabold text-ink text-lg">
-              {editing.id ? 'Modifier la formation' : 'Nouvelle formation'}
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Intitulé *</label>
-                <input
-                  required
-                  value={editing.title}
-                  onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Domaine</label>
-                <input
-                  value={editing.domain}
-                  onChange={(e) => setEditing({ ...editing, domain: e.target.value })}
-                  placeholder="Ex: Sciences de l'informatique"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Diplôme délivré</label>
-                <input
-                  value={editing.degree_awarded}
-                  onChange={(e) => setEditing({ ...editing, degree_awarded: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              { (profile?.business_detail?.category_slug === 'universite') ? (
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Faculté ou département</label>
-                <select
-                  value={editing.unit || ''}
-                  onChange={(e) => setEditing({ ...editing, unit: e.target.value })}
-                  className={inputClass}
-                >
-                  <option value="">Établissement</option>
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.parent_name ? `${u.parent_name} / ${u.name}` : u.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              ) : (
-              <details className="md:col-span-2 text-sm text-ink-muted">
-                <summary className="cursor-pointer font-semibold text-ink">Faculté ou département, si vous en avez</summary>
-                <select
-                  value={editing.unit || ''}
-                  onChange={(e) => setEditing({ ...editing, unit: e.target.value })}
-                  className={`${inputClass} mt-2`}
-                >
-                  <option value="">Établissement</option>
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.parent_name ? `${u.parent_name} / ${u.name}` : u.name}
-                    </option>
-                  ))}
-                </select>
-              </details>
-              )}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Nombre d'années</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={editing.duration_years ?? ''}
-                  onChange={(e) => setEditing({ ...editing, duration_years: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Niveau</label>
-            <select
-              value={editing.level}
-              onChange={(e) => setEditing({ ...editing, level: e.target.value })}
-              className={inputClass}
-            >
-              {(enums.levels || []).map((l) => (
-                <option key={l.value} value={l.value}>{l.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">
-              Organisation en semestres
-            </label>
-            <input
-              value={editing.semester_organization || ''}
-              onChange={(e) => setEditing({ ...editing, semester_organization: e.target.value })}
-              placeholder="Ex: 6 semestres, 2 ans"
-              className={inputClass}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">
-              Matières principales
-            </label>
-            <textarea
-              rows={2}
-              value={editing.main_subjects || ''}
-              onChange={(e) => setEditing({ ...editing, main_subjects: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">
-              Conditions d'admission
-            </label>
-            <textarea
-              rows={2}
-              value={editing.admission_conditions || ''}
-              onChange={(e) => setEditing({ ...editing, admission_conditions: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-          <ListRows
-            label="Pièces requises"
-            rows={editing.required_documents || []}
-            onChange={(rows) => setEditing({ ...editing, required_documents: rows })}
-            placeholder="Relevés de notes, Photocopies…"
-          />
-          <div className="md:col-span-2">
-            <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">
-              Modalités de stage
-            </label>
-            <textarea
-              rows={2}
-              value={editing.internship_details || ''}
-              onChange={(e) => setEditing({ ...editing, internship_details: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Durée</label>
-                <input
-                  value={editing.duration_label}
-                  onChange={(e) => setEditing({ ...editing, duration_label: e.target.value })}
-                  placeholder="Ex: 3 ans"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Niveau d'entrée</label>
-                <input
-                  value={editing.entry_level}
-                  onChange={(e) => setEditing({ ...editing, entry_level: e.target.value })}
-                  placeholder="Ex: Baccalauréat"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Niveau de sortie</label>
-                <input
-                  value={editing.exit_level}
-                  onChange={(e) => setEditing({ ...editing, exit_level: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 dark:text-white/70 mb-1">Débouchés</label>
-                <textarea
-                  rows={2}
-                  value={editing.career_outlook}
-                  onChange={(e) => setEditing({ ...editing, career_outlook: e.target.value })}
-                  className={inputClass}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 text-sm text-ink dark:text-white cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editing.is_active}
-                  onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })}
-                  className="rounded border-border text-green-700 focus:ring-green-700"
-                />
-                <span>Formation ouverte</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-ink dark:text-white cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editing.is_public}
-                  onChange={(e) => setEditing({ ...editing, is_public: e.target.checked })}
-                  className="rounded border-border text-green-700 focus:ring-green-700"
-                />
-                <span>Visible publiquement</span>
-              </label>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                disabled={busy}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium shadow-md shadow-teal-600/20 disabled:opacity-50"
-              >
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Enregistrer
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditing(null)}
-                className="px-4 py-2 rounded-xl border-2 border-border text-sm font-semibold text-ink"
-              >
-                Annuler
-              </button>
-            </div>
-          </form>
-        )}
-
-        {programs.length === 0 ? (
-          <div className="p-6 rounded-2xl border-2 border-dashed border-accent text-center text-sm text-ink-muted space-y-2">
-            <p>Aucune formation enregistrée.</p>
-            <p>Publiez une formation, puis ouvrez la campagne de l&apos;année.</p>
-            <Link to="/education/dashboard/admissions" className="inline-block text-primary font-bold">Admissions et frais</Link>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {programs.map((p) => (
-              <div
-                key={p.id}
-                className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border-2 border-accent bg-white dark:bg-gray-900 shadow-sm"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-ink truncate">{p.title}</h3>
-                    {p.is_public ? (
-                      <Eye className="w-3.5 h-3.5 text-primary" title="Visible publiquement" />
-                    ) : (
-                      <EyeOff className="w-3.5 h-3.5 text-ink-muted" title="Masqué" />
-                    )}
-                    {!p.is_active && (
-                      <span className="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-primary/10 border border-accent text-ink">
-                        Fermée
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-ink-muted font-medium">
-                    {[p.degree_awarded, p.domain, p.duration_label].filter(Boolean).join(' · ') || '—'}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditing({
-                    ...EMPTY_PROGRAM,
-                    ...p,
-                    required_documents: parseListField(p.required_documents),
-                  })}
-                    className="p-2 rounded-xl border-2 border-accent text-ink"
-                    title="Modifier"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeProgram(p.id)}
-                    disabled={busy}
-                    className="p-2 rounded-xl border-2 border-alert text-alert disabled:opacity-50"
-                    title="Supprimer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
       )}
+
     </div>
   );
 }

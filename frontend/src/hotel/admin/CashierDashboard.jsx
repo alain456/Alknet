@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CreditCard, RefreshCw, Lock } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import CashierFolios from './CashierFolios';
+import ManageHotelInvoices from './ManageHotelInvoices';
+import CashierNav from './CashierNav';
+import { RefreshCw, Lock } from 'lucide-react';
 import hotelService, { listOf } from '../hotelService';
 import { HotelPage, Panel, StatCard, Empty, btnPrimary, btnGhost } from '../ui';
 import { useHotelPerm } from '../useHotelPerm';
@@ -27,7 +30,7 @@ function folioLabel(f) {
   ].filter(Boolean).join(' · ');
 }
 
-export default function CashierDashboard() {
+function CashierDay() {
   const { canView, canCreate, canUpdate } = useHotelPerm();
   const canSee = canView('cashier');
   const canPay = canCreate('cashier') || canUpdate('cashier');
@@ -120,13 +123,10 @@ export default function CashierDashboard() {
               {closingBusy ? 'Clôture…' : 'Clôturer la caisse'}
             </button>
           )}
-          <Link to="/hotel/folios" className={`${btnGhost} text-sm inline-flex items-center gap-1.5`}>
-            <CreditCard className="w-4 h-4" />
-            Folios & paiements
-          </Link>
         </div>
       )}
     >
+      <CashierNav />
       {err && (
         <Panel className="border-alert mb-4">
           <p className="text-sm text-alert font-bold">{err}</p>
@@ -200,7 +200,7 @@ export default function CashierDashboard() {
             <Panel>
               <div className="flex items-center justify-between gap-2 mb-3">
                 <h2 className="font-extrabold text-ink">Soldes en attente</h2>
-                <Link to="/hotel/folios?unpaid=1" className="text-xs font-bold text-accent hover:underline">
+                <Link to="/hotel/cashier?section=encaisser&unpaid=1" className="text-xs font-bold text-accent hover:underline">
                   Tout encaisser →
                 </Link>
               </div>
@@ -211,7 +211,7 @@ export default function CashierDashboard() {
                   {listOf(data.unpaid_folios).map((f) => (
                     <li key={f.id}>
                       <Link
-                        to={`/hotel/folios?folio=${f.id}`}
+                        to={`/hotel/cashier?section=encaisser&folio=${f.id}`}
                         className="block p-3 rounded-xl border-2 border-amber-200 bg-amber-50/50 hover:border-amber-400 transition"
                       >
                         <p className="font-extrabold text-ink text-sm">{folioLabel(f)}</p>
@@ -272,4 +272,12 @@ export default function CashierDashboard() {
       )}
     </HotelPage>
   );
+}
+
+export default function CashierDashboard() {
+  const [params] = useSearchParams();
+  const section = params.get('section') || 'jour';
+  if (section === 'encaisser') return <CashierFolios />;
+  if (section === 'factures') return <ManageHotelInvoices />;
+  return <CashierDay />;
 }

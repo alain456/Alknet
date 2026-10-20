@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated, BasePermission
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
@@ -10,6 +11,7 @@ import hmac
 
 from .models import (
     Business, BusinessSubscription, SubscriptionPlan, SubscriptionPayment, PlatformNotification,
+    StockAlert,
 )
 from .serializers import BusinessSerializer, BusinessLiteSerializer, AdminBusinessSerializer
 from .tenant import get_user_tenant_business
@@ -298,6 +300,36 @@ class BusinessRoleListCreateView(generics.ListCreateAPIView):
         business = get_user_tenant_business(self.request.user)
         serializer.save(business=business)
 
+
+class AdminBusinessOffboardView(APIView):
+    """Export des données puis fermeture de l'accès (résiliation)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from accounts.platform_access import user_has_platform_perm
+        from accounts.data_rights import export_business_data
+        if not user_has_platform_perm(request.user, 'platform.businesses.update'):
+            return Response({'detail': 'Permission refusée.'}, status=403)
+        business = get_object_or_404(Business, pk=pk)
+        action = (request.data.get('action') or 'export').strip().lower()
+        payload = export_business_data(business)
+        if action == 'export':
+            return Response(payload)
+        if action != 'close':
+            return Response({'error': 'Action inconnue.'}, status=400)
+        business.is_active = False
+        business.save(update_fields=['is_active', 'updated_at'])
+        sub = getattr(business, 'subscription', None)
+        if sub:
+            sub.status = 'CANCELLED'
+            sub.save(update_fields=['status', 'updated_at'])
+        return Response({
+            'closed': True,
+            'business_id': str(business.id),
+            'export': payload,
+        })
+
+
 class BusinessRoleDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BusinessRoleSerializer
     permission_classes = [CanManageBusinessRoles]
@@ -494,6 +526,13 @@ class BusinessEmployeeListCreateView(generics.ListCreateAPIView):
             if role_id:
                 role = BusinessRole.objects.filter(id=role_id, business=business).first()
 
+            plan = getattr(getattr(business, 'subscription', None), 'plan', None)
+            limit = int(getattr(plan, 'max_employees', 0) or 0)
+            if limit and BusinessEmployee.objects.filter(business=business, is_active=True).count() >= limit:
+                return Response(
+                    {'error': f'Quota atteint : {limit} employé(s) pour le plan {plan.name}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             employee = BusinessEmployee.objects.create(
                 business=business, user=user, position=position, role=role,
             )
@@ -625,6 +664,22 @@ class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
                 user.email = new_email
                 email_changed = True
 
+        if 'education_scope_unit' in request.data:
+            raw = request.data.get('education_scope_unit') or None
+            if raw:
+                from education.models import EducationUnit
+                unit = EducationUnit.objects.filter(
+                    pk=raw, business=instance.business, parent__isnull=True,
+                ).exclude(kind='DEPARTMENT').first()
+                if not unit:
+                    return Response(
+                        {'education_scope_unit': 'Choisissez une faculté de cet établissement.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                instance.education_scope_unit = unit.id
+            else:
+                instance.education_scope_unit = None
+
         with transaction.atomic():
             user.save()
             instance.save()
@@ -641,9 +696,7 @@ class BusinessEmployeeDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 # --- VIEWS DE MODÉRATION ET IMPORTATION CSV ---
 from business_categories.models import BusinessCategory
-from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 import logging
 
 User = get_user_model()
@@ -664,80 +717,48 @@ def _parse_optional_float(value):
         return None
 
 
+def send_business_received_email(business):
+    """Confirme à l'entreprise que son dossier d'inscription est arrivé."""
+    from .registration_mail import send_registration_email
+    return send_registration_email(business, 'received')
+
+
 def send_business_approval_email(business, admin_message=''):
     """Confirme l'acceptation d'inscription à l'email de l'entreprise."""
-    recipient = _business_notification_email(business)
-    if not recipient:
-        return {'status': 'SKIPPED', 'reason': 'Aucun email entreprise/propriétaire'}
-
-    frontend_url = getattr(settings, 'FRONTEND_URL', None) or 'http://localhost:5173'
-    login_url = f'{frontend_url.rstrip("/")}/login'
-    category = getattr(business.primary_category, 'name', None) or 'Non spécifiée'
-    admin_block = ''
-    if (admin_message or '').strip():
-        admin_block = (
-            f'\nMessage de l’équipe Isoko Hub :\n'
-            f'{admin_message.strip()}\n'
-        )
-    subject = f'Isoko Hub — Votre entreprise « {business.name} » a été approuvée'
-    message = (
-        f'Bonjour,\n\n'
-        f'Bonne nouvelle : l’inscription de votre entreprise a été acceptée sur Isoko Hub.\n\n'
-        f'Entreprise : {business.name}\n'
-        f'Catégorie : {category}\n'
-        f'Statut : Approuvée / Active\n'
-        f'{admin_block}\n'
-        f'Vous pouvez dès maintenant vous connecter à votre espace professionnel :\n'
-        f'{login_url}\n\n'
-        f'Si vous n’êtes pas à l’origine de cette inscription, ignorez ce message.\n\n'
-        f'— L’équipe Isoko Hub\n'
-    )
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'info.isokohub@gmail.com'),
-            recipient_list=[recipient],
-            fail_silently=False,
-        )
-        return {'status': 'SENT', 'recipient': recipient}
-    except Exception as exc:
-        logger.exception('Échec email approbation entreprise %s', business.id)
-        return {'status': 'FAILED', 'recipient': recipient, 'error': str(exc)}
+    from .registration_mail import send_registration_email
+    return send_registration_email(business, 'approved', note=admin_message)
 
 
 def send_business_rejection_email(business, reason=''):
     """Informe l'entreprise du refus d'inscription."""
-    recipient = _business_notification_email(business)
-    if not recipient:
-        return {'status': 'SKIPPED', 'reason': 'Aucun email entreprise/propriétaire'}
+    from .registration_mail import send_registration_email
+    return send_registration_email(business, 'rejected', note=reason)
 
-    category = getattr(business.primary_category, 'name', None) or 'Non spécifiée'
-    reason_text = (reason or '').strip() or 'Non conforme aux exigences du secteur.'
-    subject = f'Isoko Hub — Inscription refusée pour « {business.name} »'
-    message = (
-        f'Bonjour,\n\n'
-        f'Après examen de votre dossier, l’inscription de votre entreprise sur Isoko Hub '
-        f'n’a pas pu être acceptée pour le moment.\n\n'
-        f'Entreprise : {business.name}\n'
-        f'Catégorie : {category}\n'
-        f'Statut : Refusée\n\n'
-        f'Motif du refus :\n{reason_text}\n\n'
-        f'Vous pouvez corriger votre dossier et nous recontacter si nécessaire.\n\n'
-        f'— L’équipe Isoko Hub\n'
-    )
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'info.isokohub@gmail.com'),
-            recipient_list=[recipient],
-            fail_silently=False,
-        )
-        return {'status': 'SENT', 'recipient': recipient}
-    except Exception as exc:
-        logger.exception('Échec email rejet entreprise %s', business.id)
-        return {'status': 'FAILED', 'recipient': recipient, 'error': str(exc)}
+
+class BusinessRegistrationMessagesView(APIView):
+    """Textes des trois e-mails d'inscription, modifiables par la plateforme."""
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': 'platform.businesses.view',
+        'PATCH': 'platform.businesses.approve',
+    }
+
+    def get(self, request):
+        from .registration_mail import message_templates
+        return Response(message_templates())
+
+    def patch(self, request):
+        from site_content.models import SiteSettings
+        from .registration_mail import FIELDS, message_templates
+        row = SiteSettings.get_solo()
+        update_fields = ['updated_at']
+        for kind, field in FIELDS.items():
+            key = f'{kind}_message'
+            if key in request.data:
+                setattr(row, field, str(request.data.get(key) or ''))
+                update_fields.append(field)
+        row.save(update_fields=update_fields)
+        return Response(message_templates())
 
 
 class AdminModerationListView(generics.ListAPIView):
@@ -1029,6 +1050,29 @@ class AdminCSVImportView(APIView):
             'errors': errors
         })
 
+class BusinessBySlugView(APIView):
+    """Fiche publique minimale pour router slug.isokohub.com vers la bonne page."""
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, slug):
+        business = Business.objects.select_related('primary_category', 'primary_category__parent').filter(
+            slug=slug,
+            is_active=True,
+            verification_status='APPROVED',
+        ).first()
+        if business is None:
+            return Response({'detail': 'Établissement introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        from .slug import public_path_for_business
+        return Response({
+            'id': str(business.id),
+            'name': business.name,
+            'slug': business.slug,
+            'public_path': public_path_for_business(business),
+        })
+
+
 class PublicBusinessRegistrationView(APIView):
     """
     Endpoint public permettant l'inscription d'une nouvelle entreprise (Onboarding).
@@ -1165,26 +1209,37 @@ class PublicBusinessRegistrationView(APIView):
                 return Response({'error': ' '.join(track_errors)}, status=status.HTTP_400_BAD_REQUEST)
             apply_registration_tracks(business)
 
-            # Logo établissement (URL ou data:image base64)
-            if _valid_image_payload(logo_data):
-                business.logo = logo_data
+            from profiles.images import assign_person_photo, store_profile_image
+            from rest_framework.exceptions import ValidationError as ImageError
+            try:
+                business.logo = store_profile_image(logo_data, kind='logo', key=str(business.pk))
                 business.save(update_fields=['logo'])
-
-            # Photo propriétaire → profil utilisateur (visible admin)
-            if _valid_image_payload(owner_avatar):
-                from profiles.models import Profile
-                profile, _ = Profile.objects.get_or_create(user=user)
-                profile.avatar = owner_avatar
-                profile.save(update_fields=['avatar'])
+                assign_person_photo(user, owner_avatar)
+            except ImageError as exc:
+                transaction.set_rollback(True)
+                detail = exc.detail
+                message = detail[0] if isinstance(detail, list) else detail
+                return Response({'error': str(message)}, status=status.HTTP_400_BAD_REQUEST)
 
             # Catégories secondaires
             cat_ids = data.get('category_ids', [])
             if cat_ids:
                 business.categories.set(cat_ids)
 
+            business_id = business.id
+
+            def _notify_received():
+                row = Business.objects.select_related('owner', 'primary_category').filter(pk=business_id).first()
+                if row:
+                    send_business_received_email(row)
+
+            transaction.on_commit(_notify_received)
+
             return Response({
                 'message': 'Votre entreprise a été soumise avec succès. Elle est en attente de validation.',
-                'business_id': business.id
+                'business_id': business.id,
+                'slug': business.slug,
+                'public_host': f'{business.slug}.isokohub.com',
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
@@ -1922,18 +1977,12 @@ class AdminSubscriptionListView(APIView):
             ).order_by('-created_at')
         )
         status_filter = (request.query_params.get('status') or '').strip().upper()
-        results = []
+        query = (request.query_params.get('q') or '').strip().lower()
+        rows = []
         for biz in businesses:
             ensure_business_subscription(biz)
             summary = subscription_summary(biz)
-            if status_filter:
-                if status_filter == 'BLOCKED' and not summary['is_blocked']:
-                    continue
-                if status_filter == 'ACTIVE' and not summary['has_active_subscription']:
-                    continue
-                if status_filter not in ('BLOCKED', 'ACTIVE') and summary['status'] != status_filter:
-                    continue
-            results.append({
+            rows.append({
                 'business_id': str(biz.id),
                 'business_name': biz.name,
                 'owner_email': getattr(biz.owner, 'email', None),
@@ -1943,12 +1992,53 @@ class AdminSubscriptionListView(APIView):
                 **summary,
             })
 
-        active_count = sum(1 for r in results if r['has_active_subscription'])
-        blocked_count = sum(1 for r in results if r['is_blocked'])
+        def matches(row):
+            if status_filter == 'BLOCKED' and not row['is_blocked']:
+                return False
+            if status_filter == 'ACTIVE' and not row['has_active_subscription']:
+                return False
+            if status_filter == 'GRACE' and not row['in_grace']:
+                return False
+            if status_filter == 'EXPIRING' and not row['expiry_warning']:
+                return False
+            if status_filter and status_filter not in ('BLOCKED', 'ACTIVE', 'GRACE', 'EXPIRING'):
+                if row['status'] != status_filter:
+                    return False
+            if query:
+                blob = ' '.join([
+                    row.get('business_name') or '',
+                    row.get('owner_email') or '',
+                    row.get('category') or '',
+                    row.get('plan_name') or '',
+                ]).lower()
+                if query not in blob:
+                    return False
+            return True
+
+        def urgency(row):
+            days = row['days_remaining'] if row['days_remaining'] is not None else 9999
+            if row['is_blocked']:
+                return (0, days)
+            if row['in_grace']:
+                return (1, row['grace_days_remaining'] if row['grace_days_remaining'] is not None else days)
+            if row['expiry_warning']:
+                return (2, row.get('paid_days_remaining') if row.get('paid_days_remaining') is not None else days)
+            return (3, days)
+
+        counts = {
+            'all': len(rows),
+            'active': sum(1 for row in rows if row['has_active_subscription']),
+            'grace': sum(1 for row in rows if row['in_grace']),
+            'expiring': sum(1 for row in rows if row['expiry_warning']),
+            'blocked': sum(1 for row in rows if row['is_blocked']),
+            'free': sum(1 for row in rows if row['is_free_period']),
+        }
+        results = sorted((row for row in rows if matches(row)), key=urgency)
         return Response({
             'count': len(results),
-            'active_count': active_count,
-            'blocked_count': blocked_count,
+            'active_count': counts['active'],
+            'blocked_count': counts['blocked'],
+            'counts': counts,
             'note': (
                 'Revenus plateforme = abonnements SaaS uniquement. '
                 'Les montants des commandes restent privés (acheteur ↔ vendeur).'
@@ -2042,4 +2132,45 @@ class AdminPlatformNotificationListView(APIView):
         else:
             return Response({'detail': 'ids ou all requis.'}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'updated': updated, 'unread_count': PlatformNotification.objects.filter(is_read=False).count()})
+
+
+class MyStockAlertListView(APIView):
+    """Alertes de stock faible ou rupture pour l'administrateur de la boutique ou de la pharmacie."""
+    permission_classes = [IsAuthenticated, IsBusinessTenantMember]
+
+    def get(self, request):
+        business = get_user_tenant_business(request.user)
+        if not business:
+            return Response({'unread_count': 0, 'results': []})
+        qs = StockAlert.objects.filter(business=business, is_resolved=False)
+        unread_count = qs.filter(is_read=False).count()
+        results = [
+            {
+                'id': str(alert.id),
+                'sector': alert.sector,
+                'level': alert.level,
+                'product_name': alert.product_name,
+                'quantity': alert.quantity,
+                'threshold': alert.threshold,
+                'is_read': alert.is_read,
+                'created_at': alert.created_at.isoformat() if alert.created_at else None,
+            }
+            for alert in qs[:30]
+        ]
+        return Response({'unread_count': unread_count, 'results': results})
+
+    def post(self, request):
+        business = get_user_tenant_business(request.user)
+        if not business:
+            return Response({'detail': 'Entreprise introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        qs = StockAlert.objects.filter(business=business, is_resolved=False, is_read=False)
+        if request.data.get('all'):
+            updated = qs.update(is_read=True)
+        else:
+            ids = request.data.get('ids') or []
+            if not ids:
+                return Response({'detail': 'ids ou all requis.'}, status=status.HTTP_400_BAD_REQUEST)
+            updated = qs.filter(id__in=ids).update(is_read=True)
+        unread = StockAlert.objects.filter(business=business, is_resolved=False, is_read=False).count()
+        return Response({'updated': updated, 'unread_count': unread})
 

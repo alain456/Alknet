@@ -70,9 +70,17 @@ def road_distance(from_lat, from_lon, to_lat, to_lon):
         f'{from_lon},{from_lat};{to_lon},{to_lat}?overview=false'
     )
     request = urllib.request.Request(url, headers={'User-Agent': 'IsokoHub/1.0'})
-    with urllib.request.urlopen(request, timeout=8) as response:
-        payload = json.loads(response.read().decode())
-    route = payload['routes'][0]
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode())
+        route = payload['routes'][0]
+    except Exception:
+        km = round(haversine_km(from_lat, from_lon, to_lat, to_lon), 2)
+        return {
+            'distance_km': km,
+            'duration_minutes': None,
+            'kind': 'straight',
+        }
     result = {
         'distance_km': round(route['distance'] / 1000, 2),
         'duration_minutes': max(1, round(route['duration'] / 60)),

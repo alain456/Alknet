@@ -10,7 +10,7 @@ from .views import (
 )
 from .enrollment_views import (
     AdmissionCampaignViewSet, EducationFeeViewSet, EnrollmentApplicationViewSet,
-    SchoolFeeLedgerView,
+    InscriptionBordereauView, SchoolFeeLedgerView,
     EnrollmentTrackConfirmPayView, EnrollmentTrackDocumentView, EnrollmentTrackPayView,
     EnrollmentTrackView,
 )
@@ -27,6 +27,7 @@ urlpatterns = [
     path('enum-choices/', EducationEnumChoicesView.as_view(), name='education-enum-choices'),
     path('distance/', EducationDistanceView.as_view(), name='education-distance'),
     path('accounting/', SchoolFeeLedgerView.as_view(), name='education-accounting'),
+    path('accounting/<uuid:application_id>/bordereau/', InscriptionBordereauView.as_view(), name='education-bordereau'),
     path('applications/suivi/', EnrollmentTrackView.as_view(), name='education-application-track'),
     path('applications/suivi/document/', EnrollmentTrackDocumentView.as_view(), name='education-application-track-document'),
     path('applications/suivi/pay/', EnrollmentTrackPayView.as_view(), name='education-application-track-pay'),

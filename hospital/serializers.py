@@ -34,7 +34,11 @@ class HospitalProfileSerializer(serializers.ModelSerializer):
     longitude = serializers.FloatField(source='business.longitude', read_only=True)
     province = serializers.CharField(source='business.province', read_only=True)
     commune = serializers.CharField(source='business.commune', read_only=True)
-    logo = serializers.CharField(source='business.logo', read_only=True)
+    logo = serializers.SerializerMethodField()
+
+    def get_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj.business)
 
     # Propriétés calculées
     is_open_now = serializers.SerializerMethodField()
@@ -113,8 +117,12 @@ class HospitalProfileListSerializer(serializers.ModelSerializer):
     latitude = serializers.FloatField(source='business.latitude', read_only=True)
     longitude = serializers.FloatField(source='business.longitude', read_only=True)
     province = serializers.CharField(source='business.province', read_only=True)
-    logo = serializers.CharField(source='business.logo', read_only=True)
+    logo = serializers.SerializerMethodField()
     is_open_now = serializers.SerializerMethodField()
+
+    def get_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj.business)
 
     class Meta:
         model = HospitalProfile
@@ -210,9 +218,8 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
             if emp and emp.role:
                 role_name = emp.role.name
                 role_id = str(emp.role.id)
-        profile = getattr(obj.user, 'profile', None)
-        if profile and profile.avatar:
-            avatar = profile.avatar
+        from profiles.images import display_person_photo
+        avatar = display_person_photo(obj.user) or None
         return {
             "first_name": obj.user.first_name,
             "last_name": obj.user.last_name,
@@ -223,12 +230,8 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
         }
 
     def get_public_photo_url(self, obj):
-        if obj.photo_url:
-            return obj.photo_url
-        profile = getattr(obj.user, 'profile', None)
-        if profile and profile.avatar:
-            return profile.avatar
-        return None
+        from profiles.images import display_person_photo
+        return display_person_photo(obj.user) or None
 
     def get_services(self, obj):
         return MedicalServiceSerializer(obj.related_services_queryset(), many=True).data
@@ -248,25 +251,21 @@ class DoctorProfileSerializer(serializers.ModelSerializer):
     def validate_photo_url(self, value):
         if value in (None, ''):
             return value
-        value = str(value).strip()
-        if value.startswith('data:image/'):
-            # ~1.4 Mo base64 ≈ image compressée raisonnable pour l'annuaire public
-            if len(value) > 1_800_000:
-                raise serializers.ValidationError(
-                    "Photo trop volumineuse. Compressez l'image (max ~1 Mo) avant l'envoi."
-                )
-            return value
-        if value.startswith('http://') or value.startswith('https://'):
-            return value
-        raise serializers.ValidationError(
-            "La photo doit être une URL https://… ou une image téléversée."
-        )
+        from profiles.images import store_profile_image
+        user = getattr(self.instance, 'user', None)
+        key = str(user.pk) if user else 'pending'
+        return store_profile_image(str(value).strip(), kind='avatar', key=key)
 
     def update(self, instance, validated_data):
         # Ne pas effacer la photo si le front renvoie '' (liste allégée sans data:image)
         if 'photo_url' in validated_data and not (validated_data.get('photo_url') or '').strip():
             validated_data.pop('photo_url', None)
-        return super().update(instance, validated_data)
+        instance = super().update(instance, validated_data)
+        photo = (instance.photo_url or '').strip()
+        if photo:
+            from profiles.images import assign_person_photo
+            assign_person_photo(instance.user, photo)
+        return instance
 
 
 def _safe_image_ref(value, *, max_data_len=400_000):
@@ -324,23 +323,20 @@ class DoctorProfileListSerializer(serializers.ModelSerializer):
         ]
 
     def get_user_details(self, obj):
-        profile = getattr(obj.user, 'profile', None)
-        avatar = _safe_image_ref(getattr(profile, 'avatar', None) if profile else None)
+        from profiles.images import display_person_photo
         return {
             'first_name': obj.user.first_name,
             'last_name': obj.user.last_name,
-            'avatar': avatar,
+            'avatar': display_person_photo(obj.user) or None,
         }
 
     def get_photo_url(self, obj):
-        return _safe_image_ref(obj.photo_url)
+        from profiles.images import display_person_photo
+        return display_person_photo(obj.user)
 
     def get_public_photo_url(self, obj):
-        url = _safe_image_ref(obj.photo_url)
-        if url:
-            return url
-        profile = getattr(obj.user, 'profile', None)
-        return _safe_image_ref(getattr(profile, 'avatar', None) if profile else None)
+        from profiles.images import display_person_photo
+        return display_person_photo(obj.user) or None
 
     def get_has_photo(self, obj):
         if obj.photo_url:

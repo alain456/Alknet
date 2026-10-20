@@ -26,6 +26,8 @@ from .models import (
 from .order_workflow import (
     REJECTION_REASONS,
     accept_order,
+    complete_order,
+    ensure_sellable,
     adjust_stock,
     create_order_from_items,
     create_order_proforma,
@@ -417,6 +419,7 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
         result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = self.get_serializer(order).data
+        payment_access.attach_payment_token(data, order)
         return Response({
             'ok': result.get('ok'),
             'already_paid': result.get('already_paid', False),
@@ -437,10 +440,12 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
         order = self.get_object()
         result = confirm_order_payment_stub(order)
         order.refresh_from_db()
+        order_data = self.get_serializer(order).data
+        payment_access.attach_payment_token(order_data, order)
         return Response({
             'ok': result.get('ok'),
             'message': result.get('message') or '',
-            'order': self.get_serializer(order).data,
+            'order': order_data,
         }, status=200 if result.get('ok') else 400)
 
     @action(detail=True, methods=['post'])
@@ -455,6 +460,17 @@ class RetailOrderViewSet(viewsets.ReadOnlyModelViewSet):
         data = self.get_serializer(order).data
         data['email_notification'] = email_result
         return Response(data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        order = self.get_object()
+        if not self._require_admin_order(request, order):
+            return Response({'error': 'Permission refusee.'}, status=403)
+        try:
+            order = complete_order(order, request.user)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
@@ -558,6 +574,10 @@ class RetailCartViewSet(viewsets.ViewSet):
             quantity = int(request.data.get('quantity') or 1)
         except (RetailProduct.DoesNotExist, TypeError, ValueError):
             return Response({'error': 'Produit ou quantite invalide.'}, status=400)
+        try:
+            ensure_sellable(product)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
         if quantity < 1 or quantity > product.quantity_available:
             return Response({'error': 'Stock insuffisant ou quantite invalide.'}, status=400)
         cart, _ = RetailCart.objects.get_or_create(
@@ -587,6 +607,10 @@ class RetailCartViewSet(viewsets.ViewSet):
         elif quantity > item.product.quantity_available:
             return Response({'error': 'Stock insuffisant.'}, status=400)
         else:
+            try:
+                ensure_sellable(item.product)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=400)
             item.quantity = quantity
             item.save(update_fields=['quantity', 'updated_at'])
         sync_draft_proforma(cart)
@@ -682,6 +706,7 @@ class RetailCartViewSet(viewsets.ViewSet):
         pay_result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = RetailOrderSerializer(order).data
+        payment_access.attach_payment_token(data, order)
         data['payment_initiation'] = {
             'ok': pay_result.get('ok'),
             'already_paid': pay_result.get('already_paid', False),
@@ -866,6 +891,7 @@ def guest_checkout(request):
     pay_result = initiate_order_payment(order, payer_phone)
     order.refresh_from_db()
     data = RetailOrderSerializer(order).data
+    payment_access.attach_payment_token(data, order)
     data['payment_initiation'] = {
         'ok': pay_result.get('ok'),
         'already_paid': pay_result.get('already_paid', False),

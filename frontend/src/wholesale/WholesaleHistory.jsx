@@ -12,7 +12,7 @@ export default function WholesaleHistory() {
 
   useEffect(() => {
     wholesaleService.getOrders()
-      .then((d) => setOrders(normalize(d).filter((o) => ['ACCEPTED', 'REJECTED', 'CANCELLED'].includes(o.status))))
+      .then((d) => setOrders(normalize(d).filter((o) => ['ACCEPTED', 'COMPLETED', 'REJECTED', 'CANCELLED'].includes(o.status))))
       .catch((e) => setError(e.message));
   }, []);
 

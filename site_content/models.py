@@ -144,6 +144,16 @@ class SiteSettings(models.Model):
         default=False,
         help_text="Mode maintenance — seuls les Super Admin se connectent",
     )
+    maintenance_message = models.TextField(
+        blank=True,
+        default='',
+        help_text="Texte affiché au public pendant la maintenance.",
+    )
+    processing_register = models.TextField(
+        blank=True,
+        default='',
+        help_text="Registre des traitements de données personnelles, tenu par l'opérateur.",
+    )
     password_min_length = models.PositiveSmallIntegerField(
         default=8,
         help_text="Longueur minimale des mots de passe (modifiable par Super Admin)",
@@ -155,6 +165,18 @@ class SiteSettings(models.Model):
     login_lock_minutes = models.PositiveIntegerField(
         default=15,
         help_text="Durée du blocage du compte, en minutes",
+    )
+    business_received_message = models.TextField(
+        blank=True, default='',
+        help_text="E-mail envoyé à l'entreprise quand son dossier d'inscription arrive.",
+    )
+    business_approved_message = models.TextField(
+        blank=True, default='',
+        help_text="E-mail envoyé quand le dossier est approuvé.",
+    )
+    business_rejected_message = models.TextField(
+        blank=True, default='',
+        help_text="E-mail envoyé quand le dossier est refusé.",
     )
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -266,6 +288,32 @@ class ContactMessage(models.Model):
     subject = models.CharField(max_length=200)
     message = models.TextField()
     is_read = models.BooleanField(default=False)
+    ticket_status = models.CharField(
+        max_length=20,
+        default='OPEN',
+        choices=(
+            ('OPEN', 'Ouvert'),
+            ('IN_PROGRESS', 'En cours'),
+            ('WAITING', 'En attente du client'),
+            ('RESOLVED', 'Résolu'),
+        ),
+    )
+    priority = models.CharField(
+        max_length=20,
+        default='NORMAL',
+        choices=(
+            ('LOW', 'Basse'),
+            ('NORMAL', 'Normale'),
+            ('URGENT', 'Urgente'),
+        ),
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='assigned_contact_tickets',
+    )
     admin_notes = models.TextField(blank=True)
     reply_body = models.TextField(blank=True, help_text='Dernière réponse envoyée au client')
     replied_at = models.DateTimeField(null=True, blank=True)

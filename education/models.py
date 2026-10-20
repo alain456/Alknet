@@ -144,6 +144,42 @@ class EducationProfile(models.Model):
         ('has_distance_learning', 'Cours à distance'),
     )
 
+    # --- University-specific fields ---
+    research_focus = models.TextField(
+        blank=True, default='', verbose_name='Domaines de recherche',
+        help_text='Principaux axes de recherche de l\'université.',
+    )
+    has_research_centers = models.BooleanField(
+        default=False, verbose_name='Centres de recherche',
+    )
+    partner_universities = models.JSONField(
+        default=list, blank=True, verbose_name='Universités partenaires',
+        help_text='Liste de {name, country, agreement_type, since_year}.',
+    )
+    accreditation_level = models.CharField(
+        max_length=32, blank=True, default='',
+        choices=(
+            ('NATIONAL', 'Nationale (MESRS)'),
+            ('REGIONAL', 'Régionale (CAMES, IUCEA)'),
+            ('INTERNATIONAL', 'Internationale (HCERES, AACSB, etc.)'),
+        ),
+        verbose_name='Niveau d\'accréditation',
+    )
+    student_population = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Population étudiante',
+        help_text='Nombre total d\'étudiants inscrits.',
+    )
+    faculty_count = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Nombre d\'enseignants',
+        help_text='Enseignants permanents (équivalent temps plein).',
+    )
+    founding_year = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Année de fondation',
+    )
+    motto = models.CharField(
+        max_length=200, blank=True, default='', verbose_name='Devise',
+    )
+
     # Parcours de l'école burundaise. Une école peut offrir l'un, l'autre, ou les deux.
     ECOFO_CYCLE_CHOICES = (
         ('C1', '1er cycle — 1ère et 2ème années'),
@@ -190,6 +226,10 @@ class EducationProfile(models.Model):
     class Meta:
         verbose_name = 'Fiche établissement Éducation'
         ordering = ['business__name']
+        indexes = [
+            models.Index(fields=['publication_status'], name='idx_eduprofile_pubstatus'),
+            models.Index(fields=['business', 'publication_status'], name='idx_eduprofile_biz_status'),
+        ]
 
     def __str__(self):
         return self.business.name
@@ -228,6 +268,11 @@ class EducationUnit(models.Model):
     kind = models.CharField(max_length=16, choices=UNIT_KIND_CHOICES, default='DEPARTMENT')
     code = models.CharField(max_length=50, blank=True, default='')
     description = models.TextField(blank=True, default='')
+    tuition = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Frais de scolarité',
+        help_text='Barème de la faculté, pour les programmes qui n’ont pas le leur. Peut varier par niveau.',
+    )
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(default=timezone.now)
@@ -236,6 +281,9 @@ class EducationUnit(models.Model):
     class Meta:
         verbose_name = 'Faculté / département'
         ordering = ['name']
+        indexes = [
+            models.Index(fields=['business', 'is_active'], name='idx_eduunit_biz_active'),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=['business', 'name'], name='uniq_education_unit_per_business',
@@ -259,6 +307,26 @@ class EducationProgram(models.Model):
         ('DOCTORATE', 'Doctorat'),
         ('CERTIFICATE', 'Certificat / diplôme court'),
         ('OTHER', 'Autre'),
+    )
+
+    DEGREE_TYPE_CHOICES = (
+        ('BACHELOR', 'Bachelor / Licence'),
+        ('MASTER', 'Master'),
+        ('DOCTORATE', 'Doctorat / PhD'),
+        ('PROFESSIONAL_BACHELOR', 'Licence professionnelle'),
+        ('PROFESSIONAL_MASTER', 'Master professionnel'),
+        ('ENGINEERING', 'Diplôme d\'ingénieur'),
+        ('MEDICAL', 'Diplôme médical / pharmaceutique'),
+        ('DUT', 'DUT / BTS'),
+        ('CERTIFICATE', 'Certificat'),
+        ('OTHER', 'Autre'),
+    )
+
+    ADMISSION_SELECTIVITY_CHOICES = (
+        ('OPEN', 'Ouvert (sur dossier)'),
+        ('SELECTIVE', 'Sélectif (concours / notes)'),
+        ('VERY_SELECTIVE', 'Très sélectif (concours national)'),
+        ('RESTRICTED', 'Accès restreint (quotas)'),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -305,6 +373,39 @@ class EducationProgram(models.Model):
     internship_details = models.TextField(
         blank=True, default='', verbose_name='Modalités de stage',
     )
+    options = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Options',
+        help_text='Université : options d\'un baccalauréat ou d\'un master, une par ligne.',
+    )
+    study_year_labels = models.JSONField(
+        default=list, blank=True,
+        verbose_name='Niveaux d\'inscription',
+        help_text='Libellés des années du cycle. Vide : proposés selon le cycle et la durée.',
+    )
+    tuition = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Frais de scolarité',
+        help_text='Barème du programme. S’il est renseigné, il remplace celui de la faculté. Peut varier par option et par niveau.',
+    )
+
+    degree_type = models.CharField(
+        max_length=32, choices=DEGREE_TYPE_CHOICES, blank=True, default='',
+        verbose_name='Type de diplôme',
+    )
+    credits = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Crédits (ECTS ou locaux)',
+        help_text='Total crédits du cycle (ex: 180 pour Licence, 120 pour Master).',
+    )
+    admission_selectivity = models.CharField(
+        max_length=32, choices=ADMISSION_SELECTIVITY_CHOICES, blank=True, default='',
+        verbose_name='Sélectivité admission',
+    )
+    language_of_instruction = models.CharField(
+        max_length=100, blank=True, default='',
+        verbose_name='Langue(s) d\'enseignement',
+        help_text='Ex: Français, Anglais, Kirundi. Séparées par des virgules.',
+    )
 
     level = models.CharField(max_length=32, choices=LEVEL_CHOICES, default='OTHER')
     is_active = models.BooleanField(default=True, help_text='Formation encore ouverte.')
@@ -320,6 +421,10 @@ class EducationProgram(models.Model):
         verbose_name = 'Formation'
         verbose_name_plural = 'Formations'
         ordering = ['display_order', 'title']
+        indexes = [
+            models.Index(fields=['business', 'is_public'], name='idx_eduprog_biz_public'),
+            models.Index(fields=['business', 'level'], name='idx_eduprog_biz_level'),
+        ]
 
     def __str__(self):
         return self.title
@@ -358,7 +463,7 @@ class AdmissionCampaign(models.Model):
     )
     required_documents = models.JSONField(
         default=list, blank=True, verbose_name='Pièces de l’année',
-        help_text='Université : pièces de la formation. École : pièces locales en plus du catalogue parcours.',
+        help_text='Université : pièces de la formation. École : pièces communes aux inscriptions anciennes.',
     )
     # Sous-ensemble des parcours de l'école ouverts pour cette année scolaire.
     open_tracks = models.JSONField(
@@ -370,7 +475,7 @@ class AdmissionCampaign(models.Model):
     enrollment_plan = models.JSONField(
         default=list, blank=True,
         verbose_name='Plan d’inscription',
-        help_text='Années ouvertes et nombre de places par parcours / section.',
+        help_text='Années ouvertes, places, et documents demandés pour chaque classe.',
     )
     extra_criteria = models.JSONField(
         default=list, blank=True,
@@ -381,14 +486,25 @@ class AdmissionCampaign(models.Model):
     fee_mode = models.CharField(
         max_length=16, blank=True, default='',
         choices=(('PAYANT', 'Payante'), ('GRATUIT', 'Gratuite')),
-        help_text='École : une inscription payante et une gratuite peuvent coexister pour la même année.',
+        help_text='Une inscription payante et une gratuite peuvent coexister pour la même année (école) ou le même programme (université).',
     )
+    year_start = models.DateField(null=True, blank=True, verbose_name='Rentrée')
+    year_break_start = models.DateField(null=True, blank=True, verbose_name='Début de pause')
+    year_break_end = models.DateField(null=True, blank=True, verbose_name='Fin de pause')
+    year_exam_start = models.DateField(null=True, blank=True, verbose_name='Début des examens')
+    year_deliberation = models.DateField(null=True, blank=True, verbose_name='Délibération')
 
     class Meta:
         ordering = ['-opens_on']
+        indexes = [
+            models.Index(fields=['business', 'is_public'], name='idx_educamp_biz_public'),
+            models.Index(fields=['business', 'academic_year'], name='idx_educamp_biz_year'),
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=['program', 'academic_year'], name='uniq_education_campaign_year',
+                fields=['program', 'academic_year', 'fee_mode'],
+                condition=models.Q(program__isnull=False) & ~models.Q(fee_mode=''),
+                name='uniq_education_program_year_mode',
             ),
             models.UniqueConstraint(
                 fields=['business', 'academic_year', 'fee_mode'],
@@ -469,17 +585,17 @@ class EnrollmentApplication(models.Model):
     # Coordonnées candidature (formulaire public, comme un RDV).
     student_name = models.CharField(max_length=200, blank=True, default='')
     student_email = models.EmailField(blank=True, default='')
-    student_phone = models.CharField(max_length=40, blank=True, default='')
+    student_phone = models.CharField(max_length=500, blank=True, default='')
     birth_date = models.DateField(null=True, blank=True, verbose_name='Date de naissance')
     GENDER = (
         ('F', 'Féminin'),
         ('M', 'Masculin'),
     )
     gender = models.CharField(max_length=1, choices=GENDER, blank=True, default='')
-    previous_school = models.CharField(max_length=200, blank=True, default='', verbose_name='École précédente')
-    student_address = models.CharField(max_length=255, blank=True, default='', verbose_name='Adresse')
-    guardian_name = models.CharField(max_length=200, blank=True, default='', verbose_name='Parent ou tuteur')
-    guardian_phone = models.CharField(max_length=40, blank=True, default='')
+    previous_school = models.CharField(max_length=500, blank=True, default='', verbose_name='École précédente')
+    student_address = models.CharField(max_length=800, blank=True, default='', verbose_name='Adresse')
+    guardian_name = models.CharField(max_length=500, blank=True, default='', verbose_name='Parent ou tuteur')
+    guardian_phone = models.CharField(max_length=500, blank=True, default='')
     guardian_link = models.CharField(
         max_length=40, blank=True, default='',
         verbose_name='Lien avec l’élève',
@@ -501,6 +617,11 @@ class EnrollmentApplication(models.Model):
     )
     # Copie figée des pièces au moment de la création (catalogue + extras école).
     required_documents = models.JSONField(default=list, blank=True)
+    profile_details = models.JSONField(
+        default=dict, blank=True,
+        verbose_name='Détail du candidat',
+        help_text='Université : identité, études antérieures, contact et niveau (BAC I, II, III).',
+    )
     criteria_acknowledged = models.BooleanField(
         default=False,
         verbose_name='Critères supplémentaires acceptés',
@@ -513,6 +634,10 @@ class EnrollmentApplication(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        indexes = [
+            models.Index(fields=['business', 'status'], name='idx_eduapp_biz_status'),
+            models.Index(fields=['campaign', 'status'], name='idx_eduapp_camp_status'),
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=['campaign', 'applicant'],
@@ -532,6 +657,21 @@ class EnrollmentApplication(models.Model):
                 name='education_application_status_known',
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        from .tenant_crypto import close_application, open_application
+        close_application(self, kwargs.get('update_fields'))
+        try:
+            super().save(*args, **kwargs)
+        finally:
+            open_application(self)
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        from .tenant_crypto import open_application
+        open_application(instance)
+        return instance
 
 
 class EnrollmentDocument(models.Model):
@@ -601,6 +741,11 @@ class EducationFeePayment(models.Model):
         ('PAID', 'Payé'),
         ('FAILED', 'Échoué'),
         ('WAIVED', 'Exonéré'),
+        ('BORDEREAU_RECU', 'Bordereau reçu'),
+    )
+    METHOD = (
+        ('BURUNDIPAY', 'BurundiPay'),
+        ('BORDEREAU', 'Bordereau'),
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     fee = models.ForeignKey(EducationFee, on_delete=models.PROTECT, related_name='payments')
@@ -613,7 +758,9 @@ class EducationFeePayment(models.Model):
         related_name='education_fee_payments',
     )
     status = models.CharField(max_length=20, choices=STATUS, default='UNPAID')
-    payer_phone = models.CharField(max_length=20, blank=True, default='')
+    method = models.CharField(max_length=16, choices=METHOD, blank=True, default='')
+    bordereau = models.FileField(upload_to='education/bordereaux/%Y/%m/', blank=True, null=True)
+    payer_phone = models.CharField(max_length=500, blank=True, default='')
     provider_reference = models.CharField(max_length=120, blank=True, default='')
     # Compte marchand utilisé au moment du debit. Fige comme dans les autres
     # modules de paiement : changer le compte de l'etablissement ne doit pas
@@ -628,7 +775,7 @@ class EducationFeePayment(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(status__in=['UNPAID', 'AWAITING_PIN', 'PAID', 'FAILED', 'WAIVED']),
+                condition=models.Q(status__in=['UNPAID', 'AWAITING_PIN', 'PAID', 'FAILED', 'WAIVED', 'BORDEREAU_RECU']),
                 name='education_fee_payment_status_known',
             ),
             models.UniqueConstraint(
@@ -637,6 +784,21 @@ class EducationFeePayment(models.Model):
                 name='uniq_education_fee_payment_per_application',
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        from .tenant_crypto import close_payment, open_payment
+        close_payment(self, kwargs.get('update_fields'))
+        try:
+            super().save(*args, **kwargs)
+        finally:
+            open_payment(self)
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        from .tenant_crypto import open_payment
+        open_payment(instance)
+        return instance
 
 
 class SchoolPlanSeat(models.Model):

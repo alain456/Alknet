@@ -298,6 +298,53 @@ class PublicClientSearchTests(TestCase):
         self.assertIn('Bujumbura', response.data['location'])
         self.assertTrue(response.data['groups']['businesses'])
 
+    def test_search_ignores_accents_and_suggest_opens_the_page(self):
+        from locations.models import Commune, Province
+
+        owner = User.objects.create_user(email='ecole-owner@test.bi', password='Pass123456!', role='BUSINESS_OWNER')
+        cat = BusinessCategory.objects.create(name='École', slug='ecole-search')
+        school = Business.objects.create(
+            owner=owner, primary_category=cat, name='École du Lac',
+            province='Bujumbura Mairie', commune='Mukaza',
+            verification_status='APPROVED', is_active=True,
+        )
+        province = Province.objects.create(name='Bujumbura Mairie', is_active=True)
+        Commune.objects.create(province=province, name='Mukaza', is_active=True)
+        client = APIClient()
+        found = client.get('/api/v1/businesses/search/', {'q': 'ecole'})
+        self.assertEqual(found.status_code, status.HTTP_200_OK, found.content)
+        self.assertIn('École du Lac', [row['title'] for row in found.data['groups']['businesses']])
+        suggested = client.get('/api/v1/businesses/search/suggest/', {'q': 'ecole'})
+        self.assertEqual(suggested.status_code, status.HTTP_200_OK, suggested.content)
+        match = next(row for row in suggested.data if row['label'] == 'École du Lac')
+        self.assertIn(str(school.id), match['href'])
+        places = client.get('/api/v1/businesses/search/suggest/', {'place': 'mukaza'})
+        self.assertTrue(any(row['label'] == 'Mukaza' and row['kind'] == 'location' for row in places.data))
+
+    def test_missing_location_ranks_by_visitor_position(self):
+        owner = User.objects.create_user(email='near-owner@test.bi', password='Pass123456!', role='BUSINESS_OWNER')
+        cat = BusinessCategory.objects.get(slug='restaurant-search')
+        Business.objects.create(
+            owner=owner, primary_category=cat, name='Grill proche',
+            province='Bujumbura Mairie', commune='Mukaza',
+            latitude=-3.382, longitude=29.364,
+            verification_status='APPROVED', is_active=True,
+        )
+        Business.objects.create(
+            owner=owner, primary_category=cat, name='Grill loin',
+            province='Gitega', commune='Gitega',
+            latitude=-3.426, longitude=29.931,
+            verification_status='APPROVED', is_active=True,
+        )
+        client = APIClient()
+        response = client.get('/api/v1/businesses/search/', {'q': 'grill', 'lat': '-3.383', 'lng': '29.365'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        self.assertTrue(response.data['near'])
+        names = [row['title'] for row in response.data['groups']['businesses']]
+        self.assertLess(names.index('Grill proche'), names.index('Grill loin'))
+        close = next(row for row in response.data['groups']['businesses'] if row['title'] == 'Grill proche')
+        self.assertIn('km', close['location'])
+
 
 class BurundiPayWebhookSecurityTests(TestCase):
     """
@@ -391,5 +438,60 @@ class BurundiPayWebhookSecurityTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.payment.refresh_from_db()
         self.assertEqual(self.payment.status, 'SUCCESS')
+
+
+class TenantSlugTests(TestCase):
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            email='slug-owner@test.bi', password='Pass123456!', role='BUSINESS_OWNER',
+        )
+        self.category = BusinessCategory.objects.create(
+            name='Université slug', slug='universite-slug', module='education',
+        )
+        self.business = Business.objects.create(
+            owner=self.owner, primary_category=self.category, name='Bujumbura International',
+            province='Bujumbura Mairie', is_active=True, is_verified=True,
+            verification_status='APPROVED',
+        )
+
+    def test_slug_is_assigned_from_the_name(self):
+        self.assertEqual(self.business.slug, 'bujumbura-international')
+        second = Business.objects.create(
+            owner=self.owner, primary_category=self.category, name='Bujumbura International',
+            province='Bujumbura Mairie',
+        )
+        self.assertEqual(second.slug, 'bujumbura-international-2')
+
+    def test_known_subdomain_resolves_and_unknown_is_404(self):
+        from django.test import RequestFactory
+        from config.middleware import TenantSubdomainMiddleware
+
+        middleware = TenantSubdomainMiddleware(lambda request: None)
+        request = RequestFactory().get('/', HTTP_HOST=f'{self.business.slug}.isokohub.com')
+        self.assertIsNone(middleware.process_request(request))
+        self.assertEqual(request.tenant.id, self.business.id)
+
+        missing = RequestFactory().get('/', HTTP_HOST='inconnu.isokohub.com')
+        response = middleware.process_request(missing)
+        self.assertEqual(response.status_code, 404)
+
+        local = RequestFactory().get('/', HTTP_HOST='localhost:8000')
+        self.assertIsNone(middleware.process_request(local))
+        self.assertIsNone(local.tenant)
+
+        reserved = RequestFactory().get('/', HTTP_HOST='www.isokohub.com')
+        self.assertIsNone(middleware.process_request(reserved))
+        self.assertIsNone(reserved.tenant)
+
+    def test_by_slug_points_at_the_public_page_once_approved(self):
+        client = APIClient()
+        response = client.get(f'/api/v1/businesses/by-slug/{self.business.slug}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data['public_path'], f'/education/establishment/{self.business.id}')
+
+        self.business.is_active = False
+        self.business.save(update_fields=['is_active'])
+        hidden = client.get(f'/api/v1/businesses/by-slug/{self.business.slug}/')
+        self.assertEqual(hidden.status_code, status.HTTP_404_NOT_FOUND)
 
 

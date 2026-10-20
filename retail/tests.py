@@ -11,6 +11,7 @@ from businesses.models import Business
 from .models import Prescription, ProformaInvoice, RetailProduct
 from .order_workflow import (
     accept_order,
+    complete_order,
     create_order_from_items,
     create_order_proforma,
     request_clarification,
@@ -72,6 +73,25 @@ class RetailWorkflowTests(TestCase):
         self.assertEqual(order.proforma.status, 'CONFIRMED')
         self.assertEqual(result['status'], 'SENT')
         self.assertEqual(len(mail.outbox), 2)
+
+    def test_delivery_consumes_real_stock(self):
+        order = self.create_order()
+        order.payment_status = 'PAID'
+        order.save(update_fields=['payment_status'])
+        accept_order(order, self.owner)
+        complete_order(order, self.owner)
+        self.product.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(order.status, 'COMPLETED')
+        self.assertEqual(self.product.quantity_real, 8)
+        self.assertEqual(self.product.quantity_reserved, 0)
+
+    def test_expired_lot_cannot_be_ordered(self):
+        from datetime import date, timedelta
+        self.product.expiration_date = date.today() - timedelta(days=1)
+        self.product.save(update_fields=['expiration_date'])
+        with self.assertRaisesMessage(ValueError, 'périmé'):
+            self.create_order()
 
     def test_clarification_requires_comment(self):
         order = self.create_order()

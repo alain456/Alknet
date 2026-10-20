@@ -60,6 +60,11 @@ class ProductListView(generics.ListAPIView):
             qs = qs.filter(shop_category_id=shop_cat)
         return qs
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['hide_purchase_price'] = True
+        return context
+
 
 class MyBusinessProductListView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
@@ -130,8 +135,13 @@ class ShopCategoryViewSet(viewsets.ModelViewSet):
         business = serializer.validated_data.get('business') or _user_business(self.request.user)
         if not business or not _can_manage(self.request.user, business):
             raise PermissionDenied('Permission refusée.')
-        name = serializer.validated_data.get('name') or ''
-        slug = serializer.validated_data.get('slug') or slugify(name)
+        name = (serializer.validated_data.get('name') or '').strip()
+        slug = serializer.validated_data.get('slug') or slugify(name) or 'categorie'
+        base = slug
+        n = 2
+        while ShopCategory.objects.filter(business=business, slug=slug).exists():
+            slug = f'{base}-{n}'
+            n += 1
         serializer.save(business=business, slug=slug)
 
 

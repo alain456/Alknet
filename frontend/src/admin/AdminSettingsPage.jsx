@@ -52,6 +52,8 @@ export default function AdminSettingsPage() {
             tax_rate_percent: String(settings.tax_rate_percent ?? 18),
             currency: settings.currency || 'BIF',
             maintenance_mode: Boolean(settings.maintenance_mode),
+            maintenance_message: settings.maintenance_message || '',
+            processing_register: settings.processing_register || '',
             auto_approve_businesses: Boolean(settings.auto_approve_businesses),
             brand_name: settings.brand_name || 'Isoko Hub',
             password_min_length: String(settings.password_min_length ?? 8),
@@ -88,6 +90,8 @@ export default function AdminSettingsPage() {
         tax_rate_percent: Number(formData.tax_rate_percent),
         currency: formData.currency,
         maintenance_mode: formData.maintenance_mode,
+        maintenance_message: formData.maintenance_message || '',
+        processing_register: formData.processing_register || '',
         auto_approve_businesses: formData.auto_approve_businesses,
         brand_name: formData.brand_name,
         password_min_length: Number(formData.password_min_length),
@@ -426,9 +430,31 @@ export default function AdminSettingsPage() {
                     Mode maintenance <AlertTriangle className="w-4 h-4" />
                   </span>
                   <span className="text-sm text-red-600/80">
-                    Plateforme hors ligne pour le public. Les Super Admin restent connectés.
+                    Les autres comptes ne peuvent plus se connecter. Le super administrateur reste admis.
                   </span>
                 </span>
+              </label>
+              <label className="block space-y-1 text-sm md:col-span-2">
+                <span className="font-medium text-ink">Message de maintenance</span>
+                <textarea
+                  name="maintenance_message"
+                  rows={3}
+                  value={formData.maintenance_message || ''}
+                  onChange={handleChange}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Exemple : retour prévu à 18 h."
+                />
+              </label>
+              <label className="block space-y-1 text-sm md:col-span-2">
+                <span className="font-medium text-ink">Registre des traitements</span>
+                <textarea
+                  name="processing_register"
+                  rows={5}
+                  value={formData.processing_register || ''}
+                  onChange={handleChange}
+                  className="w-full border rounded-lg px-3 py-2"
+                  placeholder="Quelles données, pour qui, combien de temps, qui y accède."
+                />
               </label>
             </div>
           </div>

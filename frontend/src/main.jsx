@@ -7,6 +7,10 @@ import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { queryClient } from './shared/queryClient.js'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
+import { installA11y } from './shared/a11y.js'
+
+if (document.body) installA11y()
+else document.addEventListener('DOMContentLoaded', installA11y)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

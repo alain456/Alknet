@@ -7,3 +7,5 @@ class BusinessesConfig(AppConfig):
 
     def ready(self):
         from . import signals  # noqa: F401
+        from .stock_alerts import connect_stock_alert_signals
+        connect_stock_alert_signals()

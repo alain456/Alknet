@@ -14,8 +14,6 @@ ECOFO_CYCLE_YEARS = {
     'C4': [7, 8, 9],
 }
 
-DEFAULT_POST_YEARS = [1, 2, 3]
-
 TRACK_PRESCOLAIRE = 'PRESCOLAIRE'
 TRACK_ECOFO = 'ECOFO'
 TRACK_POST = 'POST_FONDAMENTAL'
@@ -89,37 +87,26 @@ def normalize_class_list(raw, fallback=None):
 
 
 def section_years(section):
-    """Années / classes ouvertes pour une section post-fondamental (valeurs)."""
-    if not isinstance(section, dict):
-        return [str(y) for y in DEFAULT_POST_YEARS]
-    classes = normalize_class_list(
-        section.get('classes') or section.get('years'),
-        DEFAULT_POST_YEARS,
-    )
-    return [row['value'] for row in classes]
+    """Valeurs des classes saisies pour une section. Liste vide si l'école n'en a pas encore."""
+    return [row['value'] for row in section_classes(section)]
 
 
 def section_classes(section):
-    """Classes post-fondamental avec libellés."""
+    """Classes post-fondamental avec libellés. Rien n'est inventé si la liste est absente."""
     if not isinstance(section, dict):
-        return normalize_class_list(DEFAULT_POST_YEARS)
-    return normalize_class_list(
-        section.get('classes') or section.get('years'),
-        DEFAULT_POST_YEARS,
-    )
+        return []
+    if 'classes' in section and section.get('classes') is not None:
+        return normalize_class_list(section.get('classes'))
+    if section.get('years') is not None:
+        return normalize_class_list(section.get('years'))
+    return []
 
 
 def ecofo_classes_for_profile(profile):
-    """Classes ECOFO dynamiques (CRUD admin), avec repli sur les cycles legacy."""
+    """Classes ECOFO telles que l'école les a nommées. Les cycles ne créent pas de classes."""
     if not profile:
         return []
-    classes = normalize_class_list(getattr(profile, 'ecofo_classes', None) or [])
-    if classes:
-        return classes
-    return [
-        {'value': str(year), 'label': year_label(year)}
-        for year in ecofo_years_from_cycles(getattr(profile, 'ecofo_cycles', None) or [])
-    ]
+    return normalize_class_list(getattr(profile, 'ecofo_classes', None) or [])
 
 
 def enrollment_options_for_profile(profile):
@@ -178,12 +165,19 @@ def normalize_enrollment_plan(raw):
         if key in seen:
             continue
         seen.add(key)
-        out.append({
+        row = {
             'track': track,
             'year': year,
             'section': section,
             'seats': seats,
-        })
+        }
+        label = str(item.get('label') or '').strip()
+        if label:
+            row['label'] = label[:120]
+        if 'documents' in item:
+            from .school_enrollment_docs import clean_school_documents
+            row['documents'] = clean_school_documents(item.get('documents'))
+        out.append(row)
     return out
 
 
@@ -252,7 +246,7 @@ def enrollment_options_for_campaign(campaign, profile=None):
                 seen_ecofo.add(row['year'])
                 ecofo.append({
                     'value': row['year'],
-                    'label': year_label(row['year']),
+                    'label': row.get('label') or year_label(row['year']),
                     'seats': row['seats'],
                 })
         elif track == TRACK_POST:
@@ -264,7 +258,7 @@ def enrollment_options_for_campaign(campaign, profile=None):
             if not any(item['value'] == row['year'] for item in bucket['years']):
                 bucket['years'].append({
                     'value': row['year'],
-                    'label': year_label(row['year']),
+                    'label': row.get('label') or year_label(row['year']),
                     'seats': row['seats'],
                 })
 

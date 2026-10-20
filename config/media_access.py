@@ -57,6 +57,11 @@ def protected_media(request, path):
     full = settings.MEDIA_ROOT / relative
     if not full.is_file():
         raise Http404
+    # Logos et avatars : visibles sur les fiches publiques.
+    if relative.startswith('public/profiles/'):
+        response = serve(request, relative, document_root=settings.MEDIA_ROOT)
+        response['Cache-Control'] = 'no-cache'
+        return response
     user = user_from_request(request)
     if not user or not getattr(user, 'is_authenticated', False):
         return HttpResponse(status=401)

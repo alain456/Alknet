@@ -19,8 +19,9 @@ from .serializers import (
 )
 from .order_workflow import (
     ensure_wholesale_profile, generate_order_reference, log_order_event,
-    recalculate_order_total, adjust_stock, accept_order, reject_order,
-    mark_order_paid, mark_order_unpaid, REFUSAL_REASONS,
+    recalculate_order_total, adjust_stock, accept_order, complete_order, reject_order,
+    ensure_sellable,
+    mark_order_paid, mark_order_unpaid, REFUSAL_REASONS, notify_order_submitted,
     snapshot_cart_item, sync_draft_proforma, generate_proforma_reference,
 )
 
@@ -211,9 +212,20 @@ class StockMovementViewSet(viewsets.ReadOnlyModelViewSet):
         ).select_related('product', 'user')
 
 
+def _order_writes_closed(request, *args, **kwargs):
+    return Response(
+        {'error': 'Le statut d’une commande se change par les actions prévues, pas par modification directe.'},
+        status=405,
+    )
+
+
 class WholesaleOrderViewSet(viewsets.ModelViewSet):
     serializer_class = WholesaleOrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    create = _order_writes_closed
+    update = _order_writes_closed
+    partial_update = _order_writes_closed
+    destroy = _order_writes_closed
 
     def get_permissions(self):
         if getattr(self, 'action', None) in ('pay', 'confirm_payment'):
@@ -336,6 +348,7 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
         result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = self.get_serializer(order).data
+        payment_access.attach_payment_token(data, order)
         return Response({
             'ok': result.get('ok'),
             'already_paid': result.get('already_paid', False),
@@ -355,10 +368,12 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         result = confirm_order_payment_stub(order)
         order.refresh_from_db()
+        order_data = self.get_serializer(order).data
+        payment_access.attach_payment_token(order_data, order)
         return Response({
             'ok': result.get('ok'),
             'message': result.get('message') or '',
-            'order': self.get_serializer(order).data,
+            'order': order_data,
         }, status=200 if result.get('ok') else 400)
 
     @action(detail=True, methods=['post'])
@@ -379,7 +394,17 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
         order.save()
         recalculate_order_total(order)
         log_order_event(order, 'SUBMITTED', 'Commande envoyee par le client.', request.user)
-        return Response(self.get_serializer(order).data)
+        mail = notify_order_submitted(order)
+        if mail.get('status') != 'SENT':
+            order.status = 'DRAFT'
+            order.save(update_fields=['status', 'updated_at'])
+            return Response({
+                'error': 'La commande n’est pas enregistrée : le client n’a pas reçu l’e-mail.',
+                'email_notification': mail,
+            }, status=400)
+        data = self.get_serializer(order).data
+        data['email_notification'] = mail
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def accept(self, request, pk=None):
@@ -394,6 +419,18 @@ class WholesaleOrderViewSet(viewsets.ModelViewSet):
         data = self.get_serializer(order).data
         data['email_notification'] = email_result
         return Response(data)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        order = self.get_object()
+        business = get_user_tenant_business(request.user)
+        if order.wholesale_business_id != getattr(business, 'id', None):
+            return Response({'error': 'Permission refusee.'}, status=403)
+        try:
+            order = complete_order(order, request.user)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        return Response(self.get_serializer(order).data)
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
@@ -479,6 +516,10 @@ class WholesaleCartViewSet(viewsets.ViewSet):
             return Response({'error': 'Quantite minimale: 1'}, status=400)
         if quantity < product.min_order_quantity:
             return Response({'error': f'Quantite minimale: {product.min_order_quantity}'}, status=400)
+        try:
+            ensure_sellable(product)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
         if quantity > product.quantity_available:
             return Response({'error': f'Stock disponible: {product.quantity_available}'}, status=400)
         cart, _ = WholesaleCart.objects.get_or_create(
@@ -585,6 +626,10 @@ class WholesaleCartViewSet(viewsets.ViewSet):
             p = item.product
             if p.status != 'ACTIVE':
                 return Response({'error': f'Produit inactif: {p.name}'}, status=400)
+            try:
+                ensure_sellable(p)
+            except ValueError as exc:
+                return Response({'error': str(exc)}, status=400)
             if item.quantity < p.min_order_quantity:
                 return Response({'error': f'Quantite minimale pour {p.name}: {p.min_order_quantity}'}, status=400)
             if item.quantity > p.quantity_available:
@@ -664,6 +709,14 @@ class WholesaleCartViewSet(viewsets.ViewSet):
         proforma.order = order
         proforma.save(update_fields=['order', 'updated_at'])
         log_order_event(order, 'SUBMITTED', 'Commande envoyee.', request.user)
+        mail = notify_order_submitted(order)
+        if mail.get('status') != 'SENT':
+            order.status = 'DRAFT'
+            order.save(update_fields=['status', 'updated_at'])
+            return Response({
+                'error': 'La commande n’est pas enregistrée : le client n’a pas reçu l’e-mail.',
+                'email_notification': mail,
+            }, status=400)
 
         cart.items.all().delete()
         from .order_payment import initiate_order_payment
@@ -671,6 +724,7 @@ class WholesaleCartViewSet(viewsets.ViewSet):
         pay_result = initiate_order_payment(order, payer_phone)
         order.refresh_from_db()
         data = WholesaleOrderSerializer(order).data
+        payment_access.attach_payment_token(data, order)
         data['payment_initiation'] = {
             'ok': pay_result.get('ok'),
             'already_paid': pay_result.get('already_paid', False),
@@ -1034,6 +1088,11 @@ def guest_checkout(request):
         if qty < product.min_order_quantity:
             order.delete()
             return Response({'error': f'Quantite minimale pour {product.name}: {product.min_order_quantity}'}, status=400)
+        try:
+            ensure_sellable(product)
+        except ValueError as exc:
+            order.delete()
+            return Response({'error': str(exc)}, status=400)
         if qty > product.quantity_available:
             order.delete()
             return Response({'error': f'Stock insuffisant pour {product.name}'}, status=400)
@@ -1058,11 +1117,19 @@ def guest_checkout(request):
         f'Commande catalogue public: {buyer_name}',
         user,
     )
+    mail = notify_order_submitted(order)
+    if mail.get('status') != 'SENT':
+        order.delete()
+        return Response({
+            'error': 'La commande n’est pas enregistrée : le client n’a pas reçu l’e-mail.',
+            'email_notification': mail,
+        }, status=400)
     from .order_payment import initiate_order_payment
     from businesses import burundipay as burundipay_client
     pay_result = initiate_order_payment(order, payer_phone)
     order.refresh_from_db()
     data = WholesaleOrderSerializer(order).data
+    payment_access.attach_payment_token(data, order)
     data['payment_initiation'] = {
         'ok': pay_result.get('ok'),
         'already_paid': pay_result.get('already_paid', False),

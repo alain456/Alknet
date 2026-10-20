@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { platformRoleLabel, userHasPlatformPerm } from '../auth/platformPermissions';
 import DataSummaryCard from './components/DataSummaryCard';
 import AdminModerationModal from './AdminModerationModal';
+import BusinessRegistrationMessages from './BusinessRegistrationMessages';
 
 export default function AdminModerationPage() {
   const { user } = useAuth();
@@ -90,6 +91,8 @@ export default function AdminModerationPage() {
           Actualiser
         </button>
       </header>
+
+      <BusinessRegistrationMessages />
 
       {error && (
         <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm dark:bg-red-950/40 dark:text-red-200">

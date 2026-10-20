@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Stethoscope, Plus, Mail, CreditCard, Video, Clock, Shield, HeartPulse, Edit2, Trash2, Upload, User, X, MapPin } from 'lucide-react';
+import { Stethoscope, Plus, Mail, CreditCard, Video, Clock, Shield, HeartPulse, Edit2, Trash2, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import hospitalService from '../hospitalService';
-import { readImageAsDataUrl } from '../../shared/imageUpload';
 import PasswordInput from '../../shared/components/PasswordInput';
+import AvatarPicker from '../../shared/components/AvatarPicker';
 
 export default function ManageDoctors() {
   const [doctors, setDoctors] = useState([]);
@@ -32,7 +32,6 @@ export default function ManageDoctors() {
     specialty_ids: [], service_ids: [], role_id: ''
   });
   const [photoError, setPhotoError] = useState('');
-  const [photoUploading, setPhotoUploading] = useState(false);
   
   const [activeCategoryTab, setActiveCategoryTab] = useState('ALL');
   
@@ -167,22 +166,6 @@ export default function ManageDoctors() {
     setIsModalOpen(true);
   };
 
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setPhotoError('');
-    setPhotoUploading(true);
-    try {
-      const dataUrl = await readImageAsDataUrl(file);
-      setFormData((prev) => ({ ...prev, photo_url: dataUrl }));
-    } catch (err) {
-      setPhotoError(err.message || 'Upload impossible');
-    } finally {
-      setPhotoUploading(false);
-    }
-  };
-
   // Delete Doctor Profile
   const handleDeleteDoctor = async (id, doctorName) => {
     if (!window.confirm(`Voulez-vous vraiment supprimer le profil de ${doctorName} ? cette action est irréversible.`)) {
@@ -307,7 +290,7 @@ export default function ManageDoctors() {
             );
             return (
               <div key={doc.id} className={`bg-white dark:bg-gray-900 rounded-2xl border-2 shadow-sm hover:shadow-md transition p-6 flex flex-col justify-between space-y-4 ${
-                idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                'border-border'
               }`}>
                 <div>
                   <div className="flex items-start justify-between mb-3">
@@ -618,51 +601,22 @@ export default function ManageDoctors() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Photo professionnelle (publique)
                 </label>
-                <div className="flex flex-col sm:flex-row gap-4 items-start">
-                  <div className="w-24 h-24 rounded-2xl border border-teal-100 bg-teal-50 overflow-hidden flex items-center justify-center shrink-0">
-                    {formData.photo_url ? (
-                      <img src={formData.photo_url} alt="Aperçu" className="w-full h-full object-cover" />
-                    ) : (
-                      <User className="w-10 h-10 text-teal-400" />
-                    )}
-                  </div>
-                  <div className="flex-1 space-y-2 w-full">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold cursor-pointer transition inline-flex items-center gap-1.5">
-                        <Upload className="w-4 h-4" />
-                        {photoUploading ? 'Traitement…' : 'Téléverser une image'}
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp,image/gif"
-                          className="hidden"
-                          disabled={photoUploading}
-                          onChange={handlePhotoUpload}
-                        />
-                      </label>
-                      {formData.photo_url && (
-                        <button
-                          type="button"
-                          onClick={() => { setFormData({ ...formData, photo_url: '' }); setPhotoError(''); }}
-                          className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 text-sm font-semibold rounded-lg inline-flex items-center gap-1"
-                        >
-                          <X className="w-4 h-4" /> Retirer
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      type="url"
-                      value={formData.photo_url?.startsWith('data:') ? '' : (formData.photo_url || '')}
-                      onChange={(e) => setFormData({ ...formData, photo_url: e.target.value })}
-                      className="w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600 text-sm"
-                      placeholder="Ou coller une URL d'image (https://…)"
-                    />
-                    {photoError && <p className="text-xs text-red-600">{photoError}</p>}
-                    <p className="text-[11px] text-gray-400">
-                      Visible côté client dans l&apos;annuaire des médecins spécialistes (si le praticien est publié).
-                      JPG/PNG/WebP, max 5 Mo — l&apos;image est automatiquement compressée.
-                    </p>
-                  </div>
-                </div>
+                <AvatarPicker
+                  value={formData.photo_url}
+                  onChange={(dataUrl) => setFormData((prev) => ({ ...prev, photo_url: dataUrl }))}
+                  onError={setPhotoError}
+                />
+                <input
+                  type="url"
+                  value={formData.photo_url?.startsWith('data:') ? '' : (formData.photo_url || '')}
+                  onChange={(e) => setFormData({ ...formData, photo_url: e.target.value })}
+                  className="mt-3 w-full px-4 py-2 border dark:border-gray-700 dark:bg-gray-800 dark:text-white rounded-lg outline-none focus:ring-2 focus:ring-teal-600 text-sm"
+                  placeholder="Ou coller une URL d'image (https://…)"
+                />
+                {photoError && <p className="text-xs text-red-600 mt-2">{photoError}</p>}
+                <p className="text-[11px] text-gray-400 mt-2">
+                  Visible côté client dans l&apos;annuaire des médecins. Glissez la photo pour choisir le cadrage.
+                </p>
               </div>
 
               <div>

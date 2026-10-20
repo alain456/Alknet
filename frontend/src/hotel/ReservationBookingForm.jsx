@@ -40,6 +40,19 @@ function nightsBetween(checkIn, checkOut) {
   }
 }
 
+function GuestStepper({ label, value, onDec, onInc }) {
+  return (
+    <div>
+      <p className="text-xs font-bold text-ink-muted mb-1">{label}</p>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onDec} className="w-9 h-9 rounded-xl border-2 border-accent text-ink font-extrabold" aria-label={`Moins ${label}`}>−</button>
+        <span className="min-w-8 text-center text-base font-extrabold text-ink">{value}</span>
+        <button type="button" onClick={onInc} className="w-9 h-9 rounded-xl bg-accent text-ink font-extrabold border-2 border-accent" aria-label={`Plus ${label}`}>+</button>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Formulaire réservation partagé (client public + admin / réception).
  * mode: 'public' | 'admin'
@@ -158,9 +171,37 @@ export default function ReservationBookingForm({
     });
   };
 
+  const bump = (key, delta, min, max) => {
+    const next = (Number(form[key]) || 0) + delta;
+    if (next < min) return;
+    if (max != null && next > max) return;
+    setForm({ ...form, [key]: next });
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {err && <p className="text-sm text-alert font-bold whitespace-pre-wrap">{err}</p>}
+
+      {mode === 'public' && selectedType && (
+        <div className="rounded-2xl border-2 border-accent/40 bg-surface px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Votre séjour</p>
+            <p className="text-base font-extrabold text-ink">{selectedType.name}</p>
+            <p className="text-xs font-medium text-ink-muted">
+              {form.check_in_date || '—'} → {form.check_out_date || '—'}
+              {nights > 0 ? ` · ${nights} nuit(s)` : ''}
+              {` · ${adultsN} adulte(s)`}
+              {childrenN ? ` · ${childrenN} enfant(s)` : ''}
+            </p>
+          </div>
+          {perNight > 0 && (
+            <p className="text-lg font-extrabold text-primary">
+              {perNight.toLocaleString('fr-FR')}
+              <span className="text-xs font-bold text-ink-muted"> {rateCurrency}/nuit</span>
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid sm:grid-cols-2 gap-3">
         <div>
@@ -322,6 +363,22 @@ export default function ReservationBookingForm({
         </div>
       </div>
 
+      {mode === 'public' ? (
+        <div className="grid sm:grid-cols-2 gap-3">
+          <GuestStepper
+            label={`Adultes${capAdults ? ` (max ${capAdults})` : ''}`}
+            value={adultsN}
+            onDec={() => bump('adults', -1, 1, capAdults || null)}
+            onInc={() => bump('adults', 1, 1, capAdults || null)}
+          />
+          <GuestStepper
+            label={`Enfants${selectedType ? ` (max ${capChildren})` : ''}`}
+            value={childrenN}
+            onDec={() => bump('children', -1, 0, selectedType ? capChildren : null)}
+            onInc={() => bump('children', 1, 0, selectedType ? capChildren : null)}
+          />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-bold text-ink-muted mb-1">
@@ -350,6 +407,7 @@ export default function ReservationBookingForm({
           />
         </div>
       </div>
+      )}
       {capacityError && (
         <p className="text-xs text-alert font-bold -mt-2">{capacityError}</p>
       )}

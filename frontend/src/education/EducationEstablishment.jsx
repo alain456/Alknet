@@ -2,80 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  ArrowLeft, GraduationCap, MapPin, Phone, Globe, Mail, BookOpen, Award, ShieldCheck,
+  ArrowLeft, GraduationCap, MapPin, Phone, Globe, Mail, Award, ShieldCheck,
   Landmark, Library, Bus, UtensilsCrossed, Wrench, HeartPulse, CalendarDays,
-  ExternalLink, FileText, Briefcase,
+  ExternalLink, Briefcase,
 } from 'lucide-react';
 import educationService from './educationService';
-import { EDUCATION_ENUM_FALLBACK, loadEducationEnums } from './educationEnums';
+import { EDUCATION_ENUM_FALLBACK, loadEducationEnums, programHeadline, universityLevelLabel } from './educationEnums';
 import SchoolHistoryCarousel from './SchoolHistoryCarousel';
 
-function mapGrid(lat, lon, zoom = 16) {
+function mapPreview(lat, lon, zoom = 15) {
   const n = 2 ** zoom;
   const xFloat = (Number(lon) + 180) / 360 * n;
   const latRad = (Number(lat) * Math.PI) / 180;
   const yFloat = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n;
   const x = Math.floor(xFloat);
   const y = Math.floor(yFloat);
-  const tiles = [];
-  for (let row = -1; row <= 1; row += 1) {
-    for (let col = -1; col <= 1; col += 1) {
-      tiles.push({
-        key: `${x + col}-${y + row}`,
-        src: `/api/v1/locations/map-tile/${zoom}/${x + col}/${y + row}.png`,
-      });
-    }
-  }
   return {
-    tiles,
-    left: `${(((xFloat - (x - 1)) / 3) * 100).toFixed(2)}%`,
-    top: `${(((yFloat - (y - 1)) / 3) * 100).toFixed(2)}%`,
+    src: `/api/v1/locations/map-tile/${zoom}/${x}/${y}.png`,
+    left: `${((xFloat - x) * 100).toFixed(2)}%`,
+    top: `${((yFloat - y) * 100).toFixed(2)}%`,
   };
 }
-function offerSections(units, programs) {
-  const byParent = new Map();
-  units.forEach((unit) => {
-    const key = unit.parent || '';
-    if (!byParent.has(key)) byParent.set(key, []);
-    byParent.get(key).push(unit);
-  });
-  const used = new Set();
-  const take = (id) => programs.filter((program) => {
-    if (String(program.unit || '') !== String(id)) return false;
-    used.add(program.id);
-    return true;
-  });
-  const sections = [];
-  (byParent.get('') || []).forEach((root) => {
-    sections.push({
-      key: root.id,
-      title: root.name,
-      eyebrow: root.kind_label,
-      description: root.description,
-      programs: take(root.id),
-    });
-    (byParent.get(root.id) || []).forEach((dept) => {
-      sections.push({
-        key: dept.id,
-        title: dept.name,
-        eyebrow: dept.kind_label,
-        description: dept.description,
-        nested: true,
-        programs: take(dept.id),
-      });
-    });
-  });
-  const loose = programs.filter((program) => !used.has(program.id));
-  if (loose.length) {
-    sections.push({
-      key: 'loose',
-      title: units.length ? 'Autres formations' : '',
-      programs: loose,
-    });
-  }
-  return sections.filter((section) => section.programs.length || section.description);
-}
-
 /** Icône selon le libellé du service saisi par l'établissement. */
 function serviceIcon(label = '') {
   const l = label.toLowerCase();
@@ -116,21 +63,149 @@ function Section({ icon: Icon, title, children, id }) {
   );
 }
 
-function DocumentList({ items }) {
-  const list = (items || []).filter((d) => d && (d.label || d.description));
-  if (!list.length) return null;
+function dueLabel(iso) {
+  if (!iso) return '';
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function TuitionReveal({ lines, academicYear, label }) {
+  const [open, setOpen] = React.useState(false);
+  if (!lines?.length) return null;
   return (
-    <ul className="space-y-1.5">
-      {list.map((doc, i) => (
-        <li key={`${doc.label}-${i}`} className="flex items-start gap-2 text-sm text-ink-muted dark:text-white/80">
-          <FileText className="w-4 h-4 mt-0.5 shrink-0 text-green-700 dark:text-green-300" />
-          <span>
-            {doc.label}
-            {doc.description ? <span className="text-gray-500"> — {doc.description}</span> : null}
-          </span>
-        </li>
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="text-sm font-bold text-primary"
+      >
+        {open ? 'Masquer les frais de scolarité' : label}
+      </button>
+      {open && (
+        <div className="mt-2 text-sm text-ink">
+          {academicYear && <p className="font-semibold">Année {academicYear}</p>}
+          {lines.map((line) => {
+            const scope = [line.option ? `Option ${line.option}` : '', line.year_label].filter(Boolean).join(' · ') || 'Tous les niveaux';
+            const total = (line.installments || []).reduce((sum, row) => sum + Number(row.amount_bif || 0), 0);
+            return (
+              <div key={`${line.option || ''}-${line.year_label || scope}`} className="mt-1">
+                <p>{scope} — {total.toLocaleString('fr-BI')} BIF</p>
+                <ul className="text-ink-muted">
+                  {(line.installments || []).map((row) => (
+                    <li key={`${row.label}-${row.due_date}`}>
+                      {row.label} · {Number(row.amount_bif || 0).toLocaleString('fr-BI')} BIF
+                      {row.due_date ? ` · au plus tard le ${dueLabel(row.due_date)}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function tuitionLines(tuition) {
+  return (tuition?.schedules || []).map((schedule) => ({
+    option: schedule.option || '',
+    year_label: schedule.year_label || '',
+    installments: schedule.installments || [],
+  }));
+}
+
+function ProgramCard({ program }) {
+  const options = Array.isArray(program.options) ? program.options : [];
+  const cycle = universityLevelLabel(program.level, program.level_label);
+  return (
+    <div className="rounded-xl bg-surface px-3 py-2">
+      <p className="text-sm font-bold text-ink">{programHeadline(program.title, cycle)}</p>
+      {program.duration_label && <p className="text-xs text-ink-muted">{program.duration_label}</p>}
+      {program.level === 'MASTER' && program.domain && (
+        <p className="text-xs text-ink-muted">{program.domain}</p>
+      )}
+      {program.level === 'MASTER' && (program.faculty_name || program.unit_name) && (
+        <p className="text-xs text-ink-muted">Rattachement : {program.faculty_name || program.unit_name}</p>
+      )}
+      {options.length > 0 && (
+        <ul className="mt-1 text-sm text-ink">
+          {program.level === 'MASTER' && <li className="text-xs text-ink-muted">Parcours</li>}
+          {options.map((name) => <li key={name}>{name}</li>)}
+        </ul>
+      )}
+      {program.tuition_display?.source === 'programme' && (
+        <TuitionReveal
+          lines={program.tuition_display.lines}
+          academicYear={program.tuition_display.academic_year}
+          label="Voir les frais de scolarité"
+        />
+      )}
+    </div>
+  );
+}
+
+function UniversityOffer({ units, programs }) {
+  const masters = programs.filter((program) => program.level === 'MASTER');
+  const bachelorPrograms = programs.filter((program) => program.level !== 'MASTER');
+  const faculties = units.filter((row) => row.kind === 'FACULTY' || (!row.parent && row.kind !== 'DEPARTMENT'));
+  const used = new Set();
+  const blocks = faculties.map((faculty) => {
+    const departments = units.filter((row) => row.kind === 'DEPARTMENT' && String(row.parent) === String(faculty.id));
+    const direct = bachelorPrograms.filter((program) => String(program.unit || '') === String(faculty.id));
+    direct.forEach((program) => used.add(program.id));
+    const groups = departments.map((department) => {
+      const rows = bachelorPrograms.filter((program) => String(program.unit || '') === String(department.id));
+      rows.forEach((program) => used.add(program.id));
+      return { department, rows };
+    }).filter((group) => group.rows.length || (group.department.tuition?.schedules || []).length);
+    return { faculty, direct, groups };
+  });
+  const loose = bachelorPrograms.filter((program) => !used.has(program.id));
+
+  return (
+    <div className="space-y-6">
+      {(blocks.some((block) => block.direct.length || block.groups.length) || loose.length > 0) && (
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Baccalauréats</p>
+      )}
+      {blocks.map(({ faculty, direct, groups }) => (
+        <div key={faculty.id}>
+          <p className="text-sm font-extrabold text-ink">{faculty.name}</p>
+          {faculty.description && <p className="mt-1 text-sm text-ink-muted">{faculty.description}</p>}
+          <TuitionReveal lines={tuitionLines(faculty.tuition)} academicYear={faculty.tuition?.academic_year} label="Voir les frais de la faculté" />
+          {direct.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {direct.map((program) => <ProgramCard key={program.id} program={program} />)}
+            </div>
+          )}
+          {groups.map(({ department, rows }) => (
+            <div key={department.id} className="mt-3">
+              <p className="text-sm font-semibold text-ink">{department.name}</p>
+              {department.description && <p className="text-sm text-ink-muted">{department.description}</p>}
+              <TuitionReveal lines={tuitionLines(department.tuition)} academicYear={department.tuition?.academic_year} label="Voir les frais du département" />
+              <div className="mt-2 space-y-2">
+                {rows.map((program) => <ProgramCard key={program.id} program={program} />)}
+              </div>
+            </div>
+          ))}
+        </div>
       ))}
-    </ul>
+      {loose.length > 0 && (
+        <div>
+          {blocks.length > 0 && <p className="text-sm font-extrabold text-ink">Autres programmes</p>}
+          <div className="mt-2 space-y-2">
+            {loose.map((program) => <ProgramCard key={program.id} program={program} />)}
+          </div>
+        </div>
+      )}
+      {masters.length > 0 && (
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Masters</p>
+          <div className="mt-2 space-y-2">
+            {masters.map((program) => <ProgramCard key={program.id} program={program} />)}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -138,8 +213,6 @@ export default function EducationEstablishment() {
   const { id } = useParams();
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
-  const [programs, setPrograms] = useState([]);
-  const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [travel, setTravel] = useState(null);
@@ -147,6 +220,8 @@ export default function EducationEstablishment() {
   const [locating, setLocating] = useState(false);
   const [enums, setEnums] = useState({ particularities: [], ecofo_cycles: [], post_orientations: [] });
   const [schoolYears, setSchoolYears] = useState([]);
+  const [offer, setOffer] = useState({ units: [], programs: [] });
+  const [mapBroken, setMapBroken] = useState(false);
 
   useEffect(() => {
     loadEducationEnums().then(setEnums);
@@ -156,6 +231,7 @@ export default function EducationEstablishment() {
     let active = true;
     (async () => {
       setLoading(true);
+      setMapBroken(false);
       try {
         // Le détail n'est servi que si la fiche est publiée : un brouillon
         // renvoie 404, ce qui est le comportement attendu côté API. Si l'id
@@ -169,19 +245,25 @@ export default function EducationEstablishment() {
           data = await educationService.getEstablishmentByBusiness(id);
         }
         const businessId = data.business_detail?.id || data.business;
-        const [list, unitList] = await Promise.all([
-          educationService.publicPrograms(data.id),
-          educationService.listPublicUnits({ business: businessId }).catch(() => []),
-        ]);
         if (!active) return;
         setProfile(data);
-        setPrograms(Array.isArray(list) ? list : (list?.results || []));
-        setUnits(Array.isArray(unitList) ? unitList : (unitList?.results || []));
         if ((data.business_detail?.category_slug || '') === 'ecole') {
           const years = await educationService.listPublicCampaigns({ business: businessId }).catch(() => []);
           if (active) {
             const rows = Array.isArray(years) ? years : (years?.results || []);
             setSchoolYears(rows.filter((year) => year.is_public !== false));
+          }
+        }
+        if ((data.business_detail?.category_slug || '') === 'universite') {
+          const [programList, unitList] = await Promise.all([
+            educationService.publicPrograms(data.id).catch(() => []),
+            educationService.listPublicUnits({ business: businessId }).catch(() => []),
+          ]);
+          if (active) {
+            setOffer({
+              programs: Array.isArray(programList) ? programList : (programList?.results || []),
+              units: Array.isArray(unitList) ? unitList : (unitList?.results || []),
+            });
           }
         }
         setError('');
@@ -225,6 +307,12 @@ export default function EducationEstablishment() {
   if (!profile) return null;
 
   const business = profile.business_detail || {};
+  const universityCampaigns = (offer.programs || []).flatMap((program) => (
+    (program.campaigns || []).map((campaign) => ({
+      ...campaign,
+      program_title: campaign.program_title || program.title,
+    }))
+  ));
   const services = (profile.student_services || []).filter((s) => s && (s.label || s.description));
   const gallery = (profile.gallery || []).filter(Boolean);
   const hasContact = business.phone || profile.institutional_email || business.email || business.website;
@@ -248,8 +336,8 @@ export default function EducationEstablishment() {
   const mapHref = business.latitude != null && business.longitude != null
     ? `https://www.openstreetmap.org/?mlat=${business.latitude}&mlon=${business.longitude}#map=16/${business.latitude}/${business.longitude}`
     : '';
-  const tile = business.latitude != null && business.longitude != null
-    ? mapGrid(business.latitude, business.longitude)
+  const tile = !mapBroken && business.latitude != null && business.longitude != null
+    ? mapPreview(business.latitude, business.longitude)
     : null;
 
   const locate = () => {
@@ -271,6 +359,7 @@ export default function EducationEstablishment() {
         setTravel({
           km: data.distance_km,
           minutes: data.duration_minutes,
+          kind: data.kind || 'driving',
         });
       } catch (err) {
         setTravel(null);
@@ -310,9 +399,9 @@ export default function EducationEstablishment() {
         {gallery.length > 0 ? (
           <SchoolHistoryCarousel hero images={gallery} name={business.name} />
         ) : (
-          <div className="h-[420px] sm:h-[560px] bg-gradient-to-br from-primary to-[#132F45]" />
+          <div className="h-[420px] sm:h-[560px] bg-gradient-to-br from-ink to-primary" />
         )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-black/10" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-ink/85 via-primary/45 to-primary/10" />
         <div className="pointer-events-none absolute inset-0 z-10 flex items-end sm:items-center">
           <div className="max-w-6xl mx-auto w-full px-4 sm:px-8 pb-16 sm:pb-0">
             <Link to="/education" className="pointer-events-auto inline-flex items-center gap-1 text-sm font-semibold text-white/90 mb-4">
@@ -322,17 +411,23 @@ export default function EducationEstablishment() {
               {profile.category_name || business.category_name || profile.establishment_type_label}
               {statusLabel ? ` · ${statusLabel}` : ''}
             </p>
-            <h1 className="mt-2 max-w-xl text-4xl sm:text-5xl font-extrabold tracking-tight text-white">
-              {business.name}
-            </h1>
+            <div className="mt-2 flex items-center gap-4">
+              {business.logo ? (
+                <img
+                  src={business.logo}
+                  alt={`Logo de ${business.name || 'l’établissement'}`}
+                  className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-contain bg-surface p-1 shrink-0"
+                />
+              ) : null}
+              <h1 className="max-w-xl text-4xl sm:text-5xl font-extrabold tracking-tight text-white">
+                {business.name}
+              </h1>
+            </div>
             {(profile.official_name && profile.official_name !== business.name) && (
               <p className="mt-2 text-sm text-white/80">{profile.official_name}</p>
             )}
             {profile.short_description && (
               <p className="mt-4 max-w-lg text-base text-white/90">{profile.short_description}</p>
-            )}
-            {schoolTracks.length > 0 && (
-              <p className="mt-3 text-sm font-semibold text-white">Cette école est : {schoolTracks.join(' · ')}</p>
             )}
             {profile.boarding_regime_label && (
               <p className="mt-2 text-sm font-semibold text-white">
@@ -359,8 +454,8 @@ export default function EducationEstablishment() {
       <section id="informations" className="bg-white scroll-mt-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 grid lg:grid-cols-2 gap-8 items-center">
           <div className="relative rounded-2xl overflow-hidden min-h-[220px] bg-primary/10">
-            {(gallery[1] || gallery[0] || business.logo) ? (
-              <img src={gallery[1] || gallery[0] || business.logo} alt="" className="w-full max-h-80 object-contain bg-[#132F45]" />
+            {(business.logo || gallery[0]) ? (
+              <img src={business.logo || gallery[0]} alt={business.logo ? `Logo de ${business.name || 'l’établissement'}` : (business.name ? `Photo de ${business.name}` : '')} className="w-full max-h-80 object-contain bg-ink" />
             ) : (
               <div className="h-64 flex items-center justify-center">
                 <GraduationCap className="w-16 h-16 text-primary/40" />
@@ -370,19 +465,10 @@ export default function EducationEstablishment() {
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-primary">L&apos;établissement</p>
             <h2 className="mt-2 text-2xl sm:text-3xl font-extrabold text-ink">
-              {profile.short_description || business.name}
+              {profile.short_description ? 'Présentation' : business.name}
             </h2>
             {profile.description && (
               <p className="mt-3 text-sm text-ink-muted whitespace-pre-line">{profile.description}</p>
-            )}
-            {profile.boarding_regime_label && (
-              <p className="mt-3 text-sm font-semibold text-ink">Régime : {profile.boarding_regime_label}</p>
-            )}
-            {address && (
-              <p className="mt-3 flex items-start gap-1.5 text-sm text-ink-muted">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-primary" />
-                {address}
-              </p>
             )}
             {hasContact && (
               <div className="mt-4 flex flex-wrap gap-3 text-sm text-ink">
@@ -406,7 +492,6 @@ export default function EducationEstablishment() {
             )}
             {(() => {
               const stats = [
-                programs.length > 0 && { value: programs.length, label: 'Formations' },
                 (profile.ecofo_cycles || []).length > 0 && { value: profile.ecofo_cycles.length, label: 'Cycles ECOFO' },
                 (profile.post_fondamental_sections || []).length > 0 && { value: profile.post_fondamental_sections.length, label: 'Sections' },
                 schoolTracks.length > 0 && { value: schoolTracks.length, label: 'Parcours' },
@@ -427,28 +512,17 @@ export default function EducationEstablishment() {
         </div>
       </section>
 
-      <div className="bg-primary text-white">
+      <div className="school-dash-hero bg-ink text-surface">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 grid md:grid-cols-2 gap-8">
-          <div>
-            <h2 className="text-2xl font-extrabold">Venir à {business.name}</h2>
-            {address && <p className="mt-3 text-sm text-white/85">{address}</p>}
-            <div className="mt-4 space-y-2 text-sm">
-              {business.phone && <p>{business.phone}</p>}
-              {(profile.institutional_email || business.email) && <p>{profile.institutional_email || business.email}</p>}
-            </div>
-            {mapHref && (
-              <a href={mapHref} target="_blank" rel="noopener noreferrer" className="school-light-btn bg-white inline-flex mt-5 px-4 py-2 rounded-lg text-sm font-bold">
-                Voir l&apos;itinéraire
-              </a>
-            )}
-          </div>
-          <div className="flex flex-col justify-center">
+          <div className="flex flex-col justify-center md:col-span-2">
             <h2 className="text-2xl font-extrabold">Candidater</h2>
             <p className="mt-3 text-sm text-white/85">
-              Les formations publiées indiquent les périodes d&apos;inscription encore ouvertes.
+              {business.category_slug === 'universite'
+                ? 'Choisissez un programme ouvert et déposez le dossier d’inscription.'
+                : 'Les périodes et les pièces sont indiquées plus bas, une seule fois.'}
             </p>
-            <a href="#informations" className="inline-flex mt-5 self-start px-4 py-2 rounded-lg bg-[#EA8B33] text-white text-sm font-bold">
-              Voir les informations
+            <a href="#inscription" className="inline-flex mt-5 self-start px-4 py-2 rounded-lg bg-accent text-ink text-sm font-bold">
+              S’inscrire
             </a>
           </div>
         </div>
@@ -456,6 +530,62 @@ export default function EducationEstablishment() {
 
       <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 grid lg:grid-cols-3 gap-5 items-start">
         <div className="lg:col-span-2 space-y-5">
+      {business.category_slug === 'universite' && (
+        <Section icon={GraduationCap} title="Facultés et programmes">
+          {offer.units.length === 0 && offer.programs.length === 0 ? (
+            <p className="text-sm text-ink-muted">Cette université n&apos;a pas encore publié de faculté ni de programme.</p>
+          ) : (
+            <UniversityOffer units={offer.units} programs={offer.programs} />
+          )}
+        </Section>
+      )}
+
+      {business.category_slug === 'universite' && (
+        <section id="inscription" className="p-5 rounded-2xl border border-border bg-white scroll-mt-20">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-ink mb-3">
+            <GraduationCap className="w-5 h-5 text-primary" />
+            Inscription
+          </h2>
+          {universityCampaigns.length === 0 ? (
+            <p className="text-sm text-ink-muted">Cette université n&apos;a pas encore ouvert d&apos;inscription.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {universityCampaigns.map((campaign) => {
+                const today = new Date().toISOString().slice(0, 10);
+                const upcoming = campaign.opens_on && campaign.opens_on > today;
+                const closed = campaign.closes_on && campaign.closes_on < today;
+                const fee = campaign.enrollment_fee?.fee_mode === 'PAYANT'
+                  ? `${Number(campaign.enrollment_fee.amount_bif).toLocaleString('fr-BI')} BIF`
+                  : campaign.enrollment_fee?.fee_mode === 'GRATUIT'
+                    ? 'Gratuite'
+                    : '';
+                return (
+                  <li key={campaign.id} id={`inscription-${campaign.id}`} className="flex flex-col sm:flex-row sm:items-center gap-3 py-4 first:pt-0">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-ink">{campaign.program_title}</p>
+                      <p className="text-sm text-ink-muted">
+                        {campaign.academic_year} · {campaign.opens_on} → {campaign.closes_on}
+                        {fee ? ` · ${fee}` : ''}
+                      </p>
+                      {closed && <p className="text-sm text-ink-muted">Inscriptions closes</p>}
+                      {upcoming && <p className="text-sm text-ink-muted">Ouverture le {campaign.opens_on}</p>}
+                    </div>
+                    {campaign.open_today && (
+                      <Link
+                        to={`/education/inscription?campaign=${campaign.id}`}
+                        className="inline-flex shrink-0 justify-center px-4 py-2 rounded-xl bg-accent text-ink text-sm font-bold"
+                      >
+                        S&apos;inscrire
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
       {(business.category_slug === 'ecole' || profile.offers_prescolaire || profile.offers_ecofo || profile.offers_post_fondamental) && (
         <Section icon={GraduationCap} title="Parcours">
           {!profile.offers_prescolaire && !profile.offers_ecofo && !profile.offers_post_fondamental && (
@@ -560,7 +690,7 @@ export default function EducationEstablishment() {
         </Section>
       )}
 
-      {(profile.teaching_languages || profile.academic_calendar) && (
+      {(profile.teaching_languages || profile.academic_calendar || profile.active_calendar?.year_start || profile.year_start || profile.year_exam_start || profile.year_deliberation) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {profile.teaching_languages && (
             <Section icon={GraduationCap} title="Langues d'enseignement">
@@ -572,6 +702,14 @@ export default function EducationEstablishment() {
               <p className="text-sm text-ink-muted dark:text-white/70 whitespace-pre-line">
                 {profile.academic_calendar}
               </p>
+            </Section>
+          )}
+          {(profile.active_calendar?.year_start || profile.year_start || profile.year_exam_start || profile.year_deliberation) && (
+            <Section icon={CalendarDays} title={profile.active_calendar?.academic_year ? `Calendrier ${profile.active_calendar.academic_year}` : 'Calendrier'}>
+              {(profile.active_calendar?.year_start || profile.year_start) && <p className="text-sm text-ink">Rentrée : {profile.active_calendar?.year_start || profile.year_start}</p>}
+              {(profile.active_calendar?.year_break_start || profile.year_break_start) && <p className="text-sm text-ink">Pause : {profile.active_calendar?.year_break_start || profile.year_break_start} → {profile.active_calendar?.year_break_end || profile.year_break_end}</p>}
+              {(profile.active_calendar?.year_exam_start || profile.year_exam_start) && <p className="text-sm text-ink">Examens : {profile.active_calendar?.year_exam_start || profile.year_exam_start}</p>}
+              {(profile.active_calendar?.year_deliberation || profile.year_deliberation) && <p className="text-sm text-ink">Délibération : {profile.active_calendar?.year_deliberation || profile.year_deliberation}</p>}
             </Section>
           )}
         </div>
@@ -599,15 +737,11 @@ export default function EducationEstablishment() {
             <p className="text-sm text-ink-muted">L&apos;école n&apos;a pas encore ouvert d&apos;année scolaire.</p>
           ) : schoolYears.map((year) => (
             <article key={year.id} className="mt-3 space-y-2">
-              <p className="font-bold text-ink">
-                {year.academic_year}
-                {year.enrollment_fee?.fee_mode === 'PAYANT' ? ' · Inscription payante' : ''}
-                {year.enrollment_fee?.fee_mode === 'GRATUIT' ? ' · Inscription gratuite' : ''}
-              </p>
+              <p className="font-bold text-ink">{year.academic_year}</p>
               <p className="text-sm text-ink-muted">{year.opens_on} → {year.closes_on}</p>
               <p className="text-sm font-semibold text-ink">
                 {Number(year.enrollment_fee?.amount_bif) > 0
-                  ? `Payante — ${Number(year.enrollment_fee.amount_bif).toLocaleString('fr-BI')} BIF, règlement BurundiPay pendant l’inscription`
+                  ? `Payante — ${Number(year.enrollment_fee.amount_bif).toLocaleString('fr-BI')} BIF, BurundiPay ou bordereau pendant l’inscription`
                   : 'Gratuite — le dossier est envoyé sans paiement'}
               </p>
               {(year.open_tracks || []).length > 0 && (
@@ -621,8 +755,24 @@ export default function EducationEstablishment() {
                           <p className="font-semibold text-ink">{block.label}</p>
                           {(block.years || []).map((item) => (
                             <p key={item.value} className="text-xs mt-0.5">
-                              {item.label} : {(item.documents || []).map((d) => d.label).filter(Boolean).join(', ')}
+                              {item.label} : {(item.documents || []).map((d) => d.label).filter(Boolean).join(', ') || 'Aucun document'}
                             </p>
+                          ))}
+                        </div>
+                      );
+                    }
+                    if (code === 'POST_FONDAMENTAL' && (block.sections || []).some((section) => (section.years || []).some((item) => item.documents))) {
+                      return (
+                        <div key={code}>
+                          <p className="font-semibold text-ink">{block.label}</p>
+                          {(block.sections || []).map((section) => (
+                            <div key={section.name}>
+                              {(section.years || []).map((item) => (
+                                <p key={`${section.name}-${item.value}`} className="text-xs mt-0.5">
+                                  {section.name} · {item.label} : {(item.documents || []).map((d) => d.label).filter(Boolean).join(', ') || 'Aucun document'}
+                                </p>
+                              ))}
+                            </div>
                           ))}
                         </div>
                       );
@@ -637,11 +787,21 @@ export default function EducationEstablishment() {
                   })}
                 </div>
               )}
-              {(year.required_documents || []).filter((doc) => doc && doc.label).length > 0 && (
-                <p className="text-sm text-ink-muted">
-                  Pièces locales : {(year.required_documents || []).map((doc) => doc.label).filter(Boolean).join(', ')}
-                </p>
-              )}
+              {(() => {
+                const listed = new Set();
+                (year.open_tracks || []).forEach((code) => {
+                  const block = (year.documents_by_track || {})[code];
+                  if (!block) return;
+                  (block.documents || []).forEach((doc) => doc?.label && listed.add(doc.label));
+                  (block.years || []).forEach((item) => (item.documents || []).forEach((doc) => doc?.label && listed.add(doc.label)));
+                  (block.sections || []).forEach((section) => (section.years || []).forEach((item) => (
+                    (item.documents || []).forEach((doc) => doc?.label && listed.add(doc.label))
+                  )));
+                });
+                const extra = (year.required_documents || []).map((doc) => doc?.label).filter((label) => label && !listed.has(label));
+                if (!extra.length) return null;
+                return <p className="text-sm text-ink-muted">Autres pièces : {extra.join(', ')}</p>;
+              })()}
               {(year.extra_criteria || []).length > 0 && (
                 <div className="text-sm text-ink">
                   <p className="font-semibold">Critères supplémentaires</p>
@@ -688,178 +848,19 @@ export default function EducationEstablishment() {
         </section>
       )}
 
-      {business.category_slug !== 'ecole' && (
-      <section id="formations">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-ink dark:text-white mb-3">
-          <BookOpen className="w-5 h-5 text-green-700 dark:text-green-300" />
-          Formations publiées ({programs.length})
-        </h2>
-
-        {programs.length === 0 ? (
-          <div className="p-10 rounded-3xl border border-border bg-surface text-center">
-            <BookOpen className="w-8 h-8 mx-auto text-primary/50 mb-2" />
-            <p className="font-semibold text-ink">Aucune formation publiée</p>
-            <p className="mt-1 text-sm text-ink-muted">L&apos;établissement n&apos;a pas encore rendu son offre visible.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {offerSections(units, programs).map((section) => (
-              <div key={section.key} className={section.nested ? 'pl-4 border-l-2 border-primary/20 space-y-3' : 'space-y-3'}>
-                {section.title && (
-                  <div>
-                    {section.eyebrow && (
-                      <p className="text-[11px] font-bold uppercase tracking-wide text-primary">{section.eyebrow}</p>
-                    )}
-                    <h3 className="font-bold text-ink dark:text-white">{section.title}</h3>
-                    {section.description && (
-                      <p className="mt-1 text-sm text-ink-muted">{section.description}</p>
-                    )}
-                  </div>
-                )}
-                {section.programs.map((p) => (
-              <article
-                key={p.id}
-                className="p-5 rounded-2xl border border-border dark:border-white/10 bg-white dark:bg-black/20"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <h3 className="font-bold text-ink dark:text-white">{p.title}</h3>
-                  {p.level_label && (
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-green-600/10 text-green-700 dark:text-green-300">
-                      {p.level_label}
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                  {p.unit_name && <span className="font-medium">{p.unit_name}</span>}
-                  {p.degree_awarded && <span className="flex items-center gap-1"><Award className="w-3 h-3" /> {p.degree_awarded}</span>}
-                  {p.domain && <span>{p.domain}</span>}
-                  {p.duration_label && <span>{p.duration_label}</span>}
-                  {p.semester_organization && <span>{p.semester_organization}</span>}
-                </div>
-
-                {(p.entry_level || p.exit_level) && (
-                  <p className="mt-2 text-sm text-ink-muted dark:text-white/80">
-                    Niveau d'entrée : {p.entry_level || '—'}
-                    {p.exit_level ? ` · Sortie : ${p.exit_level}` : ''}
-                  </p>
-                )}
-
-                {p.main_subjects && (
-                  <div className="mt-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Matières principales</h4>
-                    <p className="mt-1 text-sm text-ink-muted dark:text-white/70 whitespace-pre-line">{p.main_subjects}</p>
-                  </div>
-                )}
-
-                {p.admission_conditions && (
-                  <div className="mt-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Conditions d'admission</h4>
-                    <p className="mt-1 text-sm text-ink-muted dark:text-white/70 whitespace-pre-line">{p.admission_conditions}</p>
-                  </div>
-                )}
-
-                {(p.required_documents || []).filter((d) => d && d.label).length > 0 && (
-                  <div className="mt-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Pièces à fournir</h4>
-                    <div className="mt-1">
-                      <DocumentList items={p.required_documents} />
-                    </div>
-                  </div>
-                )}
-
-                {p.internship_details && (
-                  <div className="mt-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Stage</h4>
-                    <p className="mt-1 text-sm text-ink-muted dark:text-white/70 whitespace-pre-line">{p.internship_details}</p>
-                  </div>
-                )}
-
-                {p.career_outlook && (
-                  <div className="mt-3 flex items-start gap-2">
-                    <Briefcase className="w-4 h-4 mt-0.5 shrink-0 text-green-700 dark:text-green-300" />
-                    <div>
-                      <h4 className="text-xs font-bold uppercase tracking-wide text-gray-500">Débouchés</h4>
-                      <p className="mt-1 text-sm text-ink-muted dark:text-white/70 whitespace-pre-line">{p.career_outlook}</p>
-                    </div>
-                  </div>
-                )}
-                {(p.campaigns || []).map((campaign) => (
-                  <div key={campaign.id} className="mt-4 p-3 rounded-xl bg-gray-50 dark:bg-white/5 space-y-1">
-                    <p className="text-sm font-semibold text-ink dark:text-white">
-                      Admission {campaign.academic_year}
-                      {campaign.open_today ? ' · inscriptions ouvertes' : ''}
-                    </p>
-                    <p className="text-sm text-ink-muted">
-                      {campaign.opens_on} → {campaign.closes_on}
-                      {campaign.late_opens_on ? ` · tardive ${campaign.late_opens_on} → ${campaign.late_closes_on}` : ''}
-                    </p>
-                    {campaign.required_diploma && <p className="text-sm text-ink">Diplôme requis : {campaign.required_diploma}</p>}
-                    {campaign.prerequisites && <p className="text-sm text-ink-muted">Prérequis : {campaign.prerequisites}</p>}
-                    {campaign.min_grade && <p className="text-sm text-ink-muted">Note minimale : {campaign.min_grade}</p>}
-                    {campaign.contest_name && (
-                      <p className="text-sm text-ink-muted">
-                        {campaign.contest_name}{campaign.contest_date ? ` · ${campaign.contest_date}` : ''}
-                      </p>
-                    )}
-                    {campaign.results_date && <p className="text-sm text-ink-muted">Résultats : {campaign.results_date}</p>}
-                    {campaign.confirmation_start && (
-                      <p className="text-sm text-ink-muted">
-                        Confirmation : {campaign.confirmation_start} → {campaign.confirmation_end}
-                      </p>
-                    )}
-                    {campaign.extra_conditions && <p className="text-sm text-ink-muted">{campaign.extra_conditions}</p>}
-                    {campaign.regulatory_requirements && <p className="text-sm text-ink-muted">{campaign.regulatory_requirements}</p>}
-                    {(campaign.required_documents || []).filter((d) => d && d.label).length > 0 && (
-                      <div className="pt-1">
-                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Pièces {campaign.academic_year}</p>
-                        <DocumentList items={campaign.required_documents} />
-                      </div>
-                    )}
-                    {campaign.open_today && (
-                      <Link
-                        to={user ? `/education/inscription?campaign=${campaign.id}` : '/login'}
-                        state={user ? undefined : { from: `/education/inscription?campaign=${campaign.id}` }}
-                        className="mt-2 inline-flex text-sm font-semibold text-primary"
-                      >
-                        Candidater
-                      </Link>
-                    )}
-                  </div>
-                ))}
-                {(p.fees || []).length > 0 && (
-                  <ul className="mt-3 space-y-1">
-                    {p.fees.map((fee) => (
-                      <li key={fee.id} className="text-sm text-ink">
-                        {fee.label}
-                        {fee.academic_year ? ` (${fee.academic_year})` : ''}
-                        {' — '}
-                        {Number(fee.amount_bif).toLocaleString('fr-FR')} BIF
-                        {fee.is_required ? '' : ' · facultatif'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </article>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-      )}
         </div>
 
         <aside className="space-y-5">
           {(tile || placeParts.length > 0 || profile.nearby_landmarks) && (
             <Section icon={MapPin} title="Localisation">
               {tile && (
-                <div className="relative overflow-hidden rounded-2xl border border-border h-56">
-                  <div className="grid grid-cols-3 grid-rows-3 w-full h-full">
-                    {tile.tiles.map((part) => (
-                      <img key={part.key} src={part.src} alt="" className="w-full h-full object-fill" />
-                    ))}
-                  </div>
+                <div className="relative overflow-hidden rounded-2xl border border-border h-56 bg-surface">
+                  <img
+                    src={tile.src}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={() => setMapBroken(true)}
+                  />
                   <MapPin
                     className="absolute w-7 h-7 text-alert -translate-x-1/2 -translate-y-full drop-shadow"
                     style={{ left: tile.left, top: tile.top }}
@@ -896,8 +897,9 @@ export default function EducationEstablishment() {
               )}
               {travel && (
                 <p className="mt-2 text-sm font-semibold text-ink">
-                  {Number(travel.km).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km par la route
-                  {travel.minutes ? ` · ${travel.minutes} min` : ''}
+                  {travel.kind === 'straight'
+                    ? `${Number(travel.km).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km à vol d’oiseau. L’itinéraire routier est indisponible.`
+                    : `${Number(travel.km).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km par la route${travel.minutes ? ` · ${travel.minutes} min` : ''}`}
                 </p>
               )}
               {travelError && <p className="mt-2 text-sm text-alert">{travelError}</p>}
@@ -909,11 +911,19 @@ export default function EducationEstablishment() {
               )}
             </Section>
           )}
-          {(profile.library_hours || profile.library_contact) && (
+          {(profile.library_hours || profile.library_contact || profile.library_access) && (
             <Section icon={Library} title="Bibliothèque">
               <p className="text-sm text-ink-muted">{profile.library_hours}</p>
               {profile.library_access && <p className="mt-1 text-sm text-ink-muted">{profile.library_access}</p>}
               {profile.library_contact && <p className="mt-1 text-sm text-ink">{profile.library_contact}</p>}
+            </Section>
+          )}
+          {(profile.internship_required || profile.internship_duration || profile.internship_contact) && (
+            <Section icon={GraduationCap} title="Stages">
+              <p className="text-sm text-ink">{profile.internship_required ? 'Stage obligatoire' : 'Stage possible'}</p>
+              {profile.internship_duration && <p className="mt-1 text-sm text-ink-muted">Durée : {profile.internship_duration}</p>}
+              {profile.internship_period && <p className="text-sm text-ink-muted">Période : {profile.internship_period}</p>}
+              {profile.internship_contact && <p className="mt-1 text-sm text-ink">{profile.internship_contact}</p>}
             </Section>
           )}
         </aside>

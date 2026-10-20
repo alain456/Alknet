@@ -56,14 +56,31 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             serializer.is_valid(raise_exception=True)
             user = serializer.user
             record_success(user.email)
-            if getattr(user, 'email_otp_enabled', False):
+            from site_content.models import SiteSettings
+            site = SiteSettings.get_solo()
+            if site.maintenance_mode and user.role != 'SUPER_ADMIN':
+                return Response(
+                    {'detail': site.maintenance_message or 'La plateforme est en maintenance.'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            platform_role = user.role in (
+                'SUPER_ADMIN', 'PLATFORM_FINANCE', 'PLATFORM_MODERATION',
+                'PLATFORM_SUPPORT', 'PLATFORM_CONTENT',
+            )
+            if platform_role or getattr(user, 'email_otp_enabled', False):
                 from .otp import start_email_otp
-                challenge = start_email_otp(user)
-                return Response({
-                    'two_factor_required': True,
-                    'challenge': str(challenge.id),
-                    'detail': 'Un code a été envoyé à votre adresse e-mail.',
-                }, status=status.HTTP_200_OK)
+                import logging
+                try:
+                    challenge = start_email_otp(user)
+                except Exception:
+                    logging.getLogger(__name__).exception('Code de connexion non envoyé')
+                    challenge = None
+                if challenge is not None:
+                    return Response({
+                        'two_factor_required': True,
+                        'challenge': str(challenge.id),
+                        'detail': 'Un code a été envoyé à votre adresse e-mail.',
+                    }, status=status.HTTP_200_OK)
             payload = dict(serializer.validated_data)
             access = payload.pop('access', '')
             refresh = payload.pop('refresh', '')

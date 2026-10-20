@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Mail, Phone, Save, Camera } from 'lucide-react';
-import { readImageAsDataUrl } from '../shared/imageUpload';
+import { User, Mail, Phone, Save } from 'lucide-react';
 import api from '../shared/api';
+import AvatarPicker from '../shared/components/AvatarPicker';
 
 export default function UserProfilePage() {
   const { user, updateUser, token, logout } = useAuth();
@@ -14,7 +14,6 @@ export default function UserProfilePage() {
     phone: user?.phone_number || '',
   });
   const [avatar, setAvatar] = useState('');
-  const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -43,36 +42,18 @@ export default function UserProfilePage() {
     setFormData({ ...formData, [name]: value });
   };
 
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setAvatarError('');
-    setAvatarUploading(true);
-    try {
-      const dataUrl = await readImageAsDataUrl(file, { maxSize: 400, quality: 0.85 });
-      setAvatar(dataUrl);
-    } catch (err) {
-      setAvatarError(err.message || 'Upload impossible');
-    } finally {
-      setAvatarUploading(false);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
     setMessage('');
     setError('');
     try {
+      await api.patch('profiles/me/', { avatar: avatar || '' }, { auth: true });
       const updatedUser = await api.patch('accounts/profile/', {
         first_name: formData.firstName,
         last_name: formData.lastName,
         phone_number: formData.phone,
       }, { auth: true });
-
-      await api.patch('profiles/me/', { avatar: avatar || '' }, { auth: true });
-
       updateUser?.(updatedUser);
       setMessage('Profil mis à jour.');
     } catch (err) {
@@ -94,43 +75,10 @@ export default function UserProfilePage() {
 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="p-6">
-          <div className="flex items-center gap-6 mb-8">
-            <div className="relative">
-              <div className="w-24 h-24 rounded-full bg-primary flex items-center justify-center text-white text-3xl font-bold shadow-md border-4 border-white dark:border-gray-800 overflow-hidden">
-                {avatar ? (
-                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  (formData.firstName ? formData.firstName[0].toUpperCase() : 'U')
-                )}
-              </div>
-              <label className="absolute bottom-0 right-0 p-2 bg-white dark:bg-gray-700 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 cursor-pointer">
-                <Camera className="w-4 h-4" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
-              </label>
-            </div>
-            <div>
-              <h3 className="font-semibold text-gray-900 dark:text-white text-lg">Photo de profil</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-                JPG/PNG/WebP — compressée automatiquement.
-                {avatarUploading ? ' Compression…' : ''}
-              </p>
-              <div className="flex gap-3">
-                <label className="px-4 py-2 bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium rounded-lg cursor-pointer">
-                  Téléverser
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
-                </label>
-                {avatar && (
-                  <button
-                    type="button"
-                    onClick={() => setAvatar('')}
-                    className="px-4 py-2 text-gray-600 text-sm font-medium"
-                  >
-                    Retirer
-                  </button>
-                )}
-              </div>
-              {avatarError && <p className="text-xs text-red-600 mt-2">{avatarError}</p>}
-            </div>
+          <div className="mb-8">
+            <h3 className="font-semibold text-gray-900 dark:text-white text-lg mb-3">Photo de profil</h3>
+            <AvatarPicker value={avatar} onChange={setAvatar} onError={setAvatarError} size={96} />
+            {avatarError && <p className="text-sm text-red-600 mt-2">{avatarError}</p>}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">

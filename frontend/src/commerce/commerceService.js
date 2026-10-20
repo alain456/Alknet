@@ -18,6 +18,8 @@ const commerceService = {
   getShopStatus: () => api.get('orders/commerce/shop-status/', { auth: true }),
   setShopOpen: (is_open_for_orders) =>
     api.patch('orders/commerce/shop-status/', { is_open_for_orders }, { auth: true }),
+  updateShopStatus: (payload) =>
+    api.patch('orders/commerce/shop-status/', payload, { auth: true }),
 
   listProducts: (params = {}) => {
     const q = new URLSearchParams(params).toString();
@@ -32,6 +34,10 @@ const commerceService = {
   createProduct: (body) => api.post('products/my-business/', body, { auth: true }),
   updateProduct: (id, body) => api.patch(`products/my-business/${id}/`, body, { auth: true }),
   deleteProduct: (id) => api.delete(`products/my-business/${id}/`, { auth: true }),
+
+  createVariant: (body) => api.post('products/variants/', body, { auth: true }),
+  updateVariant: (id, body) => api.patch(`products/variants/${id}/`, body, { auth: true }),
+  deleteVariant: (id) => api.delete(`products/variants/${id}/`, { auth: true }),
 
   listShopCategories: () => api.get('products/shop-categories/', { auth: true }),
   createShopCategory: (body) => api.post('products/shop-categories/', body, { auth: true }),
@@ -71,7 +77,11 @@ const commerceService = {
     for (const line of items) {
       await api.post(
         `orders/commerce/${businessId}/cart/`,
-        { product: line.product || line.product_id, quantity: Number(line.quantity) || 1 },
+        {
+          product: line.product || line.product_id,
+          quantity: Number(line.quantity) || 1,
+          ...(line.variant || line.variant_id ? { variant: line.variant || line.variant_id } : {}),
+        },
         { headers: cartHeaders() },
       );
     }

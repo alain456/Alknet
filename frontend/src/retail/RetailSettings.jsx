@@ -68,15 +68,26 @@ export default function RetailSettings() {
               className={inputClass}
             />
           </label>
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-gray-700">Message envoyé à l&apos;acceptation</span>
-            <textarea
-              rows={6}
-              value={data.acceptance_email_message || ''}
-              onChange={(e) => setData({ ...data, acceptance_email_message: e.target.value })}
-              className={inputClass}
-            />
-          </label>
+          <p className="text-xs text-ink-muted">
+            Variables : {'{patient_name}'} {'{reference}'} {'{pharmacy_name}'} {'{total_amount}'} {'{currency}'} {'{reason}'}.
+            Le client reçoit l’e-mail d’enregistrement, puis celui d’acceptation ou de refus. Sans e-mail délivré, l’action est bloquée.
+          </p>
+          {[
+            ['submission_email_message', 'Commande enregistrée'],
+            ['acceptance_email_message', 'Commande acceptée'],
+            ['rejection_email_message', 'Commande refusée'],
+          ].map(([key, label]) => (
+            <label key={key} className="block space-y-1.5">
+              <span className="text-sm font-medium text-gray-700">{label}</span>
+              <textarea
+                rows={5}
+                required
+                value={data[key] || ''}
+                onChange={(e) => setData({ ...data, [key]: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+          ))}
           <div className="pt-2 border-t border-border">
             <button
               type="submit"

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import retailService, { ORDER_STATUS_LABELS } from './retailService';
 
-const CLOSED_STATUSES = ['ACCEPTED', 'REJECTED', 'CANCELLED'];
+const CLOSED_STATUSES = ['ACCEPTED', 'COMPLETED', 'REJECTED', 'CANCELLED'];
 const normalize = (data) => (Array.isArray(data) ? data : data?.results || []);
 const money = (value, currency = 'BIF') => `${Number(value || 0).toLocaleString('fr-BI')} ${currency}`;
 
@@ -27,7 +27,7 @@ export default function RetailHistory() {
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-ink">Historique</h1>
-          <p className="text-sm text-ink-muted">Commandes acceptées, refusées ou annulées.</p>
+          <p className="text-sm text-ink-muted">Commandes acceptées, livrées, refusées ou annulées.</p>
         </div>
         <label className="text-xs space-y-1 min-w-[220px]">
           <span className="text-ink-muted">Statut</span>

@@ -234,7 +234,7 @@ export default function ManageServiceCategories() {
               <div 
                 key={cat.id} 
                 className={`bg-white dark:bg-gray-900 rounded-2xl border-2 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4 ${
-                  idx % 2 === 0 ? 'border-accent' : 'border-alert'
+                  'border-border'
                 }`}
               >
                 <div className="space-y-3">

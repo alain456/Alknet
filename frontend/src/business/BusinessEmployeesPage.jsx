@@ -42,9 +42,14 @@ export default function BusinessEmployeesPage() {
   const canEditStaff = !isHotel || canUpdate('staff');
   const canRemoveStaff = !isHotel || canDelete('staff');
   const isSchool = user?.business_info?.category_slug === 'ecole';
+  const isUniversity = user?.business_info?.category_slug === 'universite';
+  const [faculties, setFaculties] = useState([]);
+  const [facultyId, setFacultyId] = useState('');
 
   const isHospital = !isHotel && (categoryKey === 'hospital' || location.pathname.startsWith('/hospital'));
   const isCommerce = !isHotel && !isHospital && (categoryKey === 'commerce' || location.pathname.startsWith('/commerce'));
+  const isRetailPharmacy = categoryKey === 'retail_pharmacy' || location.pathname.startsWith('/retail-pharmacy');
+  const isWholesale = categoryKey === 'wholesale' || location.pathname.startsWith('/wholesale-pharmacy');
   /** Création de compte (email + mot de passe) comme Annuaire médecins hôpital */
   const createWithCredentials = isHotel;
 
@@ -54,6 +59,17 @@ export default function BusinessEmployeesPage() {
       fetchRoles();
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !isUniversity) return;
+    authFetch('/api/v1/education/units/?mine=1')
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => {
+        const rows = Array.isArray(data) ? data : (data?.results || []);
+        setFaculties(rows.filter((row) => !row.parent && row.kind !== 'DEPARTMENT'));
+      })
+      .catch(() => setFaculties([]));
+  }, [token, isUniversity]);
 
   const fetchRoles = async () => {
     try {
@@ -100,6 +116,7 @@ export default function BusinessEmployeesPage() {
       setNewPassword('');
       setNewRoleId(employee.role || '');
       setNewPosition(employee.position || '');
+      setFacultyId(employee.education_scope_unit || '');
     } else {
       setEditingEmployeeId(null);
       setNewEmail('');
@@ -108,6 +125,7 @@ export default function BusinessEmployeesPage() {
       setNewPassword('');
       setNewRoleId('');
       setNewPosition('');
+      setFacultyId('');
     }
     setIsModalOpen(true);
   };
@@ -128,6 +146,7 @@ export default function BusinessEmployeesPage() {
           email: newEmail,
           role_id: newRoleId,
           position: newPosition,
+          education_scope_unit: isUniversity ? (facultyId || null) : null,
           first_name: newFirstName,
           last_name: newLastName,
         };
@@ -142,9 +161,10 @@ export default function BusinessEmployeesPage() {
           password: newPassword,
           role_id: newRoleId,
           position: newPosition,
+          education_scope_unit: isUniversity ? (facultyId || null) : null,
         };
       } else {
-        body = { email: newEmail, role_id: newRoleId, position: newPosition };
+        body = { email: newEmail, role_id: newRoleId, position: newPosition, education_scope_unit: isUniversity ? (facultyId || null) : null };
       }
 
       const response = await authFetch(url, {
@@ -465,6 +485,15 @@ export default function BusinessEmployeesPage() {
   if (isSchool) {
     return <Navigate to="/business/roles" replace />;
   }
+  if (isCommerce) {
+    return <Navigate to="/commerce/dashboard" replace />;
+  }
+  if (isRetailPharmacy) {
+    return <Navigate to="/retail-pharmacy/dashboard" replace />;
+  }
+  if (isWholesale) {
+    return <Navigate to="/wholesale-pharmacy/dashboard" replace />;
+  }
 
   return (
     <div className="space-y-6 pb-12 max-w-7xl mx-auto">
@@ -718,6 +747,20 @@ export default function BusinessEmployeesPage() {
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-teal-500 outline-none"
                 />
               </div>
+              {isUniversity && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Faculté visible</label>
+                  <select
+                    value={facultyId}
+                    onChange={(e) => setFacultyId(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-xs"
+                  >
+                    <option value="">Toute l’université</option>
+                    {faculties.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1">S’il est limité à une faculté, il ne voit que ses programmes et ses dossiers.</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">

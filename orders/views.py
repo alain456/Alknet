@@ -3,6 +3,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, permissions, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,7 +12,7 @@ from businesses.commerce import ensure_commerce_profile, is_commerce_business, n
 from businesses.models import Business, BusinessEmployee
 from businesses import payment_access
 from businesses.tenant import get_user_tenant_business
-from products.models import Product, ProductVariant
+from products.models import Product, ProductVariant, StockMovement
 
 from .models import Order, OrderItem, Cart, CartItem
 from .serializers import OrderSerializer, CartSerializer, CartItemSerializer
@@ -71,21 +72,65 @@ def _get_or_create_cart(request, business):
     return cart
 
 
-def _decrement_stock(order):
+def _adjust_stock(order, sign):
+    """sign = -1 au checkout, +1 à l'annulation ou au refus. Refuse si le stock ne suffit pas."""
+    note = f'Commande {order.reference_code or order.pk}'
     for item in order.items.select_related('product', 'variant'):
+        qty = int(item.quantity)
+        delta = sign * qty
         if item.variant_id:
-            v = item.variant
-            v.stock = max(0, v.stock - item.quantity)
-            v.save(update_fields=['stock', 'updated_at'])
+            variant = ProductVariant.objects.select_for_update().get(pk=item.variant_id)
+            after = variant.stock + delta
+            if after < 0:
+                raise ValidationError(f'Stock insuffisant pour {item.product_name}.')
+            variant.stock = after
+            variant.save(update_fields=['stock', 'updated_at'])
+            StockMovement.objects.create(
+                business=order.business,
+                product=variant.product,
+                variant=variant,
+                movement_type='SALE' if sign < 0 else 'CANCEL',
+                quantity=delta,
+                note=note,
+            )
         elif item.product_id:
-            p = item.product
-            p.stock = max(0, p.stock - item.quantity)
-            p.save(update_fields=['stock', 'updated_at'])
+            product = Product.objects.select_for_update().get(pk=item.product_id)
+            after = product.stock + delta
+            if after < 0:
+                raise ValidationError(f'Stock insuffisant pour {item.product_name}.')
+            product.stock = after
+            product.save(update_fields=['stock', 'updated_at'])
+            StockMovement.objects.create(
+                business=order.business,
+                product=product,
+                movement_type='SALE' if sign < 0 else 'CANCEL',
+                quantity=delta,
+                note=note,
+            )
+
+
+def _decrement_stock(order):
+    _adjust_stock(order, -1)
+
+
+def _restore_stock(order):
+    _adjust_stock(order, 1)
+
+
+def _writes_closed(request, *args, **kwargs):
+    return Response(
+        {'error': 'Le statut d’une commande se change par les actions prévues, pas par modification directe.'},
+        status=405,
+    )
 
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    create = _writes_closed
+    update = _writes_closed
+    partial_update = _writes_closed
+    destroy = _writes_closed
 
     def get_permissions(self):
         if self.action in ('pay', 'confirm_payment'):
@@ -138,11 +183,14 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         order = self.get_object()
-        if order.status in ('COMPLETED', 'CANCELLED', 'REJECTED'):
-            return Response({'error': 'Cette commande ne peut pas être annulée.'}, status=400)
         by_business = _business_staff(request.user, order.business)
-        order.status = 'CANCELLED'
-        order.save(update_fields=['status', 'updated_at'])
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.status not in ('PENDING', 'CONFIRMED', 'READY'):
+                return Response({'error': 'Cette commande ne peut pas être annulée.'}, status=400)
+            _restore_stock(order)
+            order.status = 'CANCELLED'
+            order.save(update_fields=['status', 'updated_at'])
         data = OrderSerializer(order).data
         if by_business and order.client_email:
             biz = order.business.name if order.business_id else "l'établissement"
@@ -167,10 +215,19 @@ class OrderViewSet(viewsets.ModelViewSet):
                 {'error': 'La commande doit être payée avant acceptation.', 'code': 'payment_required'},
                 status=400,
             )
+        previous = order.status
         order.status = 'CONFIRMED'
         order.save(update_fields=['status', 'updated_at'])
+        try:
+            email_result = order_workflow.require_client_email(
+                order_workflow.email_order_confirmed(order),
+            )
+        except ValueError as exc:
+            order.status = previous
+            order.save(update_fields=['status', 'updated_at'])
+            return Response({'error': str(exc)}, status=400)
         data = OrderSerializer(order).data
-        data['email_notification'] = order_workflow.email_order_confirmed(order)
+        data['email_notification'] = email_result
         return Response(data)
 
     @action(detail=True, methods=['post'])
@@ -179,11 +236,31 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not _business_staff(request.user, order.business):
             return Response({'error': 'Permission refusée.'}, status=403)
         reason = (request.data.get('reason') or '').strip()
-        order.status = 'REJECTED'
-        order.notes = (order.notes or '') + (f'\nRefus: {reason}' if reason else '')
-        order.save(update_fields=['status', 'notes', 'updated_at'])
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.status not in ('PENDING', 'CONFIRMED', 'READY'):
+                return Response({'error': 'Cette commande ne peut pas être refusée.'}, status=400)
+            previous = order.status
+            previous_notes = order.notes
+            _restore_stock(order)
+            order.status = 'REJECTED'
+            order.notes = (order.notes or '') + (f'\nRefus: {reason}' if reason else '')
+            order.save(update_fields=['status', 'notes', 'updated_at'])
+        try:
+            email_result = order_workflow.require_client_email(
+                order_workflow.email_order_rejected(order, reason),
+            )
+        except ValueError as exc:
+            with transaction.atomic():
+                order = Order.objects.select_for_update().get(pk=order.pk)
+                if order.status == 'REJECTED':
+                    _decrement_stock(order)
+                    order.status = previous
+                    order.notes = previous_notes
+                    order.save(update_fields=['status', 'notes', 'updated_at'])
+            return Response({'error': str(exc)}, status=400)
         data = OrderSerializer(order).data
-        data['email_notification'] = order_workflow.email_order_rejected(order, reason)
+        data['email_notification'] = email_result
         return Response(data)
 
     @action(detail=True, methods=['post'], url_path='mark-ready')
@@ -191,6 +268,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         if not _business_staff(request.user, order.business):
             return Response({'error': 'Permission refusée.'}, status=403)
+        if order.status != 'CONFIRMED' or order.payment_status != 'PAID':
+            return Response(
+                {'error': 'Seule une commande acceptée et payée peut être marquée prête.'},
+                status=400,
+            )
         order.status = 'READY'
         order.save(update_fields=['status', 'updated_at'])
         data = OrderSerializer(order).data
@@ -202,6 +284,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         if not _business_staff(request.user, order.business):
             return Response({'error': 'Permission refusée.'}, status=403)
+        if order.status != 'READY':
+            return Response(
+                {'error': 'Seule une commande prête au retrait peut être marquée retirée.'},
+                status=400,
+            )
         order.status = 'COMPLETED'
         order.save(update_fields=['status', 'updated_at'])
         return Response(OrderSerializer(order).data)
@@ -213,22 +300,26 @@ class OrderViewSet(viewsets.ModelViewSet):
         if not phone:
             return Response({'error': 'Numéro BurundiPay requis.'}, status=400)
         result = order_payment.initiate_order_payment(order, phone)
+        order_data = OrderSerializer(order).data
+        payment_access.attach_payment_token(order_data, order)
         return Response({
             'ok': result.get('ok'),
             'message': result.get('message'),
             'payment_status': order.payment_status,
             'provider_reference': order.payment_provider_reference,
-            'order': OrderSerializer(order).data,
+            'order': order_data,
         }, status=200 if result.get('ok') else 400)
 
     @action(detail=True, methods=['post'], url_path='confirm-payment', permission_classes=[permissions.AllowAny])
     def confirm_payment(self, request, pk=None):
         order = self._get_payment_order(pk)
         result = order_payment.confirm_order_payment_stub(order)
+        order_data = OrderSerializer(order).data
+        payment_access.attach_payment_token(order_data, order)
         return Response({
             'ok': result.get('ok'),
             'message': result.get('message', 'Paiement confirmé.'),
-            'order': OrderSerializer(order).data,
+            'order': order_data,
         }, status=200 if result.get('ok') else 400)
 
     @action(detail=True, methods=['post'], url_path='confirm-payment-manual')
@@ -337,6 +428,12 @@ class CheckoutAPIView(APIView):
         user = request.user if request.user.is_authenticated else None
         if not user and (not guest_name or not guest_phone):
             return Response({'error': 'Nom et téléphone requis pour une commande invité.'}, status=400)
+        client_email = (user.email if user else guest_email).strip()
+        if not client_email:
+            return Response(
+                {'error': 'Un e-mail est requis pour confirmer l’enregistrement de la commande.'},
+                status=400,
+            )
 
         order = Order.objects.create(
             customer=user,
@@ -370,12 +467,23 @@ class CheckoutAPIView(APIView):
         _decrement_stock(order)
         cart.items.all().delete()
 
+        mail = order_workflow.email_order_received(order)
+        if mail.get('status') != 'SENT':
+            transaction.set_rollback(True)
+            return Response({
+                'error': 'La commande n’a pas été enregistrée : le client n’a pas reçu l’e-mail de confirmation.',
+                'email_notification': mail,
+            }, status=400)
+
         payment_result = None
         if payer_phone:
             payment_result = order_payment.initiate_order_payment(order, payer_phone)
 
+        order_data = OrderSerializer(order).data
+        payment_access.attach_payment_token(order_data, order)
         return Response({
-            'order': OrderSerializer(order).data,
+            'order': order_data,
+            'email_notification': mail,
             'payment': {
                 'ok': payment_result.get('ok') if payment_result else None,
                 'message': payment_result.get('message') if payment_result else 'Paiement non initié',
@@ -438,6 +546,9 @@ class CommerceShopStatusAPIView(APIView):
             'is_open_for_orders': profile.is_open_for_orders,
             'pickup_instructions': profile.pickup_instructions,
             'commercial_name': profile.commercial_name or business.name,
+            'order_received_message': profile.order_received_message,
+            'order_accepted_message': profile.order_accepted_message,
+            'order_refused_message': profile.order_refused_message,
         })
 
     def patch(self, request):
@@ -453,12 +564,18 @@ class CommerceShopStatusAPIView(APIView):
             profile.pickup_instructions = (request.data.get('pickup_instructions') or '').strip()
         if 'commercial_name' in request.data:
             profile.commercial_name = (request.data.get('commercial_name') or '').strip()
+        for field in ('order_received_message', 'order_accepted_message', 'order_refused_message'):
+            if field in request.data:
+                setattr(profile, field, request.data.get(field) or '')
         profile.save()
         return Response({
             'business_id': str(business.id),
             'is_open_for_orders': profile.is_open_for_orders,
             'pickup_instructions': profile.pickup_instructions,
             'commercial_name': profile.commercial_name or business.name,
+            'order_received_message': profile.order_received_message,
+            'order_accepted_message': profile.order_accepted_message,
+            'order_refused_message': profile.order_refused_message,
             'message': (
                 'Boutique ouverte aux commandes.'
                 if profile.is_open_for_orders

@@ -1,13 +1,17 @@
 from django.urls import path
 from .client_search import PublicSearchSuggestView, PublicSearchView
 from accounts.views import BusinessDataExportView
+from .inventory_views import InventoryCancelView, InventorySessionView, InventoryValidateView
+from .margin_views import MarginReportView
 from .views import (
-    BusinessListView, BusinessDetailView, MyBusinessListView, AdminBusinessListView, AdminBusinessDetailView,
+    BusinessListView, BusinessDetailView, BusinessBySlugView, MyBusinessListView, AdminBusinessListView, AdminBusinessDetailView,
     BusinessEmployeeListCreateView, BusinessEmployeeDetailView, EmployeeInvitationAcceptView, AdminModerationListView, AdminModerationDeskView,
     AdminModerationApproveView, AdminModerationRejectView, AdminCSVImportView, PublicBusinessRegistrationView,
+    BusinessRegistrationMessagesView,
     BusinessRoleListCreateView, BusinessRoleDetailView, SeedReceptionistRoleView,
-    MyBusinessSubscriptionView, MyBusinessAuditLogsView, AdminBusinessSubscriptionView, AdminSubscriptionListView,
+    MyBusinessSubscriptionView, MyBusinessAuditLogsView, AdminBusinessSubscriptionView, AdminBusinessOffboardView, AdminSubscriptionListView,
     MySubscriptionBurundiPayPayView, MySubscriptionBurundiPayConfirmView, BurundiPaySubscriptionWebhookView,
+    MyStockAlertListView,
     AdminSubscriptionPaymentListView, AdminPlatformNotificationListView,
     AdminSubscriptionPlansView, AdminSubscriptionPlanDetailView, AdminSubscriptionSettingsView,
 )
@@ -16,11 +20,17 @@ urlpatterns = [
     path('search/suggest/', PublicSearchSuggestView.as_view(), name='public-search-suggest'),
     path('search/', PublicSearchView.as_view(), name='public-search'),
     path('register/', PublicBusinessRegistrationView.as_view(), name='business-register-public'),
+    path('by-slug/<slug:slug>/', BusinessBySlugView.as_view(), name='business-by-slug'),
     path('', BusinessListView.as_view(), name='business-list-public'),
     path('<uuid:pk>/', BusinessDetailView.as_view(), name='business-detail-public'),
     path('me/', MyBusinessListView.as_view(), name='my-business-list-create'),
     path('me/subscription/', MyBusinessSubscriptionView.as_view(), name='my-business-subscription'),
     path('me/audit-logs/', MyBusinessAuditLogsView.as_view(), name='my-business-audit-logs'),
+    path('me/stock-alerts/', MyStockAlertListView.as_view(), name='my-stock-alerts'),
+    path('me/margins/', MarginReportView.as_view(), name='my-margins'),
+    path('me/inventory/', InventorySessionView.as_view(), name='my-inventory'),
+    path('me/inventory/validate/', InventoryValidateView.as_view(), name='my-inventory-validate'),
+    path('me/inventory/cancel/', InventoryCancelView.as_view(), name='my-inventory-cancel'),
     path('me/data-export/', BusinessDataExportView.as_view(), name='my-business-data-export'),
     path('me/subscription/pay/', MySubscriptionBurundiPayPayView.as_view(), name='my-business-subscription-pay'),
     path('me/subscription/confirm/', MySubscriptionBurundiPayConfirmView.as_view(), name='my-business-subscription-confirm'),
@@ -42,6 +52,8 @@ urlpatterns = [
     path('admin/notifications/', AdminPlatformNotificationListView.as_view(), name='admin_platform_notifications'),
     path('admin/<uuid:pk>/', AdminBusinessDetailView.as_view(), name='admin_business_detail'),
     path('admin/<uuid:pk>/subscription/', AdminBusinessSubscriptionView.as_view(), name='admin_business_subscription'),
+    path('admin/<uuid:pk>/offboard/', AdminBusinessOffboardView.as_view(), name='admin_business_offboard'),
+    path('admin/registration-messages/', BusinessRegistrationMessagesView.as_view(), name='admin_registration_messages'),
     path('admin/moderation/', AdminModerationListView.as_view(), name='admin_moderation_list'),
     path('admin/moderation/desk/', AdminModerationDeskView.as_view(), name='admin_moderation_desk'),
     path('admin/moderation/<uuid:pk>/approve/', AdminModerationApproveView.as_view(), name='admin_moderation_approve'),

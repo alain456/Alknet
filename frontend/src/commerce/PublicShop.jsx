@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Search, ShoppingCart, X, Minus, Plus, Package, Trash2, History,
+  ArrowLeft, Search, ShoppingCart, X, Minus, Plus, Package, Trash2, History, ChevronLeft, ChevronRight,
+  Phone, Mail, MapPin, Clock, Store,
 } from 'lucide-react';
 import api from '../shared/api';
+import { websiteHref } from '../shared/websiteUrl';
 import BurundiPayPayerField from '../shared/components/BurundiPayPayerField';
 import OrderPaymentSuccess from '../shared/components/OrderPaymentSuccess';
 import commerceService from './commerceService';
@@ -40,17 +42,124 @@ function productPrice(p) {
 }
 
 /** Fusionne les doublons éventuels d'un même produit. */
+function colorVariants(product) {
+  return (product?.variant_rows || []).filter((row) => row.is_active !== false && String(row.color || '').trim());
+}
+
+function cartLineKey(item) {
+  return `${item.product_id}:${item.variant_id || ''}`;
+}
+
 function normalizeCart(items) {
   const map = new Map();
   for (const item of items || []) {
-    const existing = map.get(item.product_id);
+    const key = cartLineKey(item);
+    const existing = map.get(key);
     if (existing) {
       existing.quantity += Number(item.quantity) || 0;
     } else {
-      map.set(item.product_id, { ...item, quantity: Number(item.quantity) || 0 });
+      map.set(key, { ...item, quantity: Number(item.quantity) || 0 });
     }
   }
   return Array.from(map.values());
+}
+
+function ColorProductCard({ product, onOpen, onAdd }) {
+  const colors = colorVariants(product);
+  const [index, setIndex] = useState(0);
+  const [picked, setPicked] = useState(() => (colors[0] ? [colors[0].id] : []));
+  const current = colors[index] || null;
+  const img = current?.image_url || productImage(product);
+  const stock = current
+    ? (Number(current.stock) <= 0 ? { key: 'out', label: 'Rupture' } : { key: 'in', label: 'Disponible' })
+    : stockMeta(product);
+  const available = stock.key !== 'out';
+
+  const toggle = (colorId, at) => {
+    setIndex(at);
+    setPicked((prev) => (prev.includes(colorId) ? prev.filter((id) => id !== colorId) : [...prev, colorId]));
+  };
+
+  const addChosen = () => {
+    if (!colors.length) {
+      onAdd(product, 1, null);
+      return;
+    }
+    const chosen = colors.filter((row) => picked.includes(row.id) && Number(row.stock) > 0);
+    if (!chosen.length) return;
+    chosen.forEach((row) => onAdd(product, 1, row));
+  };
+
+  return (
+    <article className="rounded-3xl bg-white overflow-hidden flex flex-col">
+      <div className="relative h-64 sm:h-72 bg-[#FFFFFF]">
+        <button type="button" onClick={() => onOpen(product)} className="h-full w-full flex items-center justify-center overflow-hidden">
+          {img ? (
+            <img src={img} alt={product.name} className="h-full w-full object-cover object-center" />
+          ) : (
+            <Package className="w-16 h-16 text-primary/40" />
+          )}
+        </button>
+        {colors.length > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Couleur précédente"
+              onClick={() => setIndex((value) => (value - 1 + colors.length) % colors.length)}
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 text-ink flex items-center justify-center"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Couleur suivante"
+              onClick={() => setIndex((value) => (value + 1) % colors.length)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 text-ink flex items-center justify-center"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
+        )}
+      </div>
+      <div className="p-4 flex flex-col gap-1 flex-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+          {product.shop_category_name || 'Article'}
+        </span>
+        <button type="button" onClick={() => onOpen(product)} className="text-left font-semibold text-ink leading-snug">
+          {product.name}
+        </button>
+        {colors.length > 1 && (
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {colors.map((row, at) => {
+              const on = picked.includes(row.id);
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  aria-label={`Variante ${at + 1}`}
+                  onClick={() => toggle(row.id, at)}
+                  className={`w-3.5 h-3.5 rounded-full ${on ? 'bg-accent ring-2 ring-ink' : 'bg-primary/30'} ${Number(row.stock) <= 0 ? 'opacity-40' : ''}`}
+                />
+              );
+            })}
+          </div>
+        )}
+        {product.description ? <p className="text-xs text-ink-muted line-clamp-2">{product.description}</p> : null}
+        <p className="text-sm font-semibold text-primary">{money(current?.unit_price ?? productPrice(product), product.currency)}</p>
+        {stock.key === 'out' ? (
+          <p className="text-xs font-semibold text-alert">Indisponible</p>
+        ) : null}
+        <button
+          type="button"
+          disabled={!available && !colors.some((row) => picked.includes(row.id) && Number(row.stock) > 0)}
+          onClick={addChosen}
+          className="mt-2 w-full rounded-full py-2 text-sm font-semibold bg-accent text-ink disabled:bg-surface disabled:text-alert"
+        >
+          {available || colors.some((row) => picked.includes(row.id) && Number(row.stock) > 0) ? 'Ajouter au panier' : 'Indisponible'}
+        </button>
+      </div>
+    </article>
+  );
 }
 
 export default function PublicShop() {
@@ -58,9 +167,7 @@ export default function PublicShop() {
   const [shop, setShop] = useState(null);
   const [products, setProducts] = useState([]);
   const [q, setQ] = useState('');
-  const [availFilter, setAvailFilter] = useState('ALL');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
-  const [sortBy, setSortBy] = useState('name');
   const [cart, setCart] = useState(() => normalizeCart(loadLocalCart(id)));
   const [selected, setSelected] = useState(null);
   const [qty, setQty] = useState(1);
@@ -92,11 +199,22 @@ export default function PublicShop() {
     ])
       .then(([business, prods]) => {
         if (business) {
+          const extras = business.extra_attributes && typeof business.extra_attributes === 'object'
+            ? business.extra_attributes
+            : {};
+          const address = business.full_address
+            || [business.avenue, business.quartier, business.zone, business.commune, business.province]
+              .filter(Boolean)
+              .join(', ');
           setShop({
             id: business.id,
             name: business.name,
-            commune: business.commune,
-            phone: business.phone,
+            phone: String(business.phone || '').trim(),
+            email: String(business.email || '').trim(),
+            website: String(business.website || '').trim(),
+            address: address && address !== 'Adresse non renseignée' ? address : '',
+            openingHours: String(extras.opening_hours || '').trim(),
+            pickupInfo: String(extras.pickup_info || '').trim(),
             logo: business.logo,
           });
         }
@@ -122,29 +240,19 @@ export default function PublicShop() {
       const matchQ = !q || hay.includes(q.toLowerCase());
       const cat = (p.shop_category_name || p.category_name || 'Autres').trim() || 'Autres';
       const matchCat = categoryFilter === 'ALL' || cat === categoryFilter;
-      const stock = stockMeta(p);
-      const matchAvail = availFilter === 'ALL'
-        || (availFilter === 'in' && stock.key === 'in')
-        || (availFilter === 'low' && stock.key === 'low')
-        || (availFilter === 'out' && stock.key === 'out');
-      return matchQ && matchCat && matchAvail;
+      return matchQ && matchCat;
     });
-    if (sortBy === 'price') {
-      list = [...list].sort((a, b) => productPrice(a) - productPrice(b));
-    } else if (sortBy === 'stock') {
-      const rank = { in: 0, low: 1, out: 2 };
-      list = [...list].sort((a, b) => rank[stockMeta(a).key] - rank[stockMeta(b).key]);
-    } else {
-      list = [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr'));
-    }
-    return list;
-  }, [products, q, categoryFilter, availFilter, sortBy]);
+    return [...list].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'fr'));
+  }, [products, q, categoryFilter]);
 
   const lines = useMemo(() => cart.map((item) => {
     const p = products.find((x) => x.id === item.product_id) || item.product || {};
-    const unit = Number(item.unit_price_snapshot ?? productPrice(p));
-    const stock = stockMeta(p);
-    const available = Number(p.stock_available ?? p.stock ?? 0);
+    const variant = (p.variant_rows || []).find((row) => row.id === item.variant_id);
+    const unit = Number(item.unit_price_snapshot ?? variant?.unit_price ?? productPrice(p));
+    const stock = variant
+      ? (Number(variant.stock) <= 0 ? { key: 'out', label: 'Rupture' } : { key: 'in', label: 'Disponible' })
+      : stockMeta(p);
+    const available = variant ? Number(variant.stock || 0) : Number(p.stock_available ?? p.stock ?? 0);
     let validation_error = null;
     if (p.is_active === false) validation_error = 'Produit inactif';
     else if (stock.key === 'out') validation_error = 'Produit en rupture';
@@ -153,7 +261,9 @@ export default function PublicShop() {
     }
     return {
       product_id: item.product_id,
+      variant_id: item.variant_id || '',
       name: item.product_name_snapshot || p.name,
+      color: item.color || variant?.color || '',
       description: p.description,
       sku: p.sku,
       unit_price: unit,
@@ -161,7 +271,7 @@ export default function PublicShop() {
       line_total: unit * item.quantity,
       availability: stock.label,
       validation_error,
-      image_url: productImage(p) || item.image_url,
+      image_url: item.image_url || variant?.image_url || productImage(p),
       currency: p.currency || 'BIF',
     };
   }), [cart, products]);
@@ -178,40 +288,41 @@ export default function PublicShop() {
     });
   };
 
-  const addToCart = (product, quantity = 1) => {
+  const addToCart = (product, quantity = 1, variant = null) => {
     setError('');
-    if (stockMeta(product).key === 'out') {
+    if (variant) {
+      if (Number(variant.stock) <= 0) {
+        setError(`${variant.color || 'Cette couleur'} est en rupture`);
+        return;
+      }
+    } else if (stockMeta(product).key === 'out') {
       setError('Produit en rupture');
       return;
     }
     const addQty = Math.max(1, Number(quantity) || 1);
-    const available = Number(product.stock_available ?? product.stock ?? 0);
+    const available = variant
+      ? Number(variant.stock || 0)
+      : Number(product.stock_available ?? product.stock ?? 0);
 
     persist((prev) => {
       const next = normalizeCart(prev);
-      const idx = next.findIndex((i) => i.product_id === product.id);
+      const idx = next.findIndex((i) => i.product_id === product.id && (i.variant_id || '') === (variant?.id || ''));
+      const snapshot = {
+        product,
+        product_name_snapshot: product.name,
+        color: variant?.color || '',
+        variant_id: variant?.id || '',
+        unit_price_snapshot: variant?.unit_price ?? productPrice(product),
+        image_url: variant?.image_url || productImage(product),
+      };
       if (idx >= 0) {
         let nextQty = next[idx].quantity + addQty;
         if (available >= 0) nextQty = Math.min(nextQty, available);
-        next[idx] = {
-          ...next[idx],
-          quantity: nextQty,
-          product,
-          product_name_snapshot: product.name,
-          unit_price_snapshot: next[idx].unit_price_snapshot ?? productPrice(product),
-          image_url: productImage(product),
-        };
+        next[idx] = { ...next[idx], ...snapshot, quantity: nextQty, unit_price_snapshot: next[idx].unit_price_snapshot ?? snapshot.unit_price_snapshot };
       } else {
         let nextQty = addQty;
         if (available >= 0) nextQty = Math.min(nextQty, Math.max(available, 1));
-        next.push({
-          product_id: product.id,
-          quantity: nextQty,
-          product,
-          product_name_snapshot: product.name,
-          unit_price_snapshot: productPrice(product),
-          image_url: productImage(product),
-        });
+        next.push({ product_id: product.id, quantity: nextQty, ...snapshot });
       }
       return next;
     });
@@ -220,15 +331,18 @@ export default function PublicShop() {
     setTimeout(() => setMessage(''), 2500);
   };
 
-  const updateQty = (productId, quantity) => {
+  const sameLine = (item, productId, variantId) => item.product_id === productId && (item.variant_id || '') === (variantId || '');
+
+  const updateQty = (productId, variantId, quantity) => {
     const qn = Number(quantity);
     persist((prev) => {
       const next = normalizeCart(prev);
-      if (qn <= 0) return next.filter((i) => i.product_id !== productId);
+      if (qn <= 0) return next.filter((i) => !sameLine(i, productId, variantId));
       return next.map((i) => {
-        if (i.product_id !== productId) return i;
+        if (!sameLine(i, productId, variantId)) return i;
         const p = products.find((x) => x.id === productId) || i.product || {};
-        const available = Number(p.stock_available ?? p.stock ?? 0);
+        const variant = (p.variant_rows || []).find((row) => row.id === variantId);
+        const available = variant ? Number(variant.stock || 0) : Number(p.stock_available ?? p.stock ?? 0);
         let nextQty = qn;
         if (available >= 0) nextQty = Math.min(nextQty, available);
         return { ...i, quantity: Math.max(nextQty, 1) };
@@ -236,8 +350,8 @@ export default function PublicShop() {
     });
   };
 
-  const removeLine = (productId) => {
-    persist((prev) => prev.filter((i) => i.product_id !== productId));
+  const removeLine = (productId, variantId) => {
+    persist((prev) => prev.filter((i) => !sameLine(i, productId, variantId)));
   };
 
   const doClear = () => {
@@ -258,8 +372,8 @@ export default function PublicShop() {
 
   const sendOrder = async () => {
     if (!confirmChecked) return;
-    if (!guestName.trim() || !guestPhone.trim()) {
-      setError('Nom et téléphone requis.');
+    if (!guestName.trim() || !guestPhone.trim() || !guestEmail.trim()) {
+      setError('Nom, e-mail et téléphone sont requis. L’e-mail sert à confirmer la commande.');
       return;
     }
     if (!payerBurundiPay.trim()) {
@@ -275,7 +389,7 @@ export default function PublicShop() {
         guest_phone: guestPhone.trim(),
         payer_phone: payerBurundiPay.trim(),
         notes: notes.trim(),
-        items: cart.map((i) => ({ product: i.product_id, quantity: i.quantity })),
+        items: cart.map((i) => ({ product: i.product_id, variant: i.variant_id || undefined, quantity: i.quantity })),
       });
       persist([]);
       setConfirmOpen(false);
@@ -316,76 +430,114 @@ export default function PublicShop() {
   }
 
   return (
-    <div className="min-h-screen bg-surface text-ink" style={{ fontFamily: 'Inter, IBM Plex Sans, sans-serif' }}>
-      <div className="bg-primary text-white px-5 sm:px-10 py-4">
-        <div className="max-w-[1180px] mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link to="/businesses" className="text-green-100 hover:text-white shrink-0" title="Retour">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            {shop?.logo ? (
-              <img src={shop.logo} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/30 bg-white" />
-            ) : (
-              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center">
-                <Package className="w-5 h-5" />
+    <div className="min-h-screen bg-surface text-ink">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+        <div className="search-panel p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <Link to="/businesses?category=Commerce" className="text-ink shrink-0" title="Retour aux boutiques">
+                <ArrowLeft className="w-5 h-5" />
+              </Link>
+              {shop?.logo ? (
+                <img src={shop.logo} alt="" className="w-10 h-10 rounded-full object-cover" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center">
+                  <Package className="w-5 h-5 text-primary" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">Boutique · retrait en magasin</p>
+                <h1 className="text-xl sm:text-2xl font-semibold text-ink truncate">{shop?.name || 'Catalogue'}</h1>
               </div>
-            )}
-            <div className="min-w-0">
-              <div className="font-display font-bold text-lg truncate" style={{ fontFamily: 'Fraunces, Zilla Slab, serif' }}>
-                {shop?.name || 'Boutique'}
-              </div>
-              <div className="text-[10px] tracking-widest uppercase text-green-200/80 font-mono">Catalogue en ligne</div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link
+                to={`/businesses/${id}/historique`}
+                className="hidden sm:inline-flex items-center gap-2 px-3 py-2 rounded-full text-xs font-semibold text-ink bg-surface"
+              >
+                <History className="w-3.5 h-3.5" />
+                Historique
+              </Link>
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="bg-accent text-ink text-xs font-semibold px-3.5 py-2 rounded-full inline-flex items-center gap-2"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                Panier · {cartCount}
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Link
-              to={`/businesses/${id}/historique`}
-              className="bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
-            >
-              <History className="w-3.5 h-3.5" />
-              Historique
-            </Link>
+          <div className="mt-4 rounded-2xl bg-white px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Contacter la boutique</p>
+            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+              {shop?.phone ? (
+                <a href={`tel:${shop.phone.replace(/\s/g, '')}`} className="flex items-center gap-2 font-semibold text-ink">
+                  <Phone className="w-4 h-4 text-primary shrink-0" />
+                  {shop.phone}
+                </a>
+              ) : null}
+              {shop?.email ? (
+                <a href={`mailto:${shop.email}`} className="flex items-center gap-2 font-semibold text-ink min-w-0">
+                  <Mail className="w-4 h-4 text-primary shrink-0" />
+                  <span className="truncate">{shop.email}</span>
+                </a>
+              ) : null}
+              {shop?.address ? (
+                <p className="flex items-start gap-2 text-ink sm:col-span-2">
+                  <MapPin className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <span>{shop.address}</span>
+                </p>
+              ) : null}
+              {shop?.openingHours ? (
+                <p className="flex items-center gap-2 text-ink">
+                  <Clock className="w-4 h-4 text-primary shrink-0" />
+                  {shop.openingHours}
+                </p>
+              ) : null}
+              {shop?.pickupInfo ? (
+                <p className="flex items-center gap-2 text-ink">
+                  <Store className="w-4 h-4 text-primary shrink-0" />
+                  {shop.pickupInfo}
+                </p>
+              ) : null}
+              {shop?.website ? (
+                <a href={websiteHref(shop.website)} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary sm:col-span-2 truncate">
+                  {shop.website}
+                </a>
+              ) : null}
+              {shop && !shop.phone && !shop.email && !shop.address ? (
+                <p className="text-ink-muted sm:col-span-2">Cette boutique n’a pas encore indiqué ses coordonnées.</p>
+              ) : null}
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2 rounded-full bg-surface px-4 py-2.5">
+            <Search className="w-4 h-4 text-primary shrink-0" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Rechercher un article…"
+              className="w-full border-none bg-transparent outline-none text-sm text-ink shadow-none focus:border-none focus:outline-none"
+            />
+          </div>
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
             <button
               type="button"
-              onClick={() => setCartOpen(true)}
-              className="bg-accent text-primary text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
+              onClick={() => setCategoryFilter('ALL')}
+              className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-semibold ${categoryFilter === 'ALL' ? 'bg-accent text-ink' : 'bg-surface text-ink'}`}
             >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              Panier · {cartCount} article{cartCount > 1 ? 's' : ''}
+              Tout · {products.length}
             </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white border-b-[3px] border-double border-primary/40 px-5 sm:px-10 py-6">
-        <div className="max-w-[1180px] mx-auto">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-accent font-semibold">
-            Boutique · retrait en magasin
-          </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-primary mt-1.5 mb-4" style={{ fontFamily: 'Fraunces, serif' }}>
-            Parcourir le catalogue
-          </h1>
-          <div className="flex flex-wrap gap-3">
-            <div className="flex-1 min-w-[240px] flex items-center gap-2.5 bg-green-50 border border-border rounded-lg px-4 py-2.5">
-              <Search className="w-4 h-4 text-ink-faint shrink-0" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Nom, description, SKU..."
-                className="border-none bg-transparent outline-none text-sm flex-1 text-ink"
-              />
-            </div>
-            <select value={availFilter} onChange={(e) => setAvailFilter(e.target.value)} className="text-sm px-3.5 py-2.5 border border-border rounded-lg bg-white text-ink-muted">
-              <option value="ALL">Toute dispo.</option>
-              <option value="in">Disponible</option>
-              <option value="low">Stock faible</option>
-              <option value="out">Rupture</option>
-            </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm px-3.5 py-2.5 border border-border rounded-lg bg-white text-ink-muted">
-              <option value="name">Trier : Nom</option>
-              <option value="price">Prix croissant</option>
-              <option value="stock">Disponibilité</option>
-            </select>
+            {categories.map(([name, count]) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setCategoryFilter(name)}
+                className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-semibold ${categoryFilter === name ? 'bg-accent text-ink' : 'bg-surface text-ink'}`}
+              >
+                {name} · {count}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -401,82 +553,20 @@ export default function PublicShop() {
         </div>
       )}
 
-      <div className="max-w-[1180px] mx-auto px-5 sm:px-10 py-8 grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">
-        <aside className="space-y-6">
-          <div>
-            <h3 className="text-[13px] font-bold uppercase tracking-wide text-primary mb-2.5">Catégorie</h3>
-            <div className="space-y-1">
-              <button type="button" onClick={() => setCategoryFilter('ALL')} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === 'ALL' ? 'bg-accent text-ink font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
-                Tous <span className="font-mono text-[11px] text-ink-faint">{products.length}</span>
-              </button>
-              {categories.map(([name, count]) => (
-                <button key={name} type="button" onClick={() => setCategoryFilter(name)} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === name ? 'bg-accent text-ink font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
-                  {name} <span className="font-mono text-[11px] text-ink-faint">{count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="bg-white border border-border rounded-[10px] p-3.5 text-xs text-ink-muted space-y-2">
-            <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-success" /> Disponible</div>
-            <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent" /> Stock faible</div>
-            <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-ink-faint" /> Rupture</div>
-          </div>
-        </aside>
-
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
         <div>
-          <div className="mb-4 text-[13.5px] text-ink-muted">
-            <strong className="text-ink">{filtered.length}</strong> produit(s)
-          </div>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-5">
-            {filtered.map((p) => {
-              const stock = stockMeta(p);
-              const available = stock.key !== 'out';
-              const img = productImage(p);
-              return (
-                <article
-                  key={p.id}
-                  className="relative rounded-2xl border border-border bg-surface p-4 pb-0 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
-                >
-                  <button type="button" onClick={() => { setSelected(p); setQty(1); }} className="w-full text-left">
-                    <div className="bg-white border border-border rounded-xl h-40 sm:h-44 flex items-center justify-center overflow-hidden mb-0">
-                      {img ? (
-                        <img src={img} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package className="w-12 h-12 text-primary/40" />
-                      )}
-                    </div>
-                  </button>
-                  <div className="bg-white border border-border border-t-0 rounded-b-xl px-4 pt-3.5 pb-4 -mt-px">
-                    <span className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">
-                      {p.shop_category_name || 'Article'}
-                    </span>
-                    <div className="font-display font-semibold text-[16.5px] text-primary mt-1 leading-snug" style={{ fontFamily: 'Fraunces, serif' }}>{p.name}</div>
-                    <div className="text-[12.5px] text-ink-muted mt-1 space-y-0.5">
-                      {p.description && <div className="line-clamp-2">{p.description}</div>}
-                      <div className="font-mono font-semibold text-primary pt-1">{money(productPrice(p), p.currency)}</div>
-                    </div>
-                    <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-border mt-2">
-                      <span className={`font-mono text-[11px] inline-flex items-center gap-1.5 ${stock.key === 'in' ? 'text-success' : stock.key === 'low' ? 'text-accent' : 'text-ink-faint'}`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                        {stock.label}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!available}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        addToCart(p, 1);
-                      }}
-                      className={`w-full mt-3 rounded-md py-2 text-[13px] font-semibold ${available ? 'bg-primary hover:bg-secondary text-white' : 'bg-red-50 text-error cursor-default'}`}
-                    >
-                      {available ? 'Ajouter au panier' : 'Rupture de stock'}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+          <p className="mb-3 text-sm text-ink-muted">
+            <strong className="text-ink">{filtered.length}</strong> produit{filtered.length > 1 ? 's' : ''}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filtered.map((p) => (
+              <ColorProductCard
+                key={p.id}
+                product={p}
+                onOpen={(item) => { setSelected(item); setQty(1); }}
+                onAdd={addToCart}
+              />
+            ))}
           </div>
           {filtered.length === 0 && <p className="text-center text-ink-muted py-16">Aucun produit trouvé.</p>}
         </div>
@@ -497,10 +587,9 @@ export default function PublicShop() {
                   <button type="button" onClick={() => setSelected(null)}><X className="w-5 h-5 text-ink-faint" /></button>
                 </div>
                 <div className="text-sm text-ink-muted space-y-1">
-                  <p>Catégorie : {selected.shop_category_name || '—'}</p>
-                  {selected.sku && <p>SKU : {selected.sku}</p>}
-                  <p>Disponibilité : {stockMeta(selected).label}</p>
-                  {selected.description && <p className="pt-1">{selected.description}</p>}
+                  {selected.shop_category_name ? <p>Catégorie : {selected.shop_category_name}</p> : null}
+                  <p>{stockMeta(selected).key === 'out' ? 'Indisponible' : 'Disponible'}</p>
+                  {selected.description ? <p className="pt-1 whitespace-pre-line">{selected.description}</p> : null}
                 </div>
                 <p className="text-lg font-mono font-bold text-primary">{money(productPrice(selected), selected.currency)}</p>
                 <div className="flex items-center gap-2">
@@ -549,13 +638,13 @@ export default function PublicShop() {
               )}
 
               {lines.map((line) => (
-                <div key={line.product_id} className="border border-border rounded-xl p-3 space-y-2">
+                <div key={`${line.product_id}-${line.variant_id}`} className="border border-border rounded-xl p-3 space-y-2">
                   <div className="flex gap-3">
                     <div className="w-12 h-12 rounded-lg bg-green-50 overflow-hidden shrink-0 flex items-center justify-center">
                       {line.image_url ? <img src={line.image_url} alt="" className="w-full h-full object-cover" /> : <Package className="w-5 h-5 text-primary/50" />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-sm">{line.name}</div>
+                      <div className="font-semibold text-sm">{line.name}{line.color ? ` · ${line.color}` : ''}</div>
                       {line.sku && <div className="text-xs text-ink-muted">SKU : {line.sku}</div>}
                       <div className="text-xs font-mono text-primary mt-0.5">{money(line.unit_price, line.currency)}</div>
                       {line.validation_error ? (
@@ -564,21 +653,21 @@ export default function PublicShop() {
                         <div className="text-xs text-emerald-700 mt-1">{line.availability}</div>
                       )}
                     </div>
-                    <button type="button" onClick={() => removeLine(line.product_id)} className="text-red-600 p-1" title="Supprimer">
+                    <button type="button" onClick={() => removeLine(line.product_id, line.variant_id)} className="text-red-600 p-1" title="Supprimer">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
+                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.variant_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
                       <input
                         type="number"
                         min={1}
                         className="w-14 border rounded px-1 py-1 text-center text-sm"
                         value={line.quantity}
-                        onChange={(e) => updateQty(line.product_id, e.target.value)}
+                        onChange={(e) => updateQty(line.product_id, line.variant_id, e.target.value)}
                       />
-                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
+                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.variant_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
                     </div>
                     <span className="text-sm font-semibold">{money(line.line_total)}</span>
                   </div>
@@ -611,8 +700,8 @@ export default function PublicShop() {
                     </thead>
                     <tbody>
                       {lines.map((l) => (
-                        <tr key={l.product_id} className="border-b border-white/60">
-                          <td className="py-1.5 pr-1">{l.name}</td>
+                        <tr key={`${l.product_id}-${l.variant_id}`} className="border-b border-white/60">
+                          <td className="py-1.5 pr-1">{l.name}{l.color ? ` · ${l.color}` : ''}</td>
                           <td className="py-1.5 text-right">{l.quantity}</td>
                           <td className="py-1.5 text-right">{money(l.unit_price)}</td>
                           <td className="py-1.5 text-right font-medium">{money(l.line_total)}</td>
@@ -687,9 +776,9 @@ export default function PublicShop() {
             </dl>
             <ul className="text-sm border-2 border-accent rounded-xl divide-y max-h-40 overflow-y-auto">
               {lines.map((l) => (
-                <li key={l.product_id} className="px-3 py-2 flex justify-between gap-2">
+                <li key={`${l.product_id}-${l.variant_id}`} className="px-3 py-2 flex justify-between gap-2">
                   <span>
-                    {l.name} × {l.quantity}
+                    {l.name}{l.color ? ` · ${l.color}` : ''} × {l.quantity}
                     <span className="block text-xs text-ink-muted">{money(l.unit_price)}</span>
                   </span>
                   <span className="font-medium">{money(l.line_total)}</span>
@@ -701,8 +790,8 @@ export default function PublicShop() {
               <input required className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={guestName} onChange={(e) => setGuestName(e.target.value)} placeholder="Jean Ndayishimiye" />
             </label>
             <label className="text-xs font-bold text-ink block space-y-1">
-              <span>Email</span>
-              <input type="email" className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} />
+              <span>E-mail *</span>
+              <input required type="email" className="w-full border-2 border-accent rounded-xl px-3 py-2 bg-surface text-ink outline-none focus:border-alert" value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} placeholder="Pour la confirmation de commande" />
             </label>
             <label className="text-xs font-bold text-ink block space-y-1">
               <span>Téléphone *</span>

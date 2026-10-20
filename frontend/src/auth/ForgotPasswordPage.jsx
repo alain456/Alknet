@@ -39,15 +39,15 @@ export default function ForgotPasswordPage() {
   return (
     <div className="w-full text-ink">
       <Link to="/login" className="inline-flex items-center text-sm sm:text-base font-bold text-ink-muted hover:text-primary mb-6 transition">
-        <ArrowLeft className="w-4 h-4 mr-1" /> Back to log in
+        <ArrowLeft className="w-4 h-4 mr-1" /> Retour à la connexion
       </Link>
 
       <div className="mb-8">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Forgot password?</h2>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Mot de passe oublié ?</h2>
         <p className="text-base text-ink-muted font-medium">
           {isSent
-            ? "We've sent a password reset link to your email."
-            : "No worries, we'll send you reset instructions."}
+            ? 'Un lien de réinitialisation a été envoyé à votre e-mail.'
+            : 'Indiquez votre e-mail. Nous vous envoyons les instructions.'}
         </p>
       </div>
 
@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
       {isSent ? (
         <div className="space-y-6">
           <div className="bg-primary/10 border-2 border-accent rounded-xl p-4 text-sm sm:text-base text-ink font-medium">
-            Check your inbox at <strong>{email}</strong> and click the link to reset your password.
+            Ouvrez la boîte de <strong>{email}</strong> et suivez le lien pour choisir un nouveau mot de passe.
           </div>
           <button
             type="button"
@@ -68,19 +68,21 @@ export default function ForgotPasswordPage() {
             disabled={isLoading}
             className="w-full bg-surface border-2 border-accent hover:bg-primary/5 text-ink font-bold text-base py-3 rounded-xl shadow-sm transition cursor-pointer disabled:opacity-70"
           >
-            Didn&apos;t receive the email? Click to resend
+            Rien reçu ? Renvoyer le lien
           </button>
         </div>
       ) : (
         <form onSubmit={onSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Email</label>
-            <input
-              type="email"
-              className="w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition"
-              placeholder="Enter your email"
-              {...form.register('email', { required: true })}
-            />
+            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+              E-mail
+              <input
+                type="email"
+                className="mt-1.5 w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition"
+                placeholder="vous@exemple.com"
+                {...form.register('email', { required: true })}
+              />
+            </label>
           </div>
 
           <button
@@ -93,7 +95,7 @@ export default function ForgotPasswordPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
-            ) : 'Reset password'}
+            ) : 'Envoyer le lien'}
           </button>
         </form>
       )}

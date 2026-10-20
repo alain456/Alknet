@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  HeartPulse, MapPin, Phone, Clock, Star, Users, CheckCircle, 
-  Navigation, Calendar, Video, Stethoscope, ChevronRight, AlertCircle, X, Shield, FlaskConical, History, Globe
+import {
+  HeartPulse, MapPin, Phone, Clock, Users, CheckCircle,
+  Calendar, Video, History,
 } from 'lucide-react';
 import DoctorCard from './DoctorCard';
 import { useParams, Link } from 'react-router-dom';
@@ -315,193 +315,132 @@ export default function HospitalProfile() {
 
   return (
     <div className="min-h-screen bg-surface text-ink pb-16">
-      {/* Hero */}
-      <div className="bg-primary text-surface relative overflow-hidden">
-        <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(ellipse at 20% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-24 relative">
-          <p className="text-xs font-bold uppercase tracking-widest text-accent mb-2">Prise de rendez-vous médical</p>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-surface max-w-2xl">{hospital.name}</h1>
-          <p className="text-surface/80 text-sm mt-2 max-w-xl">{hospital.category}</p>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Identity card */}
-        <div className="relative -mt-14 bg-surface text-ink rounded-2xl border-2 border-accent shadow-md p-5 sm:p-7 flex flex-col sm:flex-row gap-5 items-start">
-          <div className="w-24 h-24 sm:w-28 sm:h-28 bg-surface rounded-2xl shrink-0 border-2 border-alert/50 overflow-hidden flex items-center justify-center">
-            {hospital.logo ? (
-              <img src={hospital.logo} alt={hospital.name} className="w-full h-full object-cover" />
-            ) : (
-              <HeartPulse className="w-12 h-12 text-primary" />
-            )}
-          </div>
-
-          <div className="flex-1 w-full min-w-0">
-            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-ink bg-primary/10 px-2.5 py-1 rounded-lg border border-accent/40">
-                    {hospital.category}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+          <div className="flex gap-4 min-w-0">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white ring-1 ring-border flex items-center justify-center overflow-hidden shrink-0">
+              {hospital.logo ? (
+                <img src={hospital.logo} alt="" className="w-full h-full object-contain p-2" />
+              ) : (
+                <HeartPulse className="w-10 h-10 text-primary" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-ink-muted">{hospital.category || 'Hôpital'}</p>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-ink">{hospital.name}</h1>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {hospital.hasEmergency && (
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-white bg-alert px-2.5 py-1 rounded-full">
+                    Urgences 24/7
                   </span>
-                  {hospital.hasEmergency && (
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-surface bg-alert px-2.5 py-1 rounded-lg">
-                      Urgences 24/7
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">{hospital.name}</h2>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink">
-                  {hospital.beds != null && (
-                    <span className="inline-flex items-center gap-1.5 font-medium">
-                      <Users className="w-4 h-4 text-accent" /> {hospital.beds} lits
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1.5 font-medium">
-                    <MapPin className="w-4 h-4 text-accent" /> {hospital.address}
+                )}
+                {hospital.beds != null && (
+                  <span className="inline-flex items-center gap-1.5 text-sm text-ink">
+                    <Users className="w-4 h-4 text-accent" /> {hospital.beds} lits
                   </span>
-                  {hospital.phone && (
-                    <span className="inline-flex items-center gap-1.5 font-medium">
-                      <Phone className="w-4 h-4 text-accent" /> {hospital.phone}
-                    </span>
-                  )}
-                  {hospital.website && (
-                    <a
-                      href={websiteHref(hospital.website)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 font-medium text-primary hover:underline"
-                    >
-                      <Globe className="w-4 h-4 text-accent" /> Site web
-                    </a>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2 w-full md:w-auto flex-wrap">
-                <Link
-                  to={`/hospitals/${id}/historique`}
-                  className="flex-1 md:flex-none px-4 py-2.5 bg-surface text-ink font-semibold rounded-xl border-2 border-accent inline-flex items-center justify-center gap-2 text-sm"
-                >
-                  <History className="w-4 h-4" /> Mon historique
-                </Link>
-                {hospital.phone && (
-                  <a
-                    href={`tel:${hospital.phone}`}
-                    className="flex-1 md:flex-none px-4 py-2.5 bg-primary text-surface font-semibold rounded-xl border-2 border-alert inline-flex items-center justify-center gap-2 text-sm"
-                  >
-                    <Phone className="w-4 h-4" /> Appeler
-                  </a>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            {/* À propos + Services */}
-            <section className="bg-surface text-ink rounded-2xl border-2 border-accent p-5 sm:p-7 shadow-sm">
-              <h2 className="text-xl font-extrabold text-ink mb-3">À propos de l&apos;établissement</h2>
-              <p className="text-ink leading-relaxed text-sm sm:text-base">
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4 text-accent" /> {hospital.address}
+                </span>
+                {hospital.phone && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Phone className="w-4 h-4 text-accent" /> {hospital.phone}
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-sm text-ink max-w-2xl leading-relaxed">
                 {hospital.description || 'Aucune description fournie.'}
               </p>
+            </div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Link
+              to={`/hospitals/${id}/historique`}
+              className="px-4 py-2.5 bg-white border border-border text-ink text-sm font-bold rounded-full inline-flex items-center gap-2"
+            >
+              <History className="w-4 h-4" /> Historique
+            </Link>
+            {hospital.phone && (
+              <a
+                href={`tel:${hospital.phone}`}
+                className="px-4 py-2.5 bg-accent text-ink text-sm font-bold rounded-full inline-flex items-center gap-2"
+              >
+                <Phone className="w-4 h-4" /> Appeler
+              </a>
+            )}
+          </div>
+        </div>
 
-              <div className="mt-6 pt-5 border-t-2 border-alert/30">
-                <h3 className="font-bold text-ink text-base mb-1 flex items-center gap-2">
-                  <HeartPulse className="w-5 h-5 text-accent" /> Services &amp; Paquets de soins
-                </h3>
-                <p className="text-xs text-ink-muted mb-4">
-                  Choisissez un service, puis un créneau publié pour réserver.
-                </p>
-                {services.length === 0 ? (
-                  <p className="text-sm text-ink-muted">Aucun service publié pour le moment.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {services.map((srv, idx) => {
-                      const hasSlots = servicesWithSlots.has(String(srv.id));
-                      const bookable = srv.online_booking_available !== false && hasSlots;
-                      return (
-                        <div
-                          key={srv.id}
-                          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border-2 bg-surface ${
-                            idx % 2 === 0 ? 'border-accent' : 'border-alert'
+        <div className="mt-12 grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 space-y-12">
+            <section>
+              <h2 className="text-2xl font-extrabold text-ink">Services</h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                Choisissez un service, puis un créneau publié pour réserver.
+              </p>
+              {services.length === 0 ? (
+                <p className="mt-4 text-sm text-ink-muted">Aucun service publié pour le moment.</p>
+              ) : (
+                <div className="mt-5 grid sm:grid-cols-2 gap-4">
+                  {services.map((srv) => {
+                    const hasSlots = servicesWithSlots.has(String(srv.id));
+                    const bookable = srv.online_booking_available !== false && hasSlots;
+                    return (
+                      <article key={srv.id} className="rounded-3xl bg-white ring-1 ring-border p-5 flex flex-col">
+                        <h3 className="font-extrabold text-ink">{srv.name}</h3>
+                        {srv.description && (
+                          <p className="mt-1 text-sm text-ink-muted line-clamp-3">{srv.description}</p>
+                        )}
+                        <button
+                          type="button"
+                          disabled={!bookable}
+                          onClick={() => handleOpenServiceBooking(srv)}
+                          className={`mt-4 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold ${
+                            bookable
+                              ? 'bg-accent text-ink'
+                              : 'bg-surface text-ink-muted'
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="font-bold text-ink">{srv.name}</div>
-                            {srv.description && (
-                              <div className="text-xs text-ink-muted mt-1 line-clamp-2">{srv.description}</div>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            disabled={!bookable}
-                            onClick={() => handleOpenServiceBooking(srv)}
-                            className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold transition border-2 ${
-                              bookable
-                                ? 'bg-accent text-ink border-accent cursor-pointer'
-                                : 'bg-accent/15 text-ink border-alert cursor-not-allowed'
-                            }`}
-                          >
-                            <Calendar className="w-3.5 h-3.5" />
-                            {bookable ? 'Prendre RDV' : 'Pas de créneau'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                          <Calendar className="w-4 h-4" />
+                          {bookable ? 'Prendre RDV' : 'Pas de créneau'}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </section>
 
-            {/* Examens */}
-            <section className="bg-surface text-ink rounded-2xl border-2 border-alert p-5 sm:p-7 shadow-sm">
-              <h2 className="text-xl font-extrabold text-ink flex items-center gap-2 mb-1">
-                <FlaskConical className="w-6 h-6 text-accent" />
-                Examens disponibles
-              </h2>
-              <p className="text-xs text-ink-muted mb-5">Examens proposés par l&apos;établissement.</p>
-
+            <section>
+              <h2 className="text-2xl font-extrabold text-ink">Examens</h2>
+              <p className="mt-1 text-sm text-ink-muted">Examens proposés par l&apos;établissement.</p>
               {exams.length === 0 ? (
-                <div className="text-center py-10 rounded-xl border-2 border-dashed border-accent/40 bg-primary/5">
-                  <FlaskConical className="w-10 h-10 text-ink-muted mx-auto mb-2" />
-                  <p className="text-ink-muted text-sm font-medium">Aucun examen publié pour le moment.</p>
-                </div>
+                <p className="mt-4 text-sm text-ink-muted">Aucun examen publié pour le moment.</p>
               ) : (
-                <ul className="rounded-xl border-2 border-accent overflow-hidden divide-y divide-border">
+                <ul className="mt-5 rounded-3xl bg-white ring-1 ring-border divide-y divide-border">
                   {exams.map((ex) => (
-                    <li
-                      key={ex.id}
-                      className="flex items-start justify-between gap-4 px-4 py-3.5 bg-surface hover:bg-primary/5 transition"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-bold text-ink">{ex.name}</div>
-                        {ex.description && (
-                          <div className="text-xs text-ink-muted mt-0.5 leading-relaxed">{ex.description}</div>
-                        )}
-                      </div>
+                    <li key={ex.id} className="px-5 py-4">
+                      <p className="font-bold text-ink">{ex.name}</p>
+                      {ex.description && (
+                        <p className="text-sm text-ink-muted mt-0.5">{ex.description}</p>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
             </section>
 
-            {/* Médecins */}
-            <section className="bg-surface text-ink rounded-2xl border-2 border-accent p-5 sm:p-7 shadow-sm">
-              <h2 className="text-xl font-extrabold text-ink flex items-center gap-2 mb-1">
-                <Stethoscope className="w-6 h-6 text-accent" />
-                Annuaire des Médecins Spécialistes
-              </h2>
-              <p className="text-xs text-ink-muted mb-6">
-                Praticiens enregistrés — réservez directement sur un créneau publié.
+            <section>
+              <h2 className="text-2xl font-extrabold text-ink">Médecins</h2>
+              <p className="mt-1 text-sm text-ink-muted">
+                Praticiens enregistrés. Le rendez-vous s&apos;ouvre lorsqu&apos;un créneau est publié.
               </p>
-
               {publicDoctors.length === 0 ? (
-                <div className="text-center py-12 rounded-xl border-2 border-dashed border-alert/40 bg-primary/5">
-                  <Stethoscope className="w-10 h-10 text-ink-muted mx-auto mb-2" />
-                  <p className="text-ink-muted text-sm font-medium">Aucun médecin répertorié pour le moment.</p>
-                </div>
+                <p className="mt-4 text-sm text-ink-muted">Aucun médecin répertorié pour le moment.</p>
               ) : (
-                <div className="space-y-4">
+                <div className="mt-5 space-y-4">
                   {publicDoctors.map((doc) => (
                     <DoctorCard
                       key={doc.id}
@@ -515,66 +454,60 @@ export default function HospitalProfile() {
             </section>
           </div>
 
-          {/* Sidebar */}
-          <aside className="space-y-5">
-            <div className="bg-surface text-ink rounded-2xl border-2 border-accent p-5 shadow-sm sticky top-20">
-              <h3 className="font-extrabold text-ink text-base mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-accent" /> Informations d&apos;accès
-              </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between gap-3 border-b border-border pb-2.5">
-                  <span className="text-ink-muted">Horaires</span>
-                  <strong className="text-ink text-right">{hospital.hours || '—'}</strong>
+          <div className="space-y-5 lg:sticky lg:top-24 self-start">
+            <section
+              className="rounded-3xl bg-white p-6 shadow-md"
+              style={{ border: '2px solid #32667F', borderTopWidth: '8px' }}
+            >
+              <h2 className="text-lg font-extrabold text-ink">Accès</h2>
+              <dl className="mt-5 space-y-4 text-sm">
+                <div>
+                  <dt className="text-ink-muted">Horaires</dt>
+                  <dd className="mt-0.5 font-semibold text-ink">{hospital.hours || '—'}</dd>
                 </div>
-                <div className="flex items-center justify-between gap-3 border-b border-border pb-2.5">
-                  <span className="text-ink-muted">Téléphone</span>
-                  <strong className="text-ink text-right">{hospital.phone || '—'}</strong>
+                <div>
+                  <dt className="text-ink-muted">Téléphone</dt>
+                  <dd className="mt-0.5 font-semibold text-ink">{hospital.phone || '—'}</dd>
                 </div>
-                <div className="flex items-start justify-between gap-3 border-b border-border pb-2.5">
-                  <span className="text-ink-muted shrink-0">Site web</span>
-                  {hospital.website ? (
-                    <a
-                      href={websiteHref(hospital.website)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary font-semibold text-right break-all hover:underline"
-                    >
-                      {hospital.website}
-                    </a>
-                  ) : (
-                    <strong className="text-ink text-right">—</strong>
-                  )}
+                <div>
+                  <dt className="text-ink-muted">Site web</dt>
+                  <dd className="mt-0.5 font-semibold text-ink break-all">
+                    {hospital.website ? (
+                      <a href={websiteHref(hospital.website)} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">
+                        {hospital.website}
+                      </a>
+                    ) : '—'}
+                  </dd>
                 </div>
-                <div className="flex items-start justify-between gap-3 pb-1">
-                  <span className="text-ink-muted shrink-0">Email</span>
-                  <strong className="text-ink text-right break-all">{hospital.email || '—'}</strong>
+                <div>
+                  <dt className="text-ink-muted">Email</dt>
+                  <dd className="mt-0.5 font-semibold text-ink break-all">{hospital.email || '—'}</dd>
                 </div>
-              </div>
-            </div>
+              </dl>
+            </section>
 
-            <div className="bg-surface text-ink rounded-2xl border-2 border-alert p-5 shadow-sm">
-              <h3 className="font-extrabold text-ink text-base mb-2 flex items-center gap-2">
-                <Shield className="w-5 h-5 text-accent" /> Assurances &amp; mutuelles
-              </h3>
-              <p className="text-xs text-ink-muted mb-4">
-                Assurances maladie et mutuelles acceptées.
-              </p>
+            <section
+              className="rounded-3xl bg-white p-6 shadow-md"
+              style={{ border: '2px solid #EA8B33', borderTopWidth: '8px' }}
+            >
+              <h2 className="text-lg font-extrabold text-ink">Assurances</h2>
               {(hospital.insurances || []).length === 0 ? (
-                <p className="text-sm text-ink-muted">Aucune assurance déclarée pour le moment.</p>
+                <p className="mt-4 text-sm text-ink-muted">Aucune assurance déclarée pour le moment.</p>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <ul className="mt-5 flex flex-wrap gap-2">
                   {hospital.insurances.map((name) => (
-                    <span
+                    <li
                       key={name}
-                      className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-primary/10 text-ink border border-accent/40"
+                      className="px-3 py-1.5 rounded-full bg-surface text-sm font-semibold text-ink"
+                      style={{ border: '1px solid #32667F' }}
                     >
                       {name}
-                    </span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-            </div>
-          </aside>
+            </section>
+          </div>
         </div>
       </div>
 

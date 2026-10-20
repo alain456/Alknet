@@ -59,7 +59,7 @@ const educationService = {
   updateProgram: (id, body) => api.patch(`education/programs/${id}/`, encodeProgram(body), { auth: true }),
   deleteProgram: (id) => api.delete(`education/programs/${id}/`, { auth: true }),
 
-  listUnits: () => api.get('education/units/', { auth: true }),
+  listUnits: () => api.get('education/units/?mine=1', { auth: true }),
   createUnit: (body) => api.post('education/units/', body, { auth: true }),
   updateUnit: (id, body) => api.patch(`education/units/${id}/`, body, { auth: true }),
   deleteUnit: (id) => api.delete(`education/units/${id}/`, { auth: true }),

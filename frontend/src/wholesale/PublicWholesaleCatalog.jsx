@@ -61,7 +61,7 @@ export default function PublicWholesaleCatalog() {
   const [selected, setSelected] = useState(null);
   const [qty, setQty] = useState(1);
   const [cartOpen, setCartOpen] = useState(false);
-  const [showProforma, setShowProforma] = useState(true);
+  const [showProforma, setShowProforma] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmChecked, setConfirmChecked] = useState(false);
@@ -167,6 +167,7 @@ export default function PublicWholesaleCatalog() {
       line_total: unit * item.quantity,
       availability: stock.label,
       validation_error,
+      min_order_quantity: p.min_order_quantity || 1,
       image_url: p.image_url,
       currency: p.currency || 'BIF',
     };
@@ -315,188 +316,151 @@ export default function PublicWholesaleCatalog() {
     );
   }
 
+  const chip = (active) => `shrink-0 px-3 py-1.5 rounded-full text-sm font-semibold ${active ? 'bg-accent text-ink' : 'bg-surface text-ink'}`;
+
   return (
-    <div className="min-h-screen bg-surface text-ink" style={{ fontFamily: 'Inter, IBM Plex Sans, sans-serif' }}>
-      <div className="bg-primary text-white px-5 sm:px-10 py-4">
-        <div className="max-w-[1180px] mx-auto flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-surface text-ink pb-12">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6">
+        <div className="search-panel p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Link to="/businesses" className="text-green-100 hover:text-white shrink-0" title="Retour">
+            <Link to="/businesses" className="w-10 h-10 rounded-full bg-white ring-1 ring-border text-ink flex items-center justify-center shrink-0" title="Retour">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            {pharmacy?.logo ? (
-              <img src={pharmacy.logo} alt="" className="w-9 h-9 rounded-lg object-cover border border-white/30 bg-white" />
-            ) : (
-              <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-lg font-bold">+</div>
-            )}
+            <div className="w-12 h-12 rounded-2xl bg-white ring-1 ring-border flex items-center justify-center overflow-hidden shrink-0">
+              {pharmacy?.logo ? (
+                <img src={pharmacy.logo} alt="" className="w-full h-full object-contain p-1" />
+              ) : (
+                <Pill className="w-6 h-6 text-primary" />
+              )}
+            </div>
             <div className="min-w-0">
-              <div className="font-display font-bold text-lg truncate" style={{ fontFamily: 'Fraunces, Zilla Slab, serif' }}>
-                {pharmacy?.name || 'Pharmacie'}
-              </div>
-              <div className="text-[10px] tracking-widest uppercase text-green-200/80 font-mono">Catalogue en ligne</div>
+              <p className="text-xs font-semibold text-ink-muted">Vente en gros</p>
+              <p className="font-extrabold text-lg text-ink truncate">{pharmacy?.name || 'Grossiste'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2">
             <Link
               to={`/businesses/${id}/historique`}
-              className="bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
+              className="bg-white ring-1 ring-border text-ink text-sm font-bold px-4 py-2.5 rounded-full inline-flex items-center gap-2"
             >
-              <History className="w-3.5 h-3.5" />
+              <History className="w-4 h-4" />
               Historique
             </Link>
             <button
               type="button"
               onClick={() => setCartOpen(true)}
-              className="bg-accent text-ink text-xs font-semibold px-3.5 py-2 rounded-full font-mono inline-flex items-center gap-2"
+              className="bg-accent text-ink text-sm font-bold px-4 py-2.5 rounded-full inline-flex items-center gap-2"
             >
-              <ShoppingCart className="w-3.5 h-3.5" />
-              Panier · {cartCount} article{cartCount > 1 ? 's' : ''}
+              <ShoppingCart className="w-4 h-4" />
+              Panier · {cartCount}
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="bg-white border-b-[3px] border-double border-primary/40 px-5 sm:px-10 py-6">
-        <div className="max-w-[1180px] mx-auto">
-          <div className="text-[11px] font-mono uppercase tracking-widest text-accent font-semibold">
-            Vente en gros · commande libre
-          </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-primary mt-1.5 mb-4" style={{ fontFamily: 'Fraunces, serif' }}>
-            Trouvez votre médicament
-          </h1>
-          <div className="flex flex-wrap gap-3">
-            <div className="flex-1 min-w-[240px] flex items-center gap-2.5 bg-green-50 border border-border rounded-lg px-4 py-2.5">
-              <Search className="w-4 h-4 text-ink-faint shrink-0" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Nom, DCI / principe actif..."
-                className="border-none bg-transparent outline-none text-sm flex-1 text-ink"
-              />
-            </div>
-            <select value={formFilter} onChange={(e) => setFormFilter(e.target.value)} className="text-sm px-3.5 py-2.5 border border-border rounded-lg bg-white text-ink-muted">
-              <option value="ALL">Toutes les formes</option>
-              {forms.map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <select value={mfrFilter} onChange={(e) => setMfrFilter(e.target.value)} className="text-sm px-3.5 py-2.5 border border-border rounded-lg bg-white text-ink-muted">
-              <option value="ALL">Tous fabricants</option>
-              {manufacturers.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select value={availFilter} onChange={(e) => setAvailFilter(e.target.value)} className="text-sm px-3.5 py-2.5 border border-border rounded-lg bg-white text-ink-muted">
-              <option value="ALL">Toute dispo.</option>
-              <option value="in">Disponible</option>
-              <option value="low">Stock faible</option>
-              <option value="out">Rupture</option>
-            </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm px-3.5 py-2.5 border border-border rounded-lg bg-white text-ink-muted">
-              <option value="name">Trier : Nom</option>
-              <option value="price">Prix croissant</option>
-              <option value="stock">Disponibilité</option>
-            </select>
-          </div>
+        <div className="mt-4 flex items-center gap-2 rounded-full bg-surface px-4 py-2.5">
+          <Search className="w-4 h-4 text-primary shrink-0" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Nom, principe actif…"
+            className="w-full border-none bg-transparent outline-none text-sm text-ink shadow-none focus:border-none focus:outline-none"
+          />
         </div>
-      </div>
 
-      {message && (
-        <div className="max-w-[1180px] mx-auto px-5 sm:px-10 pt-4">
-          <div className="p-3 bg-green-50 border border-green-100 text-success rounded-xl text-sm">{message}</div>
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+          <button type="button" onClick={() => setCategoryFilter('ALL')} className={chip(categoryFilter === 'ALL')}>
+            Tous · {products.length}
+          </button>
+          {categories.map(([name, count]) => (
+            <button key={name} type="button" onClick={() => setCategoryFilter(name)} className={chip(categoryFilter === name)}>
+              {name} · {count}
+            </button>
+          ))}
         </div>
-      )}
-      {error && !confirmOpen && (
-        <div className="max-w-[1180px] mx-auto px-5 sm:px-10 pt-4">
-          <div className="p-3 bg-red-50 border border-red-100 text-error rounded-xl text-sm">{error}</div>
         </div>
-      )}
 
-      <div className="max-w-[1180px] mx-auto px-5 sm:px-10 py-8 grid grid-cols-1 md:grid-cols-[220px_1fr] gap-8">
-        <aside className="space-y-6">
-          <div>
-            <h3 className="text-[13px] font-bold uppercase tracking-wide text-primary mb-2.5">Catégorie</h3>
-            <div className="space-y-1">
-              <button type="button" onClick={() => setCategoryFilter('ALL')} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === 'ALL' ? 'bg-accent text-ink font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
-                Tous <span className="font-mono text-[11px] text-ink-faint">{products.length}</span>
-              </button>
-              {categories.map(([name, count]) => (
-                <button key={name} type="button" onClick={() => setCategoryFilter(name)} className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-[13.5px] ${categoryFilter === name ? 'bg-accent text-ink font-semibold' : 'text-ink-muted hover:bg-green-50'}`}>
-                  {name} <span className="font-mono text-[11px] text-ink-faint">{count}</span>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <select value={formFilter} onChange={(e) => setFormFilter(e.target.value)} className="text-sm px-3 py-2 rounded-xl bg-white ring-1 ring-border text-ink">
+            <option value="ALL">Toutes les formes</option>
+            {forms.map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <select value={mfrFilter} onChange={(e) => setMfrFilter(e.target.value)} className="text-sm px-3 py-2 rounded-xl bg-white ring-1 ring-border text-ink">
+            <option value="ALL">Tous fabricants</option>
+            {manufacturers.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+          <select value={availFilter} onChange={(e) => setAvailFilter(e.target.value)} className="text-sm px-3 py-2 rounded-xl bg-white ring-1 ring-border text-ink">
+            <option value="ALL">Toute disponibilité</option>
+            <option value="in">Disponible</option>
+            <option value="low">Stock faible</option>
+            <option value="out">Rupture</option>
+          </select>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="text-sm px-3 py-2 rounded-xl bg-white ring-1 ring-border text-ink">
+            <option value="name">Nom</option>
+            <option value="price">Prix croissant</option>
+            <option value="stock">Disponibilité</option>
+          </select>
+        </div>
+
+        {message && <div className="mt-4 p-3 bg-white ring-1 ring-border text-ink rounded-xl text-sm">{message}</div>}
+        {error && !confirmOpen && <div className="mt-4 p-3 bg-white ring-1 ring-alert text-alert rounded-xl text-sm">{error}</div>}
+
+        <div className="mt-8 flex items-end justify-between gap-3">
+          <h2 className="text-2xl font-extrabold text-ink">Médicaments</h2>
+          <p className="text-sm text-ink-muted">{filtered.length} produit{filtered.length > 1 ? 's' : ''}</p>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map((p) => {
+            const stock = stockMeta(p);
+            const available = stock.key !== 'out';
+            return (
+              <article key={p.id} className="rounded-3xl bg-white overflow-hidden flex flex-col">
+                <button type="button" onClick={() => { setSelected(p); setQty(p.min_order_quantity || 1); }} className="h-64 sm:h-72 w-full bg-[#FFFFFF] flex items-center justify-center overflow-hidden">
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.name} className="h-full w-full object-cover object-center" />
+                  ) : (
+                    <Pill className="w-16 h-16 text-primary/40" />
+                  )}
                 </button>
-              ))}
-            </div>
-          </div>
-          <div className="bg-white border border-border rounded-[10px] p-3.5 text-xs text-ink-muted space-y-2">
-            <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-success" /> Disponible</div>
-            <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent" /> Stock faible</div>
-            <div className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-ink-faint" /> Rupture</div>
-          </div>
-        </aside>
-
-        <div>
-          <div className="mb-4 text-[13.5px] text-ink-muted">
-            <strong className="text-ink">{filtered.length}</strong> médicament(s)
-          </div>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-5">
-            {filtered.map((p) => {
-              const stock = stockMeta(p);
-              const available = stock.key !== 'out';
-              return (
-                <article
-                  key={p.id}
-                  className="relative rounded-2xl border border-border bg-surface p-4 pb-0 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition"
-                >
-                  <button type="button" onClick={() => { setSelected(p); setQty(1); }} className="w-full text-left">
-                    <div className="bg-white border border-border rounded-xl h-40 sm:h-44 flex items-center justify-center overflow-hidden mb-0">
-                      {p.image_url ? (
-                        <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Pill className="w-12 h-12 text-primary/40" />
-                      )}
-                    </div>
+                <div className="p-4 flex flex-col gap-1 flex-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                    {p.therapeutic_class || p.manufacturer || 'Médicament'}
+                  </span>
+                  <button type="button" onClick={() => { setSelected(p); setQty(p.min_order_quantity || 1); }} className="text-left font-semibold text-ink leading-snug">
+                    {p.name}
                   </button>
-                  <div className="bg-white border border-border border-t-0 rounded-b-xl px-4 pt-3.5 pb-4 -mt-px">
-                    <span className="font-mono text-[10px] uppercase tracking-wide text-ink-faint">{p.therapeutic_class || p.manufacturer || 'Médicament'}</span>
-                    <div className="font-display font-semibold text-[16.5px] text-primary mt-1 leading-snug" style={{ fontFamily: 'Fraunces, serif' }}>{p.name}</div>
-                    <div className="text-[12.5px] text-ink-muted mt-1 space-y-0.5">
-                      <div>{p.packaging || p.wholesale_unit || 'Conditionnement professionnel'}</div>
-                      {p.active_ingredient && <div>DCI : {p.active_ingredient}</div>}
-                      <div className="font-mono font-semibold text-primary pt-1">{money(p.wholesale_price, p.currency)} / {(p.wholesale_unit || 'boîte').toLowerCase()}</div>
-                      <div>Minimum : {p.min_order_quantity || 1}</div>
-                    </div>
-                    <div className="flex items-center justify-between pt-2.5 border-t border-dashed border-border mt-2">
-                      <span className={`font-mono text-[11px] inline-flex items-center gap-1.5 ${stock.key === 'in' ? 'text-success' : stock.key === 'low' ? 'text-accent' : 'text-ink-faint'}`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                        {stock.label}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={!available}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        addToCart(p, 1);
-                      }}
-                      className={`w-full mt-3 rounded-md py-2 text-[13px] font-semibold ${available ? 'bg-primary hover:bg-secondary text-white' : 'bg-red-50 text-error cursor-default'}`}
-                    >
-                      {available ? 'Ajouter au panier' : 'Rupture de stock'}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-          {filtered.length === 0 && <p className="text-center text-ink-muted py-16">Aucun médicament trouvé.</p>}
+                  <p className="text-xs text-ink-muted line-clamp-2">
+                    {[p.packaging || p.wholesale_unit, p.min_order_quantity ? `Minimum ${p.min_order_quantity}` : ''].filter(Boolean).join(' · ') || 'Conditionnement non indiqué'}
+                  </p>
+                  <p className="text-sm font-semibold text-primary">{money(p.wholesale_price, p.currency)}</p>
+                  <p className={`text-xs font-semibold ${stock.key === 'out' ? 'text-alert' : 'text-primary'}`}>{stock.label}</p>
+                  <button
+                    type="button"
+                    disabled={!available}
+                    onClick={() => addToCart(p, p.min_order_quantity || 1)}
+                    className={`mt-2 w-full rounded-full py-2 text-sm font-semibold ${available ? 'bg-accent text-ink' : 'bg-surface text-alert'}`}
+                  >
+                    {available ? 'Ajouter au panier' : 'Rupture de stock'}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
         </div>
+        {filtered.length === 0 && <p className="text-center text-ink-muted py-16">Aucun médicament trouvé.</p>}
       </div>
 
       {selected && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
             <div className="grid sm:grid-cols-2">
-              <div className="bg-green-50 min-h-[220px] flex items-center justify-center overflow-hidden">
-                {selected.image_url ? <img src={selected.image_url} alt={selected.name} className="w-full h-full object-cover min-h-[220px]" /> : <Pill className="w-16 h-16 text-primary/50" />}
+              <div className="bg-surface min-h-[220px] flex items-center justify-center overflow-hidden p-6">
+                {selected.image_url ? <img src={selected.image_url} alt="" className="max-h-64 max-w-full object-contain" /> : <Pill className="w-16 h-16 text-primary" />}
               </div>
               <div className="p-6 space-y-3">
                 <div className="flex justify-between gap-2">
-                  <h3 className="text-xl font-bold text-primary" style={{ fontFamily: 'Fraunces, serif' }}>{selected.name}</h3>
+                  <h3 className="text-xl font-extrabold text-ink">{selected.name}</h3>
                   <button type="button" onClick={() => setSelected(null)}><X className="w-5 h-5 text-ink-faint" /></button>
                 </div>
                 <div className="text-sm text-ink-muted space-y-1">
@@ -531,94 +495,129 @@ export default function PublicWholesaleCatalog() {
       )}
 
       {cartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex justify-end">
-          <div className="bg-white w-full max-w-lg h-full shadow-xl flex flex-col">
-            <div className="p-4 border-b flex items-center justify-between bg-primary text-white">
+        <div className="fixed inset-0 z-50 bg-ink/40 flex justify-end" onClick={() => setCartOpen(false)}>
+          <div
+            className="bg-white w-full max-w-md h-full shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 pt-5 pb-3 flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-bold">Panier</h3>
-                <p className="text-[11px] text-green-100">{pharmacy?.name}</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-lg text-ink">Mon panier</h3>
+                  <span className="min-w-6 h-6 px-1.5 rounded-full bg-accent text-ink text-xs font-bold inline-flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                </div>
+                <p className="text-xs text-ink-muted mt-0.5">{pharmacy?.name || 'Pharmacie de gros'}</p>
               </div>
-              <button type="button" onClick={() => setCartOpen(false)}><X className="w-5 h-5" /></button>
+              <button
+                type="button"
+                onClick={() => setCartOpen(false)}
+                className="w-9 h-9 rounded-full bg-white border border-border text-ink flex items-center justify-center"
+                aria-label="Fermer le panier"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 pb-4">
               {lines.length === 0 && (
-                <div className="text-center py-10 space-y-3">
-                  <p className="text-ink-muted text-sm">Votre panier est vide.</p>
-                  <p className="text-xl font-bold">0 BIF</p>
-                  <button type="button" onClick={() => setCartOpen(false)} className="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold">
+                <div className="text-center py-16 space-y-3">
+                  <ShoppingCart className="w-10 h-10 text-ink-muted mx-auto" />
+                  <p className="text-ink font-semibold">Votre panier est vide.</p>
+                  <p className="text-sm text-ink-muted">0 BIF</p>
+                  <button
+                    type="button"
+                    onClick={() => setCartOpen(false)}
+                    className="px-4 py-2 bg-white border border-border text-ink rounded-full text-sm font-bold"
+                  >
                     Retourner au catalogue
                   </button>
                 </div>
               )}
 
-              {lines.map((line) => (
-                <div key={line.product_id} className="border border-border rounded-xl p-3 space-y-2">
-                  <div className="flex gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-green-50 overflow-hidden shrink-0 flex items-center justify-center">
-                      {line.image_url ? <img src={line.image_url} alt="" className="w-full h-full object-cover" /> : <Pill className="w-5 h-5 text-primary/50" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-sm">{line.name}</div>
-                      <div className="text-xs text-ink-muted">
-                        {line.active_ingredient && <>DCI : {line.active_ingredient} · </>}
-                        {line.packaging}
-                      </div>
-                      <div className="text-xs font-mono text-primary mt-0.5">{money(line.unit_price, line.currency)}</div>
-                      {line.validation_error ? (
-                        <div className="text-xs text-red-600 mt-1">{line.validation_error}</div>
+              <div className="divide-y divide-border">
+                {lines.map((line) => (
+                  <div key={line.product_id} className="py-4 flex gap-3">
+                    <div className="w-20 h-20 rounded-2xl bg-surface overflow-hidden shrink-0 flex items-center justify-center">
+                      {line.image_url ? (
+                        <img src={line.image_url} alt="" className="w-full h-full object-contain p-2" />
                       ) : (
-                        <div className="text-xs text-emerald-700 mt-1">{line.availability}</div>
+                        <Pill className="w-7 h-7 text-primary" />
                       )}
                     </div>
-                    <button type="button" onClick={() => removeLine(line.product_id)} className="text-red-600 p-1" title="Supprimer">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity - 1)}><Minus className="w-3 h-3" /></button>
-                      <input
-                        type="number"
-                        min={1}
-                        className="w-14 border rounded px-1 py-1 text-center text-sm"
-                        value={line.quantity}
-                        onChange={(e) => updateQty(line.product_id, e.target.value)}
-                      />
-                      <button type="button" className="icon-btn" onClick={() => updateQty(line.product_id, line.quantity + 1)}><Plus className="w-3 h-3" /></button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-bold text-sm text-ink leading-snug">{line.name}</p>
+                        <p className="text-sm font-bold text-ink shrink-0">{money(line.unit_price, line.currency)}</p>
+                      </div>
+                      <p className="text-xs text-ink-muted mt-0.5">
+                        {[
+                          line.active_ingredient && `DCI : ${line.active_ingredient}`,
+                          line.packaging || line.wholesale_unit,
+                          `Minimum ${line.min_order_quantity || 1}`,
+                        ].filter(Boolean).join(' · ')}
+                      </p>
+                      {line.validation_error ? (
+                        <p className="text-xs text-alert mt-1">{line.validation_error}</p>
+                      ) : (
+                        <p className="text-xs text-ink-muted mt-1">{line.availability}</p>
+                      )}
+                      <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="inline-flex items-center rounded-full ring-1 ring-border">
+                          <button type="button" className="w-8 h-8 text-ink" onClick={() => updateQty(line.product_id, line.quantity - 1)} aria-label="Diminuer">
+                            <Minus className="w-3 h-3 mx-auto" />
+                          </button>
+                          <input
+                            type="number"
+                            min={line.min_order_quantity || 1}
+                            className="w-10 bg-transparent text-center text-sm font-bold text-ink outline-none"
+                            value={line.quantity}
+                            onChange={(e) => updateQty(line.product_id, e.target.value)}
+                          />
+                          <button type="button" className="w-8 h-8 text-ink" onClick={() => updateQty(line.product_id, line.quantity + 1)} aria-label="Augmenter">
+                            <Plus className="w-3 h-3 mx-auto" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-ink">{money(line.line_total)}</span>
+                          <button type="button" onClick={() => removeLine(line.product_id)} className="text-ink-muted p-1" title="Supprimer" aria-label="Supprimer">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-sm font-semibold">{money(line.line_total)}</span>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
 
               {lines.length > 0 && showProforma && (
-                <div className="border-2 border-dashed border-primary/30 rounded-xl p-4 bg-green-50/40 space-y-3">
+                <div className="mt-2 rounded-2xl bg-surface ring-1 ring-border p-4 space-y-3">
                   <div className="flex justify-between items-start gap-2">
                     <div>
-                      <div className="text-[10px] uppercase tracking-widest text-slate-500 font-mono">Facture proforma</div>
-                      <div className="font-bold text-primary">Facture</div>
+                      <p className="text-[10px] uppercase tracking-widest text-ink-muted">Facture proforma</p>
+                      <p className="font-bold text-ink">Facture</p>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-100">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white ring-1 ring-border text-ink">
                       {PROFORMA_STATUS_LABELS.DRAFT}
                     </span>
                   </div>
-                  <dl className="text-xs space-y-1 text-slate-600">
-                    <div className="flex justify-between gap-2"><dt>Pharmacie de gros</dt><dd className="font-medium text-right">{pharmacy?.name}</dd></div>
-                    <div className="flex justify-between gap-2"><dt>Date</dt><dd>{todayFr()}</dd></div>
+                  <dl className="text-xs space-y-1 text-ink-muted">
+                    <div className="flex justify-between gap-2"><dt>Pharmacie de gros</dt><dd className="font-medium text-ink text-right">{pharmacy?.name}</dd></div>
+                    <div className="flex justify-between gap-2"><dt>Date</dt><dd className="text-ink">{todayFr()}</dd></div>
                   </dl>
-                  <table className="w-full text-[11px]">
+                  <table className="w-full text-[11px] text-ink">
                     <thead>
-                      <tr className="text-left text-slate-400 border-b">
-                        <th className="py-1">Produit</th>
-                        <th className="py-1 text-right">Qté</th>
-                        <th className="py-1 text-right">Prix</th>
-                        <th className="py-1 text-right">Total</th>
+                      <tr className="text-left text-ink-muted border-b border-border">
+                        <th className="py-1 font-medium">Produit</th>
+                        <th className="py-1 text-right font-medium">Qté</th>
+                        <th className="py-1 text-right font-medium">Prix</th>
+                        <th className="py-1 text-right font-medium">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lines.map((l) => (
-                        <tr key={l.product_id} className="border-b border-white/60">
+                        <tr key={l.product_id} className="border-b border-border">
                           <td className="py-1.5 pr-1">{l.name}</td>
                           <td className="py-1.5 text-right">{l.quantity}</td>
                           <td className="py-1.5 text-right">{money(l.unit_price)}</td>
@@ -627,41 +626,39 @@ export default function PublicWholesaleCatalog() {
                       ))}
                     </tbody>
                   </table>
-                  <div className="flex justify-between text-sm pt-1">
+                  <div className="flex justify-between text-sm text-ink">
                     <span>Sous-total</span>
-                    <span>{money(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between font-bold">
-                    <span>Total</span>
                     <span>{money(subtotal)}</span>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="p-4 border-t space-y-2 bg-white">
-              <div className="flex justify-between font-bold text-base">
-                <span>Total</span>
-                <span className="font-mono text-primary">{money(subtotal)}</span>
+            <div className="px-5 py-4 border-t border-border bg-white space-y-3">
+              <div className="flex justify-between items-baseline">
+                <span className="text-sm text-ink-muted">Total</span>
+                <span className="text-xl font-extrabold text-ink">{money(subtotal)}</span>
               </div>
               {lines.length > 0 && (
                 <>
-                  <button type="button" onClick={() => setShowProforma((v) => !v)} className="w-full px-3 py-2 border rounded-lg text-sm font-semibold">
-                    {showProforma ? 'Masquer la facture' : 'Voir la facture'}
-                  </button>
-                  <button type="button" onClick={() => setClearOpen(true)} className="w-full px-3 py-2 border border-red-200 text-red-700 rounded-lg text-sm font-semibold">
-                    Vider le panier
-                  </button>
+                  <div className="flex items-center justify-between text-sm">
+                    <button type="button" onClick={() => setShowProforma((v) => !v)} className="font-semibold text-ink underline underline-offset-2">
+                      {showProforma ? 'Masquer la facture' : 'Voir la facture'}
+                    </button>
+                    <button type="button" onClick={() => setClearOpen(true)} className="font-semibold text-alert">
+                      Vider le panier
+                    </button>
+                  </div>
                   <button
                     type="button"
                     disabled={hasErrors}
                     onClick={openSend}
-                    className="w-full py-2.5 bg-primary hover:bg-secondary text-white font-semibold rounded-lg disabled:opacity-40"
+                    className="w-full py-3 bg-accent text-ink font-bold rounded-full disabled:opacity-40"
                   >
                     Envoyer la commande
                   </button>
                   {hasErrors && (
-                    <p className="text-xs text-red-600">Corrigez les lignes en erreur avant l&apos;envoi.</p>
+                    <p className="text-xs text-alert">Corrigez les lignes en erreur avant l&apos;envoi.</p>
                   )}
                 </>
               )}

@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { canAccessZone, ZONE_ACCESS, getStaffNavItems, getStaffHomePath, isReceptionist, isLabTechnician, isComptable } from '../auth/roleAccess';
 import hospitalService from '../hospital/hospitalService';
 import ThemeToggle from '../shared/components/ThemeToggle';
+import SkipLink from '../shared/components/SkipLink';
+import { BUSINESS_UPDATED, firstBusiness } from '../shared/businessSync';
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
 
@@ -17,6 +19,7 @@ export default function HospitalStaffLayout() {
   const [staffNotifications, setStaffNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [subscriptionBlocked, setSubscriptionBlocked] = useState(false);
+  const [business, setBusiness] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, getRedirectPath, authFetch } = useAuth();
@@ -95,14 +98,27 @@ export default function HospitalStaffLayout() {
   };
 
   useEffect(() => {
-    if (!user || !authFetch) return;
-    authFetch('/api/v1/businesses/me/')
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => {
-        const biz = Array.isArray(data) && data[0] ? data[0] : null;
-        setSubscriptionBlocked(Boolean(biz?.subscription?.is_blocked));
-      })
-      .catch(() => setSubscriptionBlocked(false));
+    if (!user || !authFetch) return undefined;
+    const apply = (biz) => {
+      setBusiness(biz);
+      setSubscriptionBlocked(Boolean(biz?.subscription?.is_blocked));
+    };
+    const load = () => {
+      authFetch('/api/v1/businesses/me/')
+        .then((res) => (res.ok ? res.json() : []))
+        .then((data) => apply(firstBusiness(data)))
+        .catch(() => setSubscriptionBlocked(false));
+    };
+    const onUpdate = (event) => {
+      if (event.detail) setBusiness((current) => (current ? { ...current, ...event.detail } : event.detail));
+    };
+    load();
+    window.addEventListener(BUSINESS_UPDATED, onUpdate);
+    window.addEventListener('focus', load);
+    return () => {
+      window.removeEventListener(BUSINESS_UPDATED, onUpdate);
+      window.removeEventListener('focus', load);
+    };
   }, [user, authFetch]);
 
   const closeSidebar = () => setIsSidebarOpen(false);
@@ -151,6 +167,7 @@ export default function HospitalStaffLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">
+      <SkipLink />
       
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -240,10 +257,14 @@ export default function HospitalStaffLayout() {
           {/* User Info & Logout */}
           <div className="sidebar-account p-4 border-t border-white/15">
             <div className="flex items-center gap-3 mb-4">
-              <div className="sidebar-account-mark w-9 h-9 rounded-full flex items-center justify-center shrink-0">
-                <span className="font-bold text-xs">
-                  {(user?.first_name?.[0] || 'U').toUpperCase()}{(user?.last_name?.[0] || '').toUpperCase()}
-                </span>
+              <div className="sidebar-account-mark w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shrink-0 p-0.5">
+                {business?.logo ? (
+                  <img src={business.logo} alt="" className="w-full h-full object-contain" />
+                ) : (
+                  <span className="font-bold text-xs">
+                    {(business?.name || spaceTitle || 'E').slice(0, 1).toUpperCase()}
+                  </span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-xs truncate">
@@ -266,7 +287,7 @@ export default function HospitalStaffLayout() {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <main id="contenu" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Mobile & Desktop Top Bar */}
         <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 sm:px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">

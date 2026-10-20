@@ -28,10 +28,10 @@ class PostSectionSerializer(serializers.Serializer):
     years = serializers.ListField(required=False, allow_empty=True)
 
     def validate(self, attrs):
-        from .school_years import normalize_class_list, DEFAULT_POST_YEARS
+        from .school_years import normalize_class_list
         classes = attrs.get('classes')
         years = attrs.get('years')
-        normalized = normalize_class_list(classes or years, DEFAULT_POST_YEARS)
+        normalized = normalize_class_list(classes if classes is not None else years)
         if not normalized:
             raise serializers.ValidationError({
                 'classes': 'Ajoutez au moins une classe pour cette section.',
@@ -58,6 +58,7 @@ class EducationPublicBusinessSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='primary_category.name', read_only=True, default='')
     category_slug = serializers.CharField(source='primary_category.slug', read_only=True, default='')
     full_address = serializers.ReadOnlyField()
+    logo = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
@@ -68,6 +69,10 @@ class EducationPublicBusinessSerializer(serializers.ModelSerializer):
             'is_verified', 'verification_status',
             'category_name', 'category_slug', 'full_address',
         ]
+
+    def get_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj)
 
 
 class LabeledItemSerializer(serializers.Serializer):
@@ -95,34 +100,77 @@ class EducationUnitSerializer(serializers.ModelSerializer):
     class Meta:
         model = EducationUnit
         fields = [
-            'id', 'name', 'kind', 'kind_label', 'code', 'description',
+            'id', 'name', 'kind', 'kind_label', 'code', 'description', 'tuition',
             'is_active', 'parent', 'parent_name',
         ]
+
+    def validate_tuition(self, value):
+        from .tuition import clean_tuition
+        return clean_tuition(value)
+
+    def to_representation(self, instance):
+        from .tuition import normalize_tuition
+        data = super().to_representation(instance)
+        data['tuition'] = normalize_tuition(instance.tuition)
+        return data
 
 
 class EducationProgramSerializer(serializers.ModelSerializer):
     unit_name = serializers.CharField(source='unit.name', read_only=True, default='')
     faculty_name = serializers.SerializerMethodField()
     level_label = serializers.CharField(source='get_level_display', read_only=True)
+    degree_type_label = serializers.CharField(source='get_degree_type_display', read_only=True, default='')
+    admission_selectivity_label = serializers.CharField(source='get_admission_selectivity_display', read_only=True, default='')
     business_name = serializers.CharField(source='business.name', read_only=True)
     business_province = serializers.CharField(source='business.province', read_only=True, default='')
     business_commune = serializers.CharField(source='business.commune', read_only=True, default='')
     required_documents = LabeledItemSerializer(many=True, required=False)
     fees = serializers.SerializerMethodField()
     campaigns = serializers.SerializerMethodField()
+    tuition_display = serializers.SerializerMethodField()
 
     class Meta:
         model = EducationProgram
         fields = [
             'id', 'business', 'business_name', 'business_province', 'business_commune',
             'unit', 'unit_name', 'faculty_name', 'title', 'domain', 'degree_awarded',
+            'degree_type', 'degree_type_label', 'credits', 'admission_selectivity',
+            'admission_selectivity_label', 'language_of_instruction',
             'duration_years', 'duration_label', 'entry_level', 'exit_level',
             'career_outlook', 'level', 'level_label', 'is_active', 'is_public', 'display_order',
             'semester_organization', 'main_subjects', 'admission_conditions',
-            'required_documents', 'internship_details', 'fees', 'campaigns',
+            'required_documents', 'internship_details', 'options', 'study_year_labels',
+            'tuition', 'tuition_display', 'fees', 'campaigns',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+    def validate_study_year_labels(self, value):
+        labels = []
+        for item in value or []:
+            text = str(item).strip()
+            if not text or text in labels:
+                continue
+            if len(text) > 40:
+                raise serializers.ValidationError('Chaque niveau tient en 40 caractères.')
+            labels.append(text)
+        if len(labels) > 6:
+            raise serializers.ValidationError('Six niveaux au maximum.')
+        return labels
+
+    def validate_tuition(self, value):
+        from .tuition import clean_tuition
+        return clean_tuition(value)
+
+    def to_representation(self, instance):
+        from .tuition import normalize_tuition
+        data = super().to_representation(instance)
+        data['tuition'] = normalize_tuition(instance.tuition)
+        return data
+
+    def get_tuition_display(self, obj):
+        from .tuition import present_program_tuition
+        return present_program_tuition(obj)
 
     def get_faculty_name(self, obj):
         unit = obj.unit
@@ -168,6 +216,9 @@ class EducationProfileSerializer(serializers.ModelSerializer):
     establishment_type_label = serializers.CharField(
         source='get_establishment_type_display', read_only=True, default='',
     )
+    accreditation_level_label = serializers.CharField(
+        source='get_accreditation_level_display', read_only=True, default='',
+    )
     programs = EducationProgramSerializer(source='education_programs', many=True, read_only=True)
 
     student_services = LabeledItemSerializer(many=True, required=False)
@@ -179,6 +230,7 @@ class EducationProfileSerializer(serializers.ModelSerializer):
         source='get_boarding_regime_display', read_only=True, default='',
     )
     nearby_areas = serializers.SerializerMethodField()
+    active_calendar = serializers.SerializerMethodField()
 
     class Meta:
         model = EducationProfile
@@ -192,6 +244,7 @@ class EducationProfileSerializer(serializers.ModelSerializer):
             'short_description', 'official_name', 'description', 'gallery',
             'student_services', 'academic_calendar', 'nearby_landmarks',
             'year_start', 'year_break_start', 'year_break_end', 'year_exam_start', 'year_deliberation',
+            'active_calendar',
             'library_hours', 'library_access', 'library_contact',
             'internship_required', 'internship_duration', 'internship_period', 'internship_contact',
             'has_scholarships', 'has_boarding', 'boarding_regime', 'boarding_regime_label', 'has_campus',
@@ -199,17 +252,43 @@ class EducationProfileSerializer(serializers.ModelSerializer):
             'offers_prescolaire', 'offers_ecofo', 'offers_post_fondamental', 'ecofo_cycles',
             'ecofo_classes', 'post_fondamental_sections',
             'accreditation_number', 'accreditation_body', 'accreditation_valid_until',
+            # University-specific fields
+            'research_focus', 'has_research_centers', 'partner_universities',
+            'accreditation_level', 'accreditation_level_label',
+            'student_population', 'faculty_count', 'founding_year', 'motto',
             'programs', 'created_at', 'updated_at',
         ]
         # `moderation_note` est le motif de rejet écrit par la modération
         # entreprises : l'établissement le lit mais ne l'écrit jamais.
         read_only_fields = [
             'business', 'publication_status', 'published_at', 'submitted_at',
-            'moderation_note', 'created_at', 'updated_at',
+            'moderation_note', 'created_at', 'updated_at', 'active_calendar',
         ]
 
     def get_nearby_areas(self, obj):
         return reference_areas(obj.business)
+
+    def get_active_calendar(self, obj):
+        """Dates de l'inscription ouverte. Les dates de la fiche restent si aucune inscription n'en a."""
+        campaign = (
+            obj.business.education_campaigns
+            .exclude(year_start__isnull=True)
+            .order_by('-opens_on')
+            .first()
+        )
+
+        def iso(value):
+            return value.isoformat() if value else ''
+
+        source = campaign or obj
+        return {
+            'academic_year': campaign.academic_year if campaign else '',
+            'year_start': iso(getattr(source, 'year_start', None)) or iso(obj.year_start),
+            'year_break_start': iso(getattr(source, 'year_break_start', None)) or iso(obj.year_break_start),
+            'year_break_end': iso(getattr(source, 'year_break_end', None)) or iso(obj.year_break_end),
+            'year_exam_start': iso(getattr(source, 'year_exam_start', None)) or iso(obj.year_exam_start),
+            'year_deliberation': iso(getattr(source, 'year_deliberation', None)) or iso(obj.year_deliberation),
+        }
 
     def validate_ecofo_cycles(self, value):
         allowed = {code for code, _label in EducationProfile.ECOFO_CYCLE_CHOICES}
@@ -235,7 +314,7 @@ class EducationProfileWriteSerializer(EducationProfileSerializer):
         # entreprises : l'établissement le lit mais ne l'écrit jamais.
         read_only_fields = [
             'business', 'publication_status', 'published_at', 'submitted_at',
-            'moderation_note', 'created_at', 'updated_at',
+            'moderation_note', 'created_at', 'updated_at', 'active_calendar',
         ]
 
     def to_internal_value(self, data):
@@ -259,7 +338,7 @@ class EducationProfileListSerializer(serializers.ModelSerializer):
     """Version allégée pour la liste publique."""
 
     business_name = serializers.CharField(source='business.name', read_only=True)
-    business_logo = serializers.CharField(source='business.logo', read_only=True, default='')
+    business_logo = serializers.SerializerMethodField()
     business_province = serializers.CharField(source='business.province', read_only=True, default='')
     business_commune = serializers.CharField(source='business.commune', read_only=True, default='')
     business_zone = serializers.CharField(source='business.zone', read_only=True, default='')
@@ -278,6 +357,13 @@ class EducationProfileListSerializer(serializers.ModelSerializer):
     boarding_regime_label = serializers.CharField(
         source='get_boarding_regime_display', read_only=True, default='',
     )
+    accreditation_level_label = serializers.CharField(
+        source='get_accreditation_level_display', read_only=True, default='',
+    )
+
+    def get_business_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj.business)
 
     class Meta:
         model = EducationProfile
@@ -290,5 +376,8 @@ class EducationProfileListSerializer(serializers.ModelSerializer):
             'has_scholarships', 'has_boarding', 'boarding_regime', 'boarding_regime_label', 'has_campus',
             'has_evening_courses', 'has_distance_learning',
             'offers_prescolaire', 'offers_ecofo', 'offers_post_fondamental',
+            # University-specific fields for public list
+            'accreditation_level', 'accreditation_level_label',
+            'has_research_centers', 'student_population', 'founding_year',
             'published_at',
         ]

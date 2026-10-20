@@ -68,7 +68,7 @@ export const EDUCATION_PERM_GROUPS = [
   },
   {
     id: 'programs',
-    label: 'Formations',
+    label: 'Programmes',
     actions: [{ key: EDUCATION_PERMISSIONS.PROGRAMS_MANAGE, label: 'Gérer' }],
   },
   {

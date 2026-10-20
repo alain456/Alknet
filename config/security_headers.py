@@ -3,7 +3,7 @@ from django.conf import settings
 
 
 def content_security_policy() -> str:
-    images = "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org"
+    images = "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org https://images.unsplash.com"
     common = (
         "default-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "

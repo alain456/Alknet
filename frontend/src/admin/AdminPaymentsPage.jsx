@@ -16,7 +16,9 @@ export default function AdminPaymentsPage() {
   const canSuspend = userHasPlatformPerm(user, 'platform.businesses.suspend');
   const canReadBilling = userHasPlatformPerm(user, 'platform.billing.view')
     || userHasPlatformPerm(user, 'platform.subscriptions.view');
-  const [tab, setTab] = useState('plans');
+  const [tab, setTab] = useState('subscriptions');
+  const [query, setQuery] = useState('');
+  const [querySent, setQuerySent] = useState('');
   const [data, setData] = useState(null);
   const [payments, setPayments] = useState(null);
   const [notifs, setNotifs] = useState(null);
@@ -35,7 +37,10 @@ export default function AdminPaymentsPage() {
   const [busyId, setBusyId] = useState(null);
 
   const loadSubs = async () => {
-    const qs = filter ? `?status=${encodeURIComponent(filter)}` : '';
+    const params = new URLSearchParams();
+    if (filter) params.set('status', filter);
+    if (querySent) params.set('q', querySent);
+    const qs = params.toString() ? `?${params}` : '';
     const res = await api.get(`businesses/admin/subscriptions/${qs}`, { auth: true });
     setData(res);
   };
@@ -60,6 +65,7 @@ export default function AdminPaymentsPage() {
       drafts[p.code] = {
         duration_days: String(p.duration_days ?? ''),
         price_bif: String(p.price_bif ?? ''),
+        max_employees: String(p.max_employees ?? 0),
         name: p.name || '',
         description: p.description || '',
         is_active: Boolean(p.is_active),
@@ -106,8 +112,13 @@ export default function AdminPaymentsPage() {
   }, [canSettings, tab]);
 
   useEffect(() => {
+    const timer = setTimeout(() => setQuerySent(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
     load();
-  }, [token, filter, payFilter, canReadBilling, canSettings, canAlerts]);
+  }, [token, filter, querySent, payFilter, canReadBilling, canSettings, canAlerts]);
 
   const updateDraft = (code, field, value) => {
     setPlanDrafts((prev) => ({
@@ -157,6 +168,10 @@ export default function AdminPaymentsPage() {
         body.name = draft.name;
         body.description = draft.description;
         body.is_active = draft.is_active;
+        body.max_employees = parseInt(draft.max_employees || '0', 10);
+      }
+      if (code === 'free') {
+        body.max_employees = parseInt(draft.max_employees || '0', 10);
       }
       const res = await api.patch(`businesses/admin/plans/${code}/`, body, { auth: true });
       applyPlansPayload(res);
@@ -287,10 +302,10 @@ export default function AdminPaymentsPage() {
 
       <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-800 pb-2">
         {[
-          canSettings ? { id: 'plans', label: 'Plans' } : null,
-          canAlerts ? { id: 'notifications', label: `Notifications${unread ? ` (${unread})` : ''}` } : null,
+          { id: 'subscriptions', label: 'Suivi' },
           { id: 'payments', label: 'Historique paiements' },
-          { id: 'subscriptions', label: 'Abonnements' },
+          canAlerts ? { id: 'notifications', label: `Notifications${unread ? ` (${unread})` : ''}` } : null,
+          canSettings ? { id: 'plans', label: 'Plans' } : null,
         ].filter(Boolean).map((t) => (
           <button
             key={t.id}
@@ -404,6 +419,16 @@ export default function AdminPaymentsPage() {
                         </span>
                       </label>
                       <p className="text-xs text-gray-500">Durée fixe : {plan.duration_days} jours</p>
+                      <label className="block text-xs font-semibold text-gray-600">
+                        Employés maximum (0 = illimité)
+                        <input
+                          type="number"
+                          min={0}
+                          value={draft.max_employees || '0'}
+                          onChange={(e) => updateDraft(plan.code, 'max_employees', e.target.value)}
+                          className="mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-950"
+                        />
+                      </label>
                       <label className="inline-flex items-center gap-2 text-xs font-semibold text-gray-600">
                         <input
                           type="checkbox"
@@ -571,20 +596,35 @@ export default function AdminPaymentsPage() {
 
       {!loading && tab === 'subscriptions' && (
         <>
-          <div className="flex flex-wrap gap-2 items-center">
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-900"
-            >
-              <option value="">Tous les statuts</option>
-              <option value="ACTIVE">Actifs (Free + payants)</option>
-              <option value="BLOCKED">Bloqués</option>
-              <option value="TRIAL">Free</option>
-              <option value="EXPIRED">Expirés</option>
-              <option value="SUSPENDED">Suspendus</option>
-            </select>
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['', 'Toutes', data?.counts?.all],
+              ['ACTIVE', 'Actifs', data?.counts?.active],
+              ['EXPIRING', 'Échéance proche', data?.counts?.expiring],
+              ['GRACE', 'En grâce', data?.counts?.grace],
+              ['BLOCKED', 'Bloqués', data?.counts?.blocked],
+              ['TRIAL', 'Free', data?.counts?.free],
+            ].map(([value, label, count]) => (
+              <button
+                key={value || 'all'}
+                type="button"
+                onClick={() => setFilter(value)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 ${
+                  filter === value ? 'bg-accent text-ink border-accent' : 'border-gray-200 text-ink'
+                }`}
+              >
+                {label} ({count ?? 0})
+              </button>
+            ))}
           </div>
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Entreprise, e-mail du propriétaire, catégorie ou plan"
+            className="w-full max-w-xl px-3 py-2 rounded-xl border border-gray-200 text-sm"
+          />
+          <p className="text-xs text-gray-500">Les entreprises bloquées, en grâce, puis proches de l’échéance arrivent en premier.</p>
           <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 dark:bg-black/20 text-xs uppercase tracking-wide text-gray-500">

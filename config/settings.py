@@ -47,6 +47,10 @@ if not ALLOWED_HOSTS and not DEBUG:
     )
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# Sous-domaines d'établissement : biu.isokohub.com, biu.localhost.
+for _tenant_host in ('.isokohub.com', '.isoko-hub.com', '.localhost'):
+    if _tenant_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_tenant_host)
 # Le proxy Vite (conteneur frontend) appelle http://web:8000 avec Host: web:8000.
 if DEBUG:
     for _docker_host in ('web', 'host.docker.internal'):
@@ -109,11 +113,13 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'config.security_headers.SecurityHeadersMiddleware',
+    'config.middleware.TenantSubdomainMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'education.tenant_context.EducationTenantMiddleware',
+    'education.rls.EducationRlsMiddleware',
     'businesses.middleware.ActiveSubscriptionMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

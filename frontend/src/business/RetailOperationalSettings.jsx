@@ -29,7 +29,9 @@ export default function RetailOperationalSettings() {
     try {
       setData(await retailService.updateProfile({
         order_reference_prefix: data.order_reference_prefix,
+        submission_email_message: data.submission_email_message,
         acceptance_email_message: data.acceptance_email_message,
+        rejection_email_message: data.rejection_email_message,
       }));
       setMsg('Paramètres métier enregistrés.');
     } catch (err) {
@@ -54,15 +56,26 @@ export default function RetailOperationalSettings() {
           onChange={(e) => setData({ ...data, order_reference_prefix: e.target.value })}
         />
       </label>
-      <label className="text-sm space-y-1 block">
-        <span className="font-medium text-gray-700 dark:text-gray-300">Message envoyé à l&apos;acceptation</span>
-        <textarea
-          rows={5}
-          className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800"
-          value={data.acceptance_email_message || ''}
-          onChange={(e) => setData({ ...data, acceptance_email_message: e.target.value })}
-        />
-      </label>
+      <p className="text-sm text-gray-600 dark:text-gray-300">
+        Variables : {'{patient_name}'} {'{reference}'} {'{pharmacy_name}'} {'{total_amount}'} {'{currency}'} {'{reason}'}.
+        Accepter ou refuser sans e-mail délivré est impossible.
+      </p>
+      {[
+        ['submission_email_message', 'Commande enregistrée'],
+        ['acceptance_email_message', 'Commande acceptée'],
+        ['rejection_email_message', 'Commande refusée'],
+      ].map(([key, label]) => (
+        <label key={key} className="text-sm space-y-1 block">
+          <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
+          <textarea
+            rows={5}
+            required
+            className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800"
+            value={data[key] || ''}
+            onChange={(e) => setData({ ...data, [key]: e.target.value })}
+          />
+        </label>
+      ))}
       <button
         type="submit"
         disabled={saving}

@@ -2,10 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Search, Briefcase, MapPin, Building2, Store, Stethoscope, Laptop, HardHat,
   Sprout, Car, GraduationCap, Heart, Gavel, ShoppingBag, ShieldCheck,
-  CheckCircle2, HeartPulse, ChevronRight, User,
+  CheckCircle2, HeartPulse, ChevronLeft, ChevronRight, User,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../shared/api';
+import { visitorPosition } from './visitorPlace';
+import { getBusinessRecordCategoryKey } from '../auth/roleAccess';
 import useSiteContent from '../shared/useSiteContent';
 
 const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical', 'pharmac', 'laboratoire'];
@@ -57,6 +59,36 @@ function categoryIcon(name) {
   )?.[1] || Briefcase;
 }
 
+function categoryTarget(cat) {
+  const moduleKey = categoryModuleKey(cat);
+  if (moduleKey === 'education') return '/education';
+  if (moduleKey === 'hospital') return '/hospitals';
+  return `/businesses?category=${encodeURIComponent(cat.name)}`;
+}
+
+function businessTarget(business) {
+  const key = getBusinessRecordCategoryKey(business);
+  if (key === 'wholesale') return `/businesses/${business.id}/catalog`;
+  if (key === 'retail_pharmacy') return `/businesses/${business.id}/pharmacy`;
+  if (key === 'hospital' || isHealthBusiness(business)) return `/hospitals/${business.id}`;
+  return `/businesses?highlight=${business.id}`;
+}
+
+function suggestionKind(kind) {
+  return {
+    business: 'Entreprise',
+    product: 'Produit',
+    service: 'Service',
+    program: 'Formation',
+    professional: 'Professionnel',
+    location: 'Lieu',
+  }[kind] || 'Résultat';
+}
+
+function placeLabel(row) {
+  return row?.address || row?.commune || row?.province || row?.hospital_name || '';
+}
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const { settings } = useSiteContent();
@@ -68,10 +100,13 @@ export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLocation, setSearchLocation] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [suggestIndex, setSuggestIndex] = useState(-1);
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
+  const [placeIndex, setPlaceIndex] = useState(-1);
+  const [near, setNear] = useState(null);
   const [heroIndex, setHeroIndex] = useState(0);
-  const heroSlides = Array.isArray(settings?.hero_slides) ? settings.hero_slides.filter(Boolean) : [];
-  const categoryRail = useRef(null);
-  const categoryTrack = useRef(null);
+  const heroPaused = useRef(false);
+  const heroSlides = Array.isArray(settings?.hero_slides) ? settings.hero_slides.filter(Boolean).slice(0, 8) : [];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -99,59 +134,48 @@ export default function LandingPage() {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    if (heroSlides.length < 2) return undefined;
-    const timer = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % heroSlides.length);
-    }, 5200);
-    return () => clearInterval(timer);
-  }, [heroSlides.length]);
-
-  const horizontalCategories = categories.length >= 3;
-
-  useEffect(() => {
-    if (!horizontalCategories) return undefined;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduced) return undefined;
-    const onScroll = () => {
-      const rail = categoryRail.current;
-      const track = categoryTrack.current;
-      if (!rail || !track) return;
-      const distance = rail.offsetHeight - window.innerHeight;
-      if (distance <= 0) return;
-      const scrolled = Math.min(Math.max(-rail.getBoundingClientRect().top, 0), distance);
-      const maxShift = Math.max(0, track.scrollWidth - window.innerWidth + 48);
-      track.style.transform = `translate3d(${-(scrolled / distance) * maxShift}px, 0, 0)`;
-    };
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      window.removeEventListener('resize', onScroll);
-    };
-  }, [horizontalCategories, categories.length]);
-
-  const { healthBusinesses, topBusinesses, popularServices } = useMemo(() => {
+  const { featuredBusinesses, popularServices } = useMemo(() => {
     const health = allBusinesses.filter(isHealthBusiness);
-    const healthIds = new Set(health.map((b) => b.id));
-    const nonHealth = allBusinesses.filter((b) => !healthIds.has(b.id));
-
-    // Services hors établissements déjà mis en avant en santé
     const featuredHealthIds = new Set(health.slice(0, 3).map((b) => b.id));
-    const services = allServices.filter((s) => {
-      if (!s.business) return true;
-      return !featuredHealthIds.has(s.business);
-    });
-
+    const services = allServices.filter((s) => !s.business || !featuredHealthIds.has(s.business));
+    const showBusinesses = settings?.show_businesses !== false;
+    const showHealth = settings?.show_health !== false;
+    const pool = showBusinesses
+      ? allBusinesses.filter((row) => showHealth || !isHealthBusiness(row))
+      : (showHealth ? health : []);
     return {
-      healthBusinesses: health.slice(0, 3),
-      topBusinesses: nonHealth.slice(0, 3),
+      featuredBusinesses: pool.slice(0, 6),
       popularServices: services.slice(0, 4),
     };
-  }, [allBusinesses, allServices]);
+  }, [allBusinesses, allServices, settings?.show_businesses, settings?.show_health]);
 
-  const heroTitleLines = (settings?.hero_title || 'Everything you need,\nin one platform.').split('\n');
+  const coverSlides = heroSlides.length
+    ? heroSlides.map((src) => ({ key: src, src, name: '' }))
+    : featuredBusinesses.filter((row) => row.logo).slice(0, 8).map((row) => ({
+      key: row.id,
+      src: row.logo,
+      name: row.name,
+      href: businessTarget(row),
+    }));
+
+  useEffect(() => {
+    if (coverSlides.length < 2) return undefined;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    const timer = window.setInterval(() => {
+      if (heroPaused.current) return;
+      setHeroIndex((prev) => (prev + 1) % coverSlides.length);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [coverSlides.length]);
+
+  const heroTitleLines = (settings?.hero_title || 'Trouvez l’entreprise\nqu’il vous faut.').split('\n');
+  const whyItems = settings?.why_items?.length
+    ? settings.why_items.slice(0, 3)
+    : [
+      { title: 'Recherche simple', description: 'Un nom, un lieu, et les entreprises publiées sur Isoko Hub.', icon: 'Search' },
+      { title: 'Catégories réelles', description: 'Éducation, santé, hôtels, commerces et les autres secteurs déjà ouverts.', icon: 'Briefcase' },
+      { title: 'Votre établissement', description: 'Une entreprise inscrite apparaît dans l’annuaire public.', icon: 'Building2' },
+    ];
   const go = (url) => {
     if (!url) return;
     if (/^https?:\/\//i.test(url)) window.location.href = url;
@@ -166,52 +190,128 @@ export default function LandingPage() {
     }
     const timer = window.setTimeout(async () => {
       try {
-        const data = await api.get(`businesses/search/suggest/?q=${encodeURIComponent(q)}`);
+        const nearQuery = !searchLocation.trim() && near ? `&lat=${encodeURIComponent(near.lat)}&lng=${encodeURIComponent(near.lng)}` : '';
+        const data = await api.get(`businesses/search/suggest/?q=${encodeURIComponent(q)}${nearQuery}`);
         setSuggestions(Array.isArray(data) ? data : []);
+        setSuggestIndex(-1);
       } catch {
         setSuggestions([]);
       }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, searchLocation, near]);
 
-  const submitSearch = (event) => {
+  useEffect(() => {
+    if (searchLocation.trim() || searchQuery.trim().length < 2) return undefined;
+    let cancelled = false;
+    visitorPosition().then((point) => {
+      if (!cancelled && point) setNear(point);
+    });
+    return () => { cancelled = true; };
+  }, [searchQuery, searchLocation]);
+
+  useEffect(() => {
+    const place = searchLocation.trim();
+    if (place.length < 2) {
+      setPlaceSuggestions([]);
+      return undefined;
+    }
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await api.get(`businesses/search/suggest/?place=${encodeURIComponent(place)}`);
+        setPlaceSuggestions(Array.isArray(data) ? data : []);
+        setPlaceIndex(-1);
+      } catch {
+        setPlaceSuggestions([]);
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchLocation]);
+
+  const openSuggestion = (item) => {
+    if (!item) return;
+    setSuggestions([]);
+    setPlaceSuggestions([]);
+    setSuggestIndex(-1);
+    setPlaceIndex(-1);
+    if (item.kind === 'location') {
+      setSearchLocation(item.label);
+      return;
+    }
+    if (item.href) {
+      navigate(item.href);
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set('q', item.q || item.label);
+    if (searchLocation.trim()) params.set('location', searchLocation.trim());
+    navigate(`/search?${params.toString()}`);
+  };
+
+  const onQueryKeyDown = (event) => {
+    if (!suggestions.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setSuggestIndex((current) => (current + 1) % suggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setSuggestIndex((current) => (current <= 0 ? suggestions.length - 1 : current - 1));
+    } else if (event.key === 'Escape') {
+      setSuggestions([]);
+      setSuggestIndex(-1);
+    } else if (event.key === 'Enter' && suggestIndex >= 0) {
+      event.preventDefault();
+      openSuggestion(suggestions[suggestIndex]);
+    }
+  };
+
+  const onPlaceKeyDown = (event) => {
+    if (!placeSuggestions.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setPlaceIndex((current) => (current + 1) % placeSuggestions.length);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setPlaceIndex((current) => (current <= 0 ? placeSuggestions.length - 1 : current - 1));
+    } else if (event.key === 'Escape') {
+      setPlaceSuggestions([]);
+      setPlaceIndex(-1);
+    } else if (event.key === 'Enter' && placeIndex >= 0) {
+      event.preventDefault();
+      openSuggestion(placeSuggestions[placeIndex]);
+    }
+  };
+
+  const submitSearch = async (event) => {
     event?.preventDefault();
     const params = new URLSearchParams();
     if (searchQuery.trim()) params.set('q', searchQuery.trim());
-    if (searchLocation.trim()) params.set('location', searchLocation.trim());
+    if (searchLocation.trim()) {
+      params.set('location', searchLocation.trim());
+    } else {
+      const point = near || await visitorPosition();
+      if (point) {
+        params.set('lat', String(point.lat));
+        params.set('lng', String(point.lng));
+      }
+    }
     setSuggestions([]);
     navigate(`/search?${params.toString()}`);
   };
 
+  const showListings = settings?.show_businesses !== false || settings?.show_health !== false;
+  const whyIcons = { Search, Briefcase, Building2, CheckCircle2, ShieldCheck, Laptop };
+
   return (
-    <div className="w-full">
-      <section className="bg-primary py-20 px-4 text-center text-surface relative overflow-hidden">
-        {heroSlides.length > 0 ? (
-          <div className="absolute inset-0">
-            {heroSlides.map((src, i) => (
-              <img
-                key={`${i}-${String(src).slice(0, 24)}`}
-                src={src}
-                alt=""
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-                  i === heroIndex % heroSlides.length ? 'opacity-100' : 'opacity-0'
-                }`}
-              />
-            ))}
-            <div className="absolute inset-0 bg-black/40" />
-          </div>
-        ) : (
-          <div
-            className="absolute inset-0 opacity-30 pointer-events-none"
-            style={{
-              background:
-                'radial-gradient(ellipse at 20% 0%, #EA8B33 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, #E1302A 0%, transparent 45%)',
-            }}
-          />
-        )}
-        <div className="max-w-4xl mx-auto relative z-10">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-surface mb-6 leading-tight">
+    <div className="w-full pb-8">
+      {settings?.maintenance_mode && (
+        <div className="mx-4 mt-4 rounded-2xl bg-ink text-surface px-4 py-3 text-sm text-center">
+          {settings.maintenance_message || 'La plateforme est en maintenance. Certaines actions sont suspendues.'}
+        </div>
+      )}
+      <section className="px-4 pt-12 pb-6 text-center">
+        <div className="max-w-3xl mx-auto">
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-ink leading-tight">
             {heroTitleLines.map((line, idx) => (
               <React.Fragment key={idx}>
                 {idx > 0 && <br />}
@@ -219,85 +319,164 @@ export default function LandingPage() {
               </React.Fragment>
             ))}
           </h1>
-          <p className="text-lg md:text-xl text-surface/95 font-medium mb-10 max-w-2xl mx-auto leading-relaxed">
+          <p className="mt-4 text-base sm:text-lg text-ink-muted">
             {settings?.hero_subtitle
-              || 'Find trusted professionals, book services, order from the best businesses, and discover new opportunities in Burundi.'}
+              || 'Écoles, santé, hôtels, commerces et services, au même endroit.'}
           </p>
-
-          <div className="flex justify-center gap-4 mb-12 flex-wrap">
-            <button
-              onClick={() => go(settings?.hero_cta_primary_url || '/register-business')}
-              className="bg-accent hover:opacity-95 text-surface font-bold text-base py-3.5 px-8 rounded-xl border-2 border-surface/20 shadow-lg transition transform hover:-translate-y-1 flex items-center gap-2"
-            >
-              <Building2 className="w-5 h-5" /> {settings?.hero_cta_primary_label || 'Créer une Entreprise'}
-            </button>
-            <button
-              onClick={() => go(settings?.hero_cta_secondary_url || '/services')}
-              className="bg-surface/15 hover:bg-surface/25 text-surface border-2 border-surface/70 font-bold text-base py-3.5 px-8 rounded-xl transition backdrop-blur-sm"
-            >
-              {settings?.hero_cta_secondary_label || 'Explore Services'}
-            </button>
+        </div>
+        {coverSlides.length > 0 && (
+          <div
+            className="mt-8 mx-auto max-w-5xl"
+            onMouseEnter={() => { heroPaused.current = true; }}
+            onMouseLeave={() => { heroPaused.current = false; }}
+          >
+            <div className="relative h-64 sm:h-80" style={{ perspective: '1100px' }}>
+              {coverSlides.map((slide, i) => {
+                const len = coverSlides.length;
+                const active = heroIndex % len;
+                let offset = i - active;
+                if (offset > len / 2) offset -= len;
+                if (offset < -len / 2) offset += len;
+                const distance = Math.abs(offset);
+                if (distance > 2) return null;
+                const shift = offset * 46;
+                return (
+                  <button
+                    key={slide.key}
+                    type="button"
+                    aria-label={slide.name || `Image ${i + 1}`}
+                    onClick={() => {
+                      if (i === active && slide.href) navigate(slide.href);
+                      else setHeroIndex(i);
+                    }}
+                    className="absolute top-0 left-1/2 h-full w-[62%] sm:w-[42%] rounded-3xl bg-white overflow-hidden shadow-lg transition-all duration-500 flex flex-col"
+                    style={{
+                      transform: `translateX(calc(-50% + ${shift}%)) rotateY(${offset * -32}deg) scale(${distance === 0 ? 1 : 0.84})`,
+                      zIndex: 10 - distance,
+                      opacity: distance === 2 ? 0.55 : 1,
+                    }}
+                  >
+                    <img src={slide.src} alt="" className="min-h-0 flex-1 w-full object-contain p-4" />
+                    {slide.name ? (
+                      <span className="px-3 pb-3 text-sm font-bold text-ink truncate">{slide.name}</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+              {coverSlides.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Image précédente"
+                    onClick={() => setHeroIndex((i) => (i - 1 + coverSlides.length) % coverSlides.length)}
+                    className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white text-ink flex items-center justify-center shadow-md"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Image suivante"
+                    onClick={() => setHeroIndex((i) => (i + 1) % coverSlides.length)}
+                    className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white text-ink flex items-center justify-center shadow-md"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+            </div>
+            {coverSlides.length > 1 && (
+              <div className="mt-4 flex justify-center gap-2">
+                {coverSlides.map((slide, i) => (
+                  <button
+                    key={slide.key}
+                    type="button"
+                    aria-label={slide.name || `Image ${i + 1}`}
+                    onClick={() => setHeroIndex(i)}
+                    className={`h-2 rounded-full ${i === heroIndex % coverSlides.length ? 'w-6 bg-accent' : 'w-2 bg-primary/30'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-
-          <form onSubmit={submitSearch} className="hero-search bg-surface p-2 rounded-full shadow-2xl flex max-w-3xl mx-auto items-center border-2 border-accent relative">
-            <div className="flex-1 flex items-center px-4 border-r border-border relative">
+        )}
+        <div className="max-w-3xl mx-auto">
+          <form onSubmit={submitSearch} className="hero-search mt-8 bg-white p-2 rounded-2xl ring-1 ring-border shadow-sm flex flex-col sm:flex-row sm:items-center gap-2 text-left relative">
+            <div className="flex-1 flex items-center px-3 relative">
               <Search className="text-accent w-5 h-5 mr-2 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={settings?.search_placeholder || 'Profession, Business, Restaurant, Product...'}
-                className="hero-search-input w-full py-3 outline-none text-base font-medium bg-transparent border-0"
+                placeholder={settings?.search_placeholder || 'Entreprise, service, établissement…'}
+                className="hero-search-input w-full py-3 outline-none text-sm font-medium bg-transparent border-0 text-ink"
+                onKeyDown={onQueryKeyDown}
+                aria-autocomplete="list"
+                aria-expanded={suggestions.length > 0}
               />
               {suggestions.length > 0 && (
-                <ul className="hero-search-suggest absolute left-0 right-0 top-full mt-3 bg-white text-left rounded-2xl shadow-xl border border-slate-200 z-20 overflow-hidden">
-                  {suggestions.map((item) => (
-                    <li key={`${item.kind}-${item.label}`}>
+                <ul className="hero-search-suggest absolute left-0 right-0 top-full mt-2 bg-white text-left rounded-3xl shadow-xl z-20 overflow-hidden">
+                  {suggestions.map((item, index) => (
+                    <li key={`${item.kind}-${item.label}-${item.href || ''}`}>
                       <button
                         type="button"
-                        className="hero-search-suggest-btn w-full px-4 py-2.5 text-sm text-left"
-                        onClick={() => {
-                          if (item.kind === 'location') {
-                            setSearchLocation(item.label);
-                            setSuggestions([]);
-                          } else {
-                            setSearchQuery(item.q || item.label);
-                            setSuggestions([]);
-                          }
-                        }}
+                        className={`hero-search-suggest-btn w-full px-4 py-2.5 text-sm text-left text-ink ${index === suggestIndex ? 'bg-accent/15' : ''}`}
+                        onMouseEnter={() => setSuggestIndex(index)}
+                        onClick={() => openSuggestion(item)}
                       >
                         <span className="font-semibold">{item.label}</span>
-                        <span className="ml-2 text-xs uppercase">{item.kind === 'location' ? 'Lieu' : 'Entreprise'}</span>
+                        {item.detail ? <span className="ml-2 text-xs text-ink-muted">{item.detail}</span> : null}
+                        <span className="ml-2 text-xs uppercase text-primary">{suggestionKind(item.kind)}</span>
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
-            <div className="w-1/3 flex items-center px-4">
+            <div className="sm:w-48 flex items-center px-3 sm:border-l sm:border-border relative">
               <MapPin className="text-accent w-5 h-5 mr-2 shrink-0" />
               <input
                 type="text"
                 value={searchLocation}
                 onChange={(e) => setSearchLocation(e.target.value)}
-                placeholder={settings?.search_location_placeholder || 'Location'}
-                className="hero-search-input w-full py-3 outline-none text-base font-medium bg-transparent border-0"
+                placeholder={settings?.search_location_placeholder || 'Lieu'}
+                className="hero-search-input w-full py-3 outline-none text-sm font-medium bg-transparent border-0 text-ink"
+                onKeyDown={onPlaceKeyDown}
+                aria-autocomplete="list"
+                aria-expanded={placeSuggestions.length > 0}
               />
+              {placeSuggestions.length > 0 && (
+                <ul className="absolute left-0 right-0 top-full mt-2 bg-white text-left rounded-3xl shadow-xl z-20 overflow-hidden">
+                  {placeSuggestions.map((item, index) => (
+                    <li key={`${item.label}-${item.detail}`}>
+                      <button
+                        type="button"
+                        className={`w-full px-4 py-2.5 text-sm text-left text-ink ${index === placeIndex ? 'bg-accent/15' : ''}`}
+                        onMouseEnter={() => setPlaceIndex(index)}
+                        onClick={() => openSuggestion(item)}
+                      >
+                        <span className="font-semibold">{item.label}</span>
+                        <span className="ml-2 text-xs text-ink-muted">{item.detail || 'Lieu'}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <button type="submit" className="bg-primary hover:opacity-95 text-surface font-bold text-base py-3 px-8 rounded-full transition border-2 border-accent shrink-0">
-              Search
+            <button type="submit" className="bg-accent text-ink font-bold text-sm py-3 px-6 rounded-xl shrink-0">
+              Rechercher
             </button>
           </form>
-          {heroSlides.length > 1 && (
-            <div className="mt-8 flex justify-center gap-2">
-              {heroSlides.map((_, i) => (
+          {categories.length > 0 && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {categories.slice(0, 6).map((cat) => (
                 <button
-                  key={i}
+                  key={cat.id}
                   type="button"
-                  aria-label={`Image ${i + 1}`}
-                  onClick={() => setHeroIndex(i)}
-                  className={`h-2 rounded-full ${i === heroIndex % heroSlides.length ? 'w-6 bg-white' : 'w-2 bg-white/60'}`}
-                />
+                  onClick={() => navigate(categoryTarget(cat))}
+                  className="px-3 py-1.5 rounded-full bg-white ring-1 ring-border text-sm font-semibold text-ink"
+                >
+                  {cat.name}
+                </button>
               ))}
             </div>
           )}
@@ -305,317 +484,170 @@ export default function LandingPage() {
       </section>
 
       {settings?.show_categories !== false && (
-      horizontalCategories && !loading && categories.length > 0 ? (
-      <section
-        ref={categoryRail}
-        className="relative"
-        style={{ height: `${Math.max(categories.length, 6) * 18}vh` }}
-      >
-        <div className="sticky top-16 h-[calc(100vh-4rem)] overflow-hidden flex flex-col justify-center">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-10 px-4">{settings?.categories_title || 'Explore Categories'}</h2>
-          <div ref={categoryTrack} className="flex gap-6 px-6 w-max will-change-transform">
+      <section className="px-4 py-12 max-w-6xl mx-auto">
+        <div className="flex items-end justify-between gap-3 mb-6">
+          <h2 className="text-2xl font-extrabold text-ink">{settings?.categories_title || 'Explorer par catégorie'}</h2>
+        </div>
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="h-28 rounded-2xl bg-white ring-1 ring-border animate-pulse" />)}
+          </div>
+        ) : categories.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {categories.map((cat) => {
               const IconComp = categoryIcon(cat.name);
-              const moduleKey = categoryModuleKey(cat);
-              const target = moduleKey === 'education'
-                ? '/education'
-                : (moduleKey === 'hospital'
-                  ? '/hospitals'
-                  : `/businesses?category=${encodeURIComponent(cat.name)}`);
               return (
                 <button
                   key={cat.id}
                   type="button"
-                  onClick={() => navigate(target)}
-                  className="flex flex-col items-center shrink-0 w-44 p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group"
+                  onClick={() => navigate(categoryTarget(cat))}
+                  className="flex flex-col items-center justify-center gap-3 p-5 rounded-2xl bg-white ring-1 ring-border text-ink hover:ring-accent"
                 >
-                  <IconComp className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
-                  <span className="font-medium text-gray-700 group-hover:text-primary text-center leading-tight">{cat.name}</span>
+                  <IconComp className="w-7 h-7 text-primary" />
+                  <span className="text-sm font-semibold text-center leading-tight">{cat.name}</span>
                 </button>
               );
             })}
           </div>
-        </div>
-      </section>
-      ) : (
-      <section className="py-20 px-4 max-w-7xl mx-auto">
-        <h2 className="text-3xl font-bold text-gray-900 text-center mb-12">{settings?.categories_title || 'Explore Categories'}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
-          {loading ? (
-            [1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl bg-white animate-pulse">
-                <div className="w-8 h-8 bg-gray-200 rounded-full mb-3" />
-                <div className="h-4 bg-gray-200 rounded w-16" />
-              </div>
-            ))
-          ) : categories.length > 0 ? (
-            categories.map((cat) => {
-              const IconComp = categoryIcon(cat.name);
-              const moduleKey = categoryModuleKey(cat);
-              const target = moduleKey === 'education'
-                ? '/education'
-                : (moduleKey === 'hospital'
-                  ? '/hospitals'
-                  : `/businesses?category=${encodeURIComponent(cat.name)}`);
-              return (
-                <div
-                  key={cat.id}
-                  onClick={() => navigate(target)}
-                  className="flex flex-col items-center p-6 border border-gray-100 rounded-2xl hover:shadow-lg hover:border-primary/20 transition cursor-pointer bg-white group"
-                >
-                  <IconComp className="w-8 h-8 text-gray-400 group-hover:text-primary mb-3 transition" />
-                  <span className="font-medium text-gray-700 group-hover:text-primary text-center leading-tight">{cat.name}</span>
-                </div>
-              );
-            })
-          ) : (
-            <p className="col-span-full text-center text-gray-500">Aucune catégorie utilisée pour le moment.</p>
-          )}
-        </div>
-      </section>
-      )
-      )}
-
-      {settings?.show_professionals !== false && (
-      <section className="py-20 px-4 bg-white border-t border-gray-100">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-end mb-10">
-            <h2 className="text-3xl font-bold text-gray-900">{settings?.professionals_title || 'Featured Professionals'}</h2>
-            <button onClick={() => navigate('/hospitals')} className="text-primary font-semibold hover:underline">View All</button>
-          </div>
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 animate-pulse h-56" />
-              ))}
-            </div>
-          ) : professionals.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-              {professionals.map((doc) => {
-                const photo = doc.public_photo_url || doc.photo_url || doc.user_details?.avatar;
-                const name = doc.full_name || `${doc.user_details?.first_name || ''} ${doc.user_details?.last_name || ''}`.trim() || 'Médecin';
-                const specialty = (doc.specialties || []).map((s) => s.name).filter(Boolean).join(', ')
-                  || doc.staff_category_display
-                  || 'Professionnel de santé';
-                const hospitalId = doc.hospital_id || doc.hospital;
-                return (
-                  <div key={doc.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition">
-                    <div className="h-32 bg-gradient-to-r from-teal-100 to-emerald-100" />
-                    <div className="px-6 pb-6 relative">
-                      <div className="w-16 h-16 rounded-full bg-primary border-4 border-white absolute -top-8 flex items-center justify-center text-white font-bold text-xl shadow-sm overflow-hidden">
-                        {photo ? (
-                          <img src={photo} alt={name} className="w-full h-full object-cover" />
-                        ) : (
-                          <User className="w-7 h-7" />
-                        )}
-                      </div>
-                      <div className="pt-10">
-                        <h3 className="font-bold text-lg text-gray-900 line-clamp-1">{name}</h3>
-                        <p className="text-sm text-gray-500 mb-2 line-clamp-1">{specialty}</p>
-                        <p className="text-xs text-gray-500 mb-4 flex items-center gap-1">
-                          <MapPin className="w-3.5 h-3.5" /> {doc.hospital_name || 'Burundi'}
-                        </p>
-                        <Link
-                          to={hospitalId ? `/hospitals/${hospitalId}` : '/hospitals'}
-                          className="block w-full text-center border border-gray-200 hover:border-primary text-gray-700 hover:text-primary font-medium py-2 rounded-lg transition"
-                        >
-                          Voir le profil
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-center text-gray-500 py-8">Aucun professionnel publié pour le moment.</p>
-          )}
-        </div>
-      </section>
-      )}
-
-      {settings?.show_health !== false && (
-      <section className="py-20 px-4 max-w-7xl mx-auto border-t border-gray-100">
-        <div className="flex justify-between items-end mb-10">
-          <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <HeartPulse className="text-teal-600" /> {settings?.health_title || 'Établissements de Santé'}
-          </h2>
-          <button onClick={() => navigate('/hospitals')} className="text-teal-600 font-semibold hover:underline">Voir l&apos;annuaire complet</button>
-        </div>
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[1, 2, 3].map((i) => <div key={i} className="h-64 rounded-2xl bg-gray-100 animate-pulse" />)}
-          </div>
-        ) : healthBusinesses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {healthBusinesses.map((h) => (
-              <div
-                key={h.id}
-                onClick={() => navigate(`/hospitals/${h.id}`)}
-                className="flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl transition cursor-pointer group"
-              >
-                <div className="h-40 bg-teal-50 flex items-center justify-center relative overflow-hidden">
-                  {h.logo ? (
-                    <img src={h.logo} alt={h.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Building2 className="w-16 h-16 text-teal-200" />
-                  )}
-                  {(h.extra_attributes?.is_24_7 || h.emergency_available) && (
-                    <div className="absolute top-4 right-4 bg-white/90 px-2 py-1 rounded text-xs font-bold text-teal-700 shadow-sm backdrop-blur-sm">
-                      Urgences
-                    </div>
-                  )}
-                </div>
-                <div className="p-6 flex-1">
-                  <h3 className="font-bold text-xl text-gray-900 mb-1 group-hover:text-teal-600 transition">{h.name}</h3>
-                  <p className="text-gray-500 text-sm mb-4">
-                    <MapPin className="inline w-4 h-4 mr-1" />
-                    {h.address || h.commune || h.province || 'Burundi'}
-                  </p>
-                  <div className="flex gap-2 mb-4 flex-wrap">
-                    {(h.categories_detail || []).slice(0, 3).map((c) => (
-                      <span key={c.id} className="px-2 py-1 bg-gray-50 text-xs rounded border border-gray-200">{c.name}</span>
-                    ))}
-                    {!(h.categories_detail || []).length && (
-                      <span className="px-2 py-1 bg-gray-50 text-xs rounded border border-gray-200">
-                        {h.primary_category_name || 'Santé'}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-end border-t border-gray-100 pt-4 mt-auto">
-                    <span className="text-teal-600 text-sm font-semibold flex items-center">
-                      Voir le profil <ChevronRight className="w-4 h-4 ml-1" />
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
         ) : (
-          <p className="text-center text-gray-500 py-8">Aucun établissement de santé publié.</p>
+          <p className="text-sm text-ink-muted">Aucune catégorie publiée pour le moment.</p>
         )}
       </section>
       )}
 
-      {settings?.show_businesses !== false && (
-      <section className="py-20 px-4 max-w-7xl mx-auto">
-        <div className="flex justify-between items-end mb-10">
-          <h2 className="text-3xl font-bold text-gray-900">{settings?.businesses_title || 'Top Businesses'}</h2>
-          <button onClick={() => navigate('/businesses')} className="text-primary font-semibold hover:underline">View All</button>
+      {showListings && (
+      <section className="px-4 py-12 max-w-6xl mx-auto">
+        <div className="flex items-end justify-between gap-3 mb-6">
+          <h2 className="text-2xl font-extrabold text-ink">{settings?.businesses_title || 'Entreprises à découvrir'}</h2>
+          <button type="button" onClick={() => navigate('/businesses')} className="text-sm font-bold text-primary">Voir tout</button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {loading ? (
-            [1, 2, 3].map((i) => (
-              <div key={i} className="flex p-4 border border-gray-100 rounded-2xl animate-pulse">
-                <div className="w-20 h-20 bg-gray-200 rounded-xl mr-4" />
-                <div className="flex-1 space-y-2 py-2">
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                  <div className="h-3 bg-gray-200 rounded w-1/2" />
-                </div>
-              </div>
-            ))
-          ) : topBusinesses.length > 0 ? (
-            topBusinesses.map((business) => (
-              <div
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => <div key={i} className="h-64 rounded-2xl bg-white ring-1 ring-border animate-pulse" />)}
+          </div>
+        ) : featuredBusinesses.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {featuredBusinesses.map((business) => (
+              <button
                 key={business.id}
-                onClick={() => navigate(`/businesses?highlight=${business.id}`)}
-                className="flex p-4 border border-gray-100 rounded-2xl hover:shadow-lg transition cursor-pointer"
+                type="button"
+                onClick={() => navigate(businessTarget(business))}
+                className="text-left rounded-2xl bg-white ring-1 ring-border overflow-hidden hover:ring-accent"
               >
-                <div className="w-20 h-20 bg-gray-100 rounded-xl shrink-0 mr-4 flex items-center justify-center overflow-hidden">
+                <div className="h-36 bg-surface flex items-center justify-center relative">
                   {business.logo ? (
-                    <img src={business.logo} alt={business.name} className="w-full h-full object-cover" />
+                    <img src={business.logo} alt="" className="w-full h-full object-contain p-3" />
                   ) : (
-                    <Building2 className="text-gray-400 w-8 h-8" />
+                    <Building2 className="w-10 h-10 text-primary" />
+                  )}
+                  {(business.extra_attributes?.is_24_7 || business.emergency_available) && (
+                    <span className="absolute top-3 right-3 text-[11px] font-bold px-2 py-1 rounded-lg bg-white text-ink ring-1 ring-border">Urgences</span>
                   )}
                 </div>
-                <div className="flex-1">
-                  <h3 className="font-bold text-lg text-gray-900">{business.name}</h3>
-                  <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full mb-2 inline-block">
-                    {business.primary_category_name || 'Entreprise'}
+                <div className="px-4 py-4">
+                  <p className="text-xs font-semibold text-ink-muted">{business.primary_category_name || 'Entreprise'}</p>
+                  <h3 className="mt-1 font-extrabold text-ink truncate">{business.name}</h3>
+                  <p className="mt-1 text-sm text-ink-muted flex items-center gap-1 truncate">
+                    <MapPin className="w-3.5 h-3.5 shrink-0" /> {placeLabel(business) || 'Burundi'}
+                  </p>
+                  <span className="mt-3 inline-flex items-center text-sm font-bold text-primary">
+                    Voir la fiche <ChevronRight className="w-4 h-4" />
                   </span>
-                  <div className="flex items-center text-sm text-gray-500">
-                    <MapPin className="w-4 h-4 mr-1" /> {business.address || business.commune || 'Burundi'}
-                  </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <p className="col-span-full text-center text-gray-500 py-8">Aucune autre entreprise à afficher.</p>
-          )}
-        </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-ink-muted">Aucune entreprise publiée pour le moment.</p>
+        )}
       </section>
       )}
 
       {settings?.show_services !== false && (
-      <section className="py-20 px-4 bg-white border-t border-gray-100">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex justify-between items-end mb-10">
-            <h2 className="text-3xl font-bold text-gray-900">{settings?.services_title || 'Popular Services'}</h2>
-            <button onClick={() => navigate('/services')} className="text-primary font-semibold hover:underline">View All</button>
+      <section className="px-4 py-12 max-w-6xl mx-auto">
+        <div className="flex items-end justify-between gap-3 mb-6">
+          <h2 className="text-2xl font-extrabold text-ink">{settings?.services_title || 'Services'}</h2>
+          <button type="button" onClick={() => navigate('/services')} className="text-sm font-bold text-primary">Voir tout</button>
+        </div>
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => <div key={i} className="h-56 rounded-2xl bg-white ring-1 ring-border animate-pulse" />)}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {loading ? (
-              [1, 2, 3, 4].map((i) => (
-                <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-pulse h-64" />
-              ))
-            ) : popularServices.length > 0 ? (
-              popularServices.map((service) => {
-                const title = service.title || service.name || 'Service';
-                const img = (service.image_urls && service.image_urls[0]) || null;
-                return (
-                  <div key={service.id} className="bg-white rounded-2xl p-5 shadow-sm hover:shadow-md transition border border-gray-50">
-                    <div className="h-40 bg-gray-100 rounded-xl mb-4 flex items-center justify-center overflow-hidden">
-                      {img ? (
-                        <img src={img} alt={title} className="w-full h-full object-cover" />
-                      ) : (
-                        <Briefcase className="w-10 h-10 text-gray-300" />
-                      )}
-                    </div>
-                    <div className="text-xs font-bold text-primary tracking-wider uppercase mb-1">Service</div>
-                    <h3 className="font-bold text-gray-900 mb-2 line-clamp-1">{title}</h3>
-                    <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
-                      <span className="text-sm text-gray-500 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
-                          {title.charAt(0)}
-                        </div>
-                        Prestataire
-                      </span>
-                      {service.price != null && (
-                        <span className="font-bold text-gray-900">{Number(service.price).toLocaleString('fr-BI')} FBu</span>
-                      )}
-                    </div>
+        ) : popularServices.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {popularServices.map((service) => {
+              const title = service.title || service.name || 'Service';
+              const img = (service.image_urls && service.image_urls[0]) || null;
+              return (
+                <button
+                  key={service.id}
+                  type="button"
+                  onClick={() => navigate('/services')}
+                  className="text-left rounded-2xl bg-white ring-1 ring-border overflow-hidden hover:ring-accent"
+                >
+                  <div className="h-32 bg-surface flex items-center justify-center">
+                    {img ? <img src={img} alt="" className="w-full h-full object-contain p-2" /> : <Briefcase className="w-8 h-8 text-primary" />}
                   </div>
-                );
-              })
-            ) : (
-              <p className="col-span-full text-center text-gray-500 py-8">Aucun service publié pour le moment.</p>
-            )}
+                  <div className="px-4 py-4">
+                    <h3 className="font-extrabold text-ink truncate">{title}</h3>
+                    {service.price != null && (
+                      <p className="mt-1 text-sm text-ink-muted">{Number(service.price).toLocaleString('fr-BI')} FBu</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
+        ) : (
+          <p className="text-sm text-ink-muted">Aucun service publié pour le moment.</p>
+        )}
+      </section>
+      )}
+
+      {settings?.show_professionals !== false && (loading || professionals.length > 0) && (
+      <section className="px-4 py-12 max-w-6xl mx-auto">
+        <div className="flex items-end justify-between gap-3 mb-6">
+          <h2 className="text-2xl font-extrabold text-ink">{settings?.professionals_title || 'Professionnels de santé'}</h2>
+          <button type="button" onClick={() => navigate('/hospitals')} className="text-sm font-bold text-primary">Voir tout</button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {loading ? (
+            [1, 2, 3, 4].map((i) => <div key={i} className="h-40 rounded-2xl bg-white ring-1 ring-border animate-pulse" />)
+          ) : professionals.map((doc) => {
+            const photo = doc.public_photo_url || doc.photo_url || doc.user_details?.avatar;
+            const name = doc.full_name || `${doc.user_details?.first_name || ''} ${doc.user_details?.last_name || ''}`.trim() || 'Médecin';
+            const specialty = (doc.specialties || []).map((s) => s.name).filter(Boolean).join(', ')
+              || doc.staff_category_display
+              || 'Professionnel de santé';
+            const hospitalId = doc.hospital_id || doc.hospital;
+            return (
+              <Link key={doc.id} to={hospitalId ? `/hospitals/${hospitalId}` : '/hospitals'} className="rounded-2xl bg-white ring-1 ring-border p-4 hover:ring-accent">
+                <div className="w-14 h-14 rounded-full bg-surface ring-1 ring-border overflow-hidden flex items-center justify-center text-primary">
+                  {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : <User className="w-6 h-6" />}
+                </div>
+                <h3 className="mt-3 font-extrabold text-ink truncate">{name}</h3>
+                <p className="text-sm text-ink-muted truncate">{specialty}</p>
+                <p className="mt-1 text-xs text-ink-muted truncate">{doc.hospital_name || 'Burundi'}</p>
+              </Link>
+            );
+          })}
         </div>
       </section>
       )}
 
       {settings?.show_why !== false && (
-      <section className="py-24 px-4 max-w-7xl mx-auto text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-16">{settings?.why_title || 'Why choose Isoko Hub?'}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
-          {(settings?.why_items?.length
-            ? settings.why_items
-            : [
-              { title: 'Verified Professionals', description: 'Every service provider is vetted for quality and reliability.', icon: 'CheckCircle2' },
-              { title: 'Secure Payments', description: 'Your funds are protected until the service is delivered.', icon: 'ShieldCheck' },
-              { title: 'Trusted Businesses', description: 'Find the best local businesses rated by the community.', icon: 'Briefcase' },
-              { title: 'AI Recommendations', description: "Our smart algorithm finds exactly what you're looking for.", icon: 'Laptop' },
-            ]
-          ).map((item) => {
-            const IconComp = { CheckCircle2, ShieldCheck, Briefcase, Laptop }[item.icon] || CheckCircle2;
+      <section className="px-4 py-12 max-w-6xl mx-auto">
+        <h2 className="text-2xl font-extrabold text-ink text-center">{settings?.why_title || 'Pourquoi Isoko Hub'}</h2>
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {whyItems.map((item) => {
+            const IconComp = whyIcons[item.icon] || CheckCircle2;
             return (
-              <div key={item.title} className="flex flex-col items-center">
-                <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-6">
-                  <IconComp className="w-8 h-8" />
+              <div key={item.title} className="rounded-2xl bg-white ring-1 ring-border px-5 py-6 text-center">
+                <div className="mx-auto w-12 h-12 rounded-2xl bg-[#E7F0F4] text-primary flex items-center justify-center">
+                  <IconComp className="w-6 h-6" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
-                <p className="text-gray-500">{item.description}</p>
+                <h3 className="mt-4 font-extrabold text-ink">{item.title}</h3>
+                <p className="mt-2 text-sm text-ink-muted">{item.description}</p>
               </div>
             );
           })}
@@ -623,19 +655,25 @@ export default function LandingPage() {
       </section>
       )}
 
-      {settings?.show_app_banner !== false && (
-      <section className="py-20 px-4 bg-primary text-surface text-center">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl sm:text-4xl font-extrabold mb-6 text-surface">{settings?.app_banner_title || 'Take Isoko Hub everywhere'}</h2>
-          <p className="text-surface/90 text-lg sm:text-xl font-medium mb-8">
-            {settings?.app_banner_subtitle || 'The official Isoko Hub mobile app is currently under development.'}
-          </p>
-          <div className="inline-block border-2 border-accent rounded-full px-8 py-3.5 font-bold tracking-wide text-surface text-base sm:text-lg bg-surface/10">
-            {settings?.app_banner_badge || 'COMING SOON'}
+      <section className="px-4 py-12">
+        <div className="max-w-4xl mx-auto rounded-3xl bg-white ring-1 ring-border px-6 py-12 text-center">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-ink">Trouvez ce qu’il vous faut. Faites connaître votre activité.</h2>
+          <p className="mt-3 text-sm text-ink-muted">Les établissements publiés sont déjà dans l’annuaire. Le vôtre peut y figurer.</p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button type="button" onClick={() => go(settings?.hero_cta_secondary_url || '/businesses')} className="px-5 py-3 rounded-xl bg-primary text-surface text-sm font-bold">
+              {settings?.hero_cta_secondary_label || 'Explorer'}
+            </button>
+            <button type="button" onClick={() => go(settings?.hero_cta_primary_url || '/register-business')} className="px-5 py-3 rounded-xl bg-accent text-ink text-sm font-bold">
+              {settings?.hero_cta_primary_label || 'Créer une entreprise'}
+            </button>
           </div>
+          {settings?.show_app_banner !== false && (
+            <p className="mt-6 text-xs font-semibold text-ink-muted">
+              {settings?.app_banner_title || 'Application mobile'} · {settings?.app_banner_badge || 'Bientôt disponible'}
+            </p>
+          )}
         </div>
       </section>
-      )}
     </div>
   );
 }

@@ -32,7 +32,6 @@ export default function FrontDeskArrivals() {
   const { can, canUpdate, canView } = useHotelPerm();
   const allowFrontDesk = can('hotel.stays.check_in') || can('hotel.front_desk') || canView('reservations');
   const allowCheckIn = can('hotel.stays.check_in') || canUpdate('stays');
-  const allowConfirm = can('hotel.reservations.confirm');
   const allowNoShow = can('hotel.reservations.cancel') || can('hotel.stays.check_in');
   const [list, setList] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -54,7 +53,7 @@ export default function FrontDeskArrivals() {
       hotelService.reservations({ date: day }),
       hotelService.rooms(),
     ]);
-    setList(listOf(res).filter((r) => ['CONFIRMED', 'EXPECTED', 'PENDING'].includes(r.status)));
+    setList(listOf(res).filter((r) => ['CONFIRMED', 'EXPECTED'].includes(r.status)));
     setRooms(listOf(rms));
   };
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [allowFrontDesk]);
@@ -65,10 +64,8 @@ export default function FrontDeskArrivals() {
     && READY_HK.includes(x.housekeeping_status)
   ));
 
-  const statusAllowsCheckIn = (r) => ['CONFIRMED', 'EXPECTED'].includes(r.status);
-
   return (
-    <HotelPage title="Arrivées du jour" subtitle={`${day} — après confirmation Réservations`}>
+    <HotelPage title="Arrivées du jour" subtitle={`${day} — réservations confirmées, paiement et chambre prête`}>
       {(err || msg) && (
         <p className={`text-sm font-bold whitespace-pre-wrap ${err ? 'text-alert' : 'text-primary'}`}>
           {err || msg}
@@ -112,9 +109,9 @@ export default function FrontDeskArrivals() {
       )}
       <Panel>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h2 className="font-extrabold text-ink">Réservations du jour</h2>
+          <h2 className="font-extrabold text-ink">Réservations confirmées</h2>
           <Link to="/hotel/reservations" className="text-xs font-bold text-accent hover:underline">
-            → Menu Réservations (confirmer)
+            Demandes en attente → Réservations
           </Link>
         </div>
         {!list.length ? <Empty>Aucune arrivée prévue</Empty> : list.map((r) => (
@@ -123,36 +120,15 @@ export default function FrontDeskArrivals() {
               <p className="font-bold text-ink">{r.guest_name}</p>
               <p className="text-xs text-ink-muted">
                 {r.reference} · {r.room_type_name} · {r.status}
+                {` · ${Number(r.adults) || 1} ad.`}
+                {Number(r.children) > 0 ? ` · ${Number(r.children)} enf.` : ''}
+                {r.guest_phone ? ` · ${r.guest_phone}` : ''}
                 {r.payment_status ? ` · paiement ${r.payment_status}` : ''}
+                {readyRooms(r).length ? ' · chambre prête' : ' · aucune chambre prête'}
               </p>
-              {!statusAllowsCheckIn(r) && (
-                <p className="text-[11px] text-amber-700 font-bold mt-1">
-                  En attente de confirmation (Réservations) avant check-in.
-                </p>
-              )}
             </div>
             <div className="flex flex-wrap gap-2 items-center">
-              {!statusAllowsCheckIn(r) ? (
-                allowConfirm ? (
-                <button
-                  type="button"
-                  className={btnGhost}
-                  onClick={async () => {
-                    setErr('');
-                    setMsg('');
-                    try {
-                      await hotelService.confirmReservation(r.id);
-                      setMsg(`${r.reference} confirmée — check-in possible.`);
-                      load();
-                    } catch (ex) { setErr(ex.message); }
-                  }}
-                >
-                  Confirmer d&apos;abord
-                </button>
-                ) : (
-                  <span className="text-[11px] font-bold text-ink-muted">En attente confirmation</span>
-                )
-              ) : allowCheckIn ? (
+              {allowCheckIn ? (
                 <>
                   <select
                     className={fieldClass}
@@ -239,7 +215,7 @@ export function FrontDeskDepartures() {
         {' '}
         <Link to="/hotel/housekeeping" className="text-accent font-bold hover:underline">Voir le ménage</Link>
         {' · '}
-        <Link to="/hotel/folios" className="text-accent font-bold hover:underline">Caisse / folios</Link>
+        <Link to="/hotel/cashier?section=encaisser" className="text-accent font-bold hover:underline">Caisse</Link>
       </p>
       <Panel>
         {!stays.length ? <Empty>Aucun séjour en cours</Empty> : stays.map((s) => (

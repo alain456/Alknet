@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Download, FileText } from 'lucide-react';
 import hotelService, { listOf } from '../hotelService';
 import { getToken } from '../../shared/api';
 import { HotelPage, Panel, btnPrimary, btnGhost, Empty, fieldClass, StatCard } from '../ui';
+import CashierNav from './CashierNav';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -121,13 +121,10 @@ export default function ManageHotelInvoices() {
 
   return (
     <HotelPage
-      title="Facturation"
-      subtitle="Factures émises et folios ouverts"
+      title="Caisse"
+      subtitle="Facture au départ, après encaissement du solde"
       actions={(
         <div className="flex flex-wrap gap-2">
-          <Link to="/hotel/cashier" className={`${btnGhost} text-sm`}>
-            Dashboard caisse
-          </Link>
           <button
             type="button"
             className={btnPrimary}
@@ -144,6 +141,7 @@ export default function ManageHotelInvoices() {
         </div>
       )}
     >
+      <CashierNav />
       {err && (
         <Panel className="border-alert mb-3">
           <p className="font-bold text-alert text-sm">{err}</p>

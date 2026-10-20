@@ -197,6 +197,20 @@ function OrderDetail({ id, clientMode }) {
     }
   };
 
+  const deliver = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const res = await wholesaleService.completeOrder(id);
+      setOrder(res);
+      setMsg('Commande marquée livrée. Le stock réel a été déduit.');
+    } catch (e) {
+      setError(e.message || 'Livraison impossible');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const reject = async (e) => {
     e.preventDefault();
     if (!reason) {
@@ -256,7 +270,8 @@ function OrderDetail({ id, clientMode }) {
   const canMarkPaid = !clientMode
     && order.payment_status !== 'PAID'
     && ['SUBMITTED', 'PROCESSING', 'ACCEPTED'].includes(order.status);
-  const canClearPaid = !clientMode && order.payment_status === 'PAID' && order.status !== 'ACCEPTED';
+  const canDeliver = !clientMode && order.status === 'ACCEPTED';
+  const canClearPaid = !clientMode && order.payment_status === 'PAID' && !['ACCEPTED', 'COMPLETED'].includes(order.status);
   const pf = order.proforma;
 
   return (
@@ -302,6 +317,11 @@ function OrderDetail({ id, clientMode }) {
                 Refuser
               </button>
             </>
+          )}
+          {canDeliver && (
+            <button type="button" onClick={deliver} disabled={busy} className="px-4 py-2 bg-primary text-white rounded-xl font-semibold disabled:opacity-40">
+              Marquer livrée
+            </button>
           )}
           {canMarkPaid && (
             <button type="button" onClick={() => setPayOpen(true)} className="px-4 py-2 bg-teal-700 text-white rounded-xl font-semibold">

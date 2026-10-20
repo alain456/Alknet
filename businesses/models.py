@@ -12,6 +12,14 @@ class Business(models.Model):
     categories = models.ManyToManyField(BusinessCategory, related_name='businesses', blank=True)
     
     name = models.CharField(max_length=255)
+    slug = models.SlugField(
+        max_length=80, unique=True, null=True, blank=True,
+        help_text='Sous-domaine public, par exemple biu.isokohub.com.',
+    )
+    custom_domain = models.CharField(
+        max_length=255, blank=True, default='', db_index=True,
+        help_text='Domaine propre du client, par exemple boutique.client.bi.',
+    )
     logo = models.TextField(blank=True, help_text="URL ou Image Base64 du logo")
     description = models.TextField(blank=True)
     address = models.CharField(max_length=255, blank=True)
@@ -73,6 +81,12 @@ class Business(models.Model):
         return ", ".join(components) if components else "Adresse non renseignée"
 
     def save(self, *args, **kwargs):
+        if not (self.slug or '').strip():
+            from .slug import allocate_business_slug
+            self.slug = allocate_business_slug(self.name, exclude_pk=self.pk)
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                kwargs['update_fields'] = list(set(update_fields) | {'slug'})
         if not self.address:
             hierarchical_parts = [p for p in [self.avenue, self.quartier, self.zone, self.commune, self.province] if p]
             if hierarchical_parts:
@@ -114,6 +128,10 @@ class BusinessEmployee(models.Model):
     role = models.ForeignKey(BusinessRole, on_delete=models.SET_NULL, null=True, blank=True, related_name='employees')
     position = models.CharField(max_length=100, default='Staff', blank=True)
     is_active = models.BooleanField(default=True)
+    education_scope_unit = models.UUIDField(
+        null=True, blank=True,
+        help_text='Université : faculté dont cet employé voit les programmes et les dossiers. Vide : tout l’établissement.',
+    )
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -132,6 +150,10 @@ class SubscriptionPlan(models.Model):
     description = models.TextField(blank=True)
     price_bif = models.PositiveIntegerField(default=0, help_text="Prix en BIF (0 = gratuit / essai)")
     duration_days = models.PositiveIntegerField(default=30)
+    max_employees = models.PositiveIntegerField(
+        default=0,
+        help_text="Nombre max d'employés. 0 = illimité.",
+    )
     is_trial = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -262,6 +284,7 @@ class SubscriptionPayment(models.Model):
     raw_response = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    invoice_number = models.CharField(max_length=40, blank=True, default='', db_index=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -312,6 +335,110 @@ class PlatformNotification(models.Model):
         return f"{self.title} ({'lu' if self.is_read else 'non lu'})"
 
 
+class StockAlert(models.Model):
+    """Alerte envoyée à l'administrateur quand un article passe en stock faible ou en rupture."""
+    LEVEL_CHOICES = (
+        ('LOW', 'Stock faible'),
+        ('OUT', 'Rupture'),
+        ('EXPIRING', 'Péremption proche'),
+        ('EXPIRED', 'Périmé'),
+    )
+    SECTOR_CHOICES = (
+        ('commerce', 'Commerce'),
+        ('retail', 'Pharmacie de détail'),
+        ('wholesale', 'Pharmacie de gros'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='stock_alerts')
+    sector = models.CharField(max_length=20, choices=SECTOR_CHOICES)
+    product_id = models.UUIDField()
+    variant_id = models.UUIDField(null=True, blank=True)
+    product_name = models.CharField(max_length=255)
+    level = models.CharField(max_length=8, choices=LEVEL_CHOICES)
+    quantity = models.IntegerField(default=0)
+    threshold = models.PositiveIntegerField(default=0)
+    is_read = models.BooleanField(default=False)
+    is_resolved = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Alerte de stock'
+        verbose_name_plural = 'Alertes de stock'
+
+    def __str__(self):
+        return f'{self.product_name} ({self.level})'
+
+
+class InventorySession(models.Model):
+    """Séance de comptage. Le stock théorique est recopié à l'ouverture."""
+    STATUS_CHOICES = (
+        ('OPEN', 'En cours'),
+        ('VALIDATED', 'Validé'),
+        ('CANCELLED', 'Abandonné'),
+    )
+    SECTOR_CHOICES = (
+        ('commerce', 'Commerce'),
+        ('retail', 'Pharmacie de détail'),
+        ('wholesale', 'Pharmacie de gros'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='inventory_sessions')
+    sector = models.CharField(max_length=20, choices=SECTOR_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='OPEN')
+    opened_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='inventory_sessions_opened',
+    )
+    validated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='inventory_sessions_validated',
+    )
+    opened_at = models.DateTimeField(default=timezone.now)
+    validated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-opened_at']
+        verbose_name = 'Inventaire'
+        verbose_name_plural = 'Inventaires'
+
+    def __str__(self):
+        return f'Inventaire {self.business.name} ({self.status})'
+
+
+class InventoryLine(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(InventorySession, on_delete=models.CASCADE, related_name='lines')
+    product_id = models.UUIDField()
+    variant_id = models.UUIDField(null=True, blank=True)
+    product_name = models.CharField(max_length=255)
+    sku = models.CharField(max_length=80, blank=True, default='')
+    batch_number = models.CharField(max_length=120, blank=True, default='')
+    expiration_date = models.DateField(null=True, blank=True)
+    theoretical_qty = models.PositiveIntegerField()
+    counted_qty = models.PositiveIntegerField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['product_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['session', 'product_id'],
+                condition=models.Q(variant_id__isnull=True),
+                name='uniq_inventory_line_product',
+            ),
+            models.UniqueConstraint(
+                fields=['session', 'variant_id'],
+                condition=models.Q(variant_id__isnull=False),
+                name='uniq_inventory_line_variant',
+            ),
+        ]
+
+    def __str__(self):
+        return self.product_name
+
+
 class CommerceProfile(models.Model):
     """Profil vertical Commerce (Boutique, Mode, Quincaillerie, Supermarché, …)."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -323,6 +450,34 @@ class CommerceProfile(models.Model):
     pickup_instructions = models.TextField(
         blank=True,
         default='Retrait en magasin après confirmation de paiement.',
+    )
+    order_received_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {client_name},\n\n'
+            'Votre commande {reference} a bien été enregistrée chez {shop_name}.\n'
+            'Montant : {total_amount} {currency}.\n\n'
+            'Vous recevrez un e-mail dès que la boutique aura accepté ou refusé votre commande.\n\n'
+            'Cordialement,\n{shop_name}'
+        ),
+    )
+    order_accepted_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {client_name},\n\n'
+            'Votre commande {reference} a été acceptée par {shop_name}.\n'
+            'Montant : {total_amount} {currency}.\n'
+            'Retrait en magasin.\n\n'
+            'Cordialement,\n{shop_name}'
+        ),
+    )
+    order_refused_message = models.TextField(
+        blank=True,
+        default=(
+            'Bonjour {client_name},\n\n'
+            'Votre commande {reference} a été refusée par {shop_name}.\n\n'
+            'Cordialement,\n{shop_name}'
+        ),
     )
     is_open_for_orders = models.BooleanField(default=True)
 

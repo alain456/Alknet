@@ -477,6 +477,7 @@ class LocationAccessTests(EducationBaseTests):
                 {'label': 'Relevés de notes', 'description': 'Deux dernières années'},
                 {'label': 'Pièce d’identité', 'description': ''},
             ],
+            'fee_mode': 'GRATUIT',
         }, format='json')
         self.assertEqual(created.status_code, 201, created.content)
         same_program_other_year = client.post('/api/v1/education/campaigns/', {
@@ -485,6 +486,7 @@ class LocationAccessTests(EducationBaseTests):
             'opens_on': '2027-06-01',
             'closes_on': '2027-08-31',
             'required_documents': [{'label': 'Attestation', 'description': ''}],
+            'fee_mode': 'GRATUIT',
         }, format='json')
         self.assertEqual(same_program_other_year.status_code, 201, same_program_other_year.content)
 
@@ -906,7 +908,7 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         self.assertIn('PRESCOLAIRE', response.data['documents_by_track'])
         self.assertEqual(
             [doc['label'] for doc in response.data['documents_by_track']['PRESCOLAIRE']['documents']],
-            ["Extrait d'acte de naissance", 'Photo d’identité'],
+            ['Photo passeport', "Extrait d'acte de naissance", 'Photo d’identité'],
         )
 
         updated = client.patch(f"/api/v1/education/campaigns/{response.data['id']}/", {
@@ -1026,10 +1028,15 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
                 **extra,
             }
             labels = payload.pop('labels', [])
+            if not any(str(label).lower() == 'photo passeport' for label in labels):
+                labels = ['Photo passeport', *labels]
             for index, label in enumerate(labels):
+                photo = str(label).lower() == 'photo passeport'
                 payload[f'doc_label_{index}'] = label
                 payload[f'doc_file_{index}'] = SimpleUploadedFile(
-                    f'{label}.pdf', b'%PDF-1.4 piece', content_type='application/pdf',
+                    'passeport.jpg' if photo else f'{label}.pdf',
+                    b'\xff\xd8\xff\xd8' if photo else b'%PDF-1.4 piece',
+                    content_type='image/jpeg' if photo else 'application/pdf',
                 )
             return client.post(
                 '/api/v1/education/applications/apply/',
@@ -1051,7 +1058,7 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         self.assertEqual(preschool.data['application']['status'], 'LISTE_ATTENTE')
         self.assertEqual(
             [doc['label'] for doc in preschool.data['application']['required_documents']],
-            ["Extrait d'acte de naissance"],
+            ['Photo passeport', "Extrait d'acte de naissance"],
         )
 
         again = apply(
@@ -1077,7 +1084,7 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         self.assertEqual(ecofo.status_code, 201, ecofo.content)
         self.assertEqual(
             [doc['label'] for doc in ecofo.data['application']['required_documents']],
-            ["Extrait d'acte de naissance"],
+            ['Photo passeport', "Extrait d'acte de naissance"],
         )
 
         post = apply(
@@ -1091,7 +1098,7 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         self.assertEqual(post.status_code, 201, post.content)
         self.assertEqual(
             [doc['label'] for doc in post.data['application']['required_documents']],
-            ["Extrait d'acte de naissance"],
+            ['Photo passeport', "Extrait d'acte de naissance"],
         )
 
         patched = owner.patch(f'/api/v1/education/campaigns/{campaign_id}/', {
@@ -1211,6 +1218,130 @@ class PlatformApprovalPublishesProfileTests(EducationBaseTests):
         )
         self.assertEqual(blocked.status_code, 400, blocked.content)
 
+    def test_school_defines_documents_per_class_and_client_sends_them(self):
+        """L'école nomme les pièces de chaque classe. L'élève dépose celles de sa classe."""
+        from datetime import date, timedelta
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.utils import timezone
+
+        school_category = BusinessCategory.objects.create(
+            name='École pièces', slug='ecole', parent=self.parent, module=ModuleKey.EDUCATION,
+        )
+        school_owner = User.objects.create_user(
+            email='ecole-pieces@edu.test', password='Pass123456!', role='BUSINESS_OWNER',
+        )
+        business = Business.objects.create(
+            owner=school_owner, primary_category=school_category, category=school_category,
+            name='École des pièces', email='pieces@edu.test',
+        )
+        EducationProfile.objects.create(
+            business=business, publication_status=PublicationStatus.PUBLISHED,
+            published_at=timezone.now(),
+            offers_prescolaire=True,
+            offers_ecofo=True,
+            offers_post_fondamental=True,
+            ecofo_cycles=['C1'],
+            ecofo_classes=[{'value': '1', 'label': '1ère année'}],
+            post_fondamental_sections=[{
+                'orientation': 'GENERAL',
+                'name': 'Lettres',
+                'classes': [{'value': '1', 'label': '1ère année'}],
+                'years': ['1'],
+            }],
+        )
+        today = date.today()
+        admin = APIClient()
+        admin.force_authenticate(school_owner)
+        opened = admin.post('/api/v1/education/campaigns/', {
+            'academic_year': '2026-2027',
+            'opens_on': str(today - timedelta(days=1)),
+            'closes_on': str(today + timedelta(days=20)),
+            'fee_mode': 'GRATUIT',
+            'enrollment_plan': [
+                {
+                    'track': 'PRESCOLAIRE', 'year': '', 'section': '', 'seats': 20,
+                    'documents': [{'label': 'Carnet de vaccination', 'description': 'PDF'}],
+                },
+                {
+                    'track': 'ECOFO', 'year': '1', 'section': '', 'seats': 30,
+                    'documents': [{'label': 'Bulletin de 6e', 'description': ''}],
+                },
+                {
+                    'track': 'POST_FONDAMENTAL', 'year': '1', 'section': 'Lettres', 'seats': 25,
+                    'documents': [
+                        {'label': 'Relevé du tronc commun', 'description': ''},
+                        {'label': 'Photo récente', 'description': ''},
+                    ],
+                },
+            ],
+        }, format='json')
+        self.assertEqual(opened.status_code, 201, opened.content)
+        by_track = {row['track']: row for row in opened.data['enrollment_plan']}
+        self.assertEqual(by_track['PRESCOLAIRE']['documents'][0]['label'], 'Carnet de vaccination')
+        self.assertEqual(
+            [doc['label'] for doc in opened.data['documents_by_track']['ECOFO']['years'][0]['documents']],
+            ['Photo passeport', 'Bulletin de 6e'],
+        )
+        post_year = opened.data['documents_by_track']['POST_FONDAMENTAL']['sections'][0]['years'][0]
+        self.assertEqual(
+            [doc['label'] for doc in post_year['documents']],
+            ['Photo passeport', 'Relevé du tronc commun', 'Photo récente'],
+        )
+        self.assertNotIn("Extrait d'acte de naissance", str(opened.data['documents_by_track']))
+
+        visitor = APIClient()
+        public = visitor.get(f"/api/v1/education/campaigns/{opened.data['id']}/")
+        self.assertEqual(public.status_code, 200, public.content)
+        self.assertEqual(
+            [doc['label'] for doc in public.data['documents_by_track']['PRESCOLAIRE']['documents'][:2]],
+            ['Photo passeport', 'Carnet de vaccination'],
+        )
+
+        def apply(email, labels, **extra):
+            payload = {
+                'campaign': opened.data['id'],
+                'student_name': 'Élève Pièces',
+                'student_email': email,
+                'student_phone': '79001122',
+                'birth_date': '2016-04-02',
+                'gender': 'M',
+                'guardian_name': 'Parent Pièces',
+                'guardian_phone': '79003344',
+                'guardian_link': 'Père',
+                **extra,
+            }
+            for index, label in enumerate(labels):
+                payload[f'doc_label_{index}'] = label
+                photo = str(label).lower() == 'photo passeport'
+                payload[f'doc_file_{index}'] = SimpleUploadedFile(
+                    'passeport.jpg' if photo else 'piece.pdf',
+                    b'\xff\xd8\xff\xd8' if photo else b'%PDF-1.4 piece',
+                    content_type='image/jpeg' if photo else 'application/pdf',
+                )
+            return visitor.post('/api/v1/education/applications/apply/', payload, format='multipart')
+
+        wrong = apply('mauvais@edu.test', ['Photo passeport', "Extrait d'acte de naissance"], track='ECOFO', ecofo_year='1')
+        self.assertEqual(wrong.status_code, 400, wrong.content)
+        self.assertIn('Bulletin de 6e', str(wrong.data))
+
+        sent = apply('ecofo-pieces@edu.test', ['Photo passeport', 'Bulletin de 6e'], track='ECOFO', ecofo_year='1')
+        self.assertEqual(sent.status_code, 201, sent.content)
+        self.assertEqual(
+            [doc['label'] for doc in sent.data['application']['required_documents']],
+            ['Photo passeport', 'Bulletin de 6e'],
+        )
+        post = apply(
+            'post-pieces@edu.test',
+            ['Photo passeport', 'Relevé du tronc commun', 'Photo récente'],
+            track='POST_FONDAMENTAL', post_section='Lettres', post_year='1',
+        )
+        self.assertEqual(post.status_code, 201, post.content)
+
+        dossiers = admin.get('/api/v1/education/applications/')
+        emails = {row['student_email'] for row in dossiers.data}
+        self.assertIn('ecofo-pieces@edu.test', emails)
+        self.assertIn('post-pieces@edu.test', emails)
+
 
 class PublicationFlowTests(EducationBaseTests):
     def test_owner_submits_then_publishes_through_mark_published(self):
@@ -1266,6 +1397,7 @@ class EnrollmentAndFeeTests(EducationBaseTests):
             'academic_year': year,
             'opens_on': str(opens or (today - timedelta(days=1))),
             'closes_on': str(closes or (today + timedelta(days=10))),
+            'fee_mode': 'GRATUIT',
         }, format='json')
         self.assertEqual(response.status_code, 201, response.content)
         return response.data
@@ -1286,12 +1418,38 @@ class EnrollmentAndFeeTests(EducationBaseTests):
         self.assertEqual(response.status_code, 400, response.content)
 
     def test_student_submits_and_other_school_cannot_read(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
         opened = self._campaign(self.program_public)
         created = APIClient().post('/api/v1/education/applications/apply/', {
             'campaign': opened['id'],
-            'student_name': 'Étudiant',
+            'first_name': 'Étudiant',
+            'last_name': 'Test',
             'student_email': 'candidat@edu.test',
             'student_phone': '79001122',
+            'birth_date': '2004-05-02',
+            'gender': 'M',
+            'nationality': 'Burundaise',
+            'marital_status': 'Célibataire',
+            'avenue': 'Avenue',
+            'zone': 'Zone',
+            'commune': 'Commune',
+            'province': 'Gitega',
+            'country': 'Burundi',
+            'previous_school': 'Lycée',
+            'last_percent': '70',
+            'state_exam_percent': '65',
+            'studies_declared': 'Non',
+            'guardian_link': 'Père',
+            'guardian_name': 'Parent',
+            'guardian_email': 'parent@edu.test',
+            'guardian_phone': '79111111',
+            'guardian_address': 'Gitega',
+            'study_year': 'BAC I',
+            'terms_ack': '1',
+            'doc_label_0': 'Photo passeport',
+            'doc_file_0': SimpleUploadedFile('passeport.jpg', b'\xff\xd8\xff\xd8', content_type='image/jpeg'),
+            'doc_label_1': 'Carte d’identité',
+            'doc_file_1': SimpleUploadedFile('carte.pdf', b'%PDF-1.4', content_type='application/pdf'),
         }, format='multipart')
         self.assertEqual(created.status_code, 201, created.content)
         self.assertEqual(created.data['application']['status'], 'ENVOYEE')
@@ -1362,17 +1520,42 @@ class EnrollmentAndFeeTests(EducationBaseTests):
         self.assertEqual(early.status_code, 400, early.content)
         created = APIClient().post('/api/v1/education/applications/apply/', {
             'campaign': opened['id'],
-            'student_name': 'Étudiant',
+            'first_name': 'Étudiant',
+            'last_name': 'Test',
             'student_email': 'docs@edu.test',
             'student_phone': '79001122',
-            'doc_label_0': 'Diplôme',
-            'doc_file_0': SimpleUploadedFile('d.pdf', b'%PDF-1.4 d', content_type='application/pdf'),
-            'doc_label_1': 'Relevés',
-            'doc_file_1': SimpleUploadedFile('r.pdf', b'%PDF-1.4 r', content_type='application/pdf'),
+            'birth_date': '2004-05-02',
+            'gender': 'M',
+            'nationality': 'Burundaise',
+            'marital_status': 'Célibataire',
+            'avenue': 'Avenue',
+            'zone': 'Zone',
+            'commune': 'Commune',
+            'province': 'Gitega',
+            'country': 'Burundi',
+            'previous_school': 'Lycée',
+            'last_percent': '70',
+            'state_exam_percent': '65',
+            'studies_declared': 'Non',
+            'guardian_link': 'Père',
+            'guardian_name': 'Parent',
+            'guardian_email': 'parent@edu.test',
+            'guardian_phone': '79111111',
+            'guardian_address': 'Gitega',
+            'study_year': 'BAC I',
+            'terms_ack': '1',
+            'doc_label_0': 'Photo passeport',
+            'doc_file_0': SimpleUploadedFile('passeport.jpg', b'\xff\xd8\xff\xd8', content_type='image/jpeg'),
+            'doc_label_1': 'Carte d’identité',
+            'doc_file_1': SimpleUploadedFile('carte.pdf', b'%PDF-1.4 c', content_type='application/pdf'),
+            'doc_label_2': 'Diplôme',
+            'doc_file_2': SimpleUploadedFile('d.pdf', b'%PDF-1.4 d', content_type='application/pdf'),
+            'doc_label_3': 'Relevés',
+            'doc_file_3': SimpleUploadedFile('r.pdf', b'%PDF-1.4 r', content_type='application/pdf'),
         }, format='multipart')
         self.assertEqual(created.status_code, 201, created.content)
         self.assertEqual(created.data['application']['status'], 'ENVOYEE')
-        self.assertEqual(len(created.data['application']['files']), 2)
+        self.assertEqual(len(created.data['application']['files']), 4)
 
 
 class SubscriptionGatingTests(EducationBaseTests):
@@ -1760,3 +1943,373 @@ class ProductionGuardTests(EducationBaseTests):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.data['detail'], 'Erreur interne.')
         self.assertNotIn('secret', str(response.data))
+
+
+class UniversityInscriptionTests(EducationBaseTests):
+    def test_candidate_follows_the_published_campaign(self):
+        from datetime import date, timedelta
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from education.enrollment import university_study_years
+        from education.models import AdmissionCampaign, EnrollmentApplication
+
+        self.program_public.study_year_labels = ['Licence 1', 'Licence 2']
+        self.program_public.save()
+        self.assertEqual(university_study_years(self.program_public), ['Licence 1', 'Licence 2'])
+        self.program_public.study_year_labels = []
+        self.program_public.duration_years = 3
+        self.program_public.level = 'LICENCE'
+        self.program_public.options = ['Génie logiciel']
+        self.program_public.save()
+        today = date.today()
+        campaign = AdmissionCampaign.objects.create(
+            business=self.school_b,
+            program=self.program_public,
+            academic_year='2026-2027',
+            opens_on=today - timedelta(days=1),
+            closes_on=today + timedelta(days=20),
+            required_documents=[{'label': 'Diplôme', 'description': 'PDF'}],
+            is_public=True,
+        )
+        pdf = SimpleUploadedFile('diplome.pdf', b'%PDF-1.4', content_type='application/pdf')
+        identity = SimpleUploadedFile('carte.pdf', b'%PDF-1.4', content_type='application/pdf')
+        photo = SimpleUploadedFile('passeport.jpg', b'\xff\xd8\xff\xd8', content_type='image/jpeg')
+        response = APIClient().post('/api/v1/education/applications/apply/', {
+            'campaign': str(campaign.id),
+            'first_name': 'Aline',
+            'last_name': 'Ndayishimiye',
+            'student_email': 'aline@example.com',
+            'student_phone': '79000000',
+            'birth_date': '2004-05-02',
+            'gender': 'F',
+            'nationality': 'Burundaise',
+            'marital_status': 'Célibataire',
+            'avenue': 'Av. du Cinquantenaire',
+            'zone': 'Kigobe',
+            'commune': 'Ntahangwa',
+            'province': 'Bujumbura Mairie',
+            'country': 'Burundi',
+            'previous_school': 'Lycée du Lac',
+            'last_percent': '70',
+            'state_exam_percent': '65',
+            'studies_declared': 'Non',
+            'guardian_link': 'Père',
+            'guardian_name': 'Jean Ndayishimiye',
+            'guardian_email': 'jean@example.com',
+            'guardian_phone': '79111111',
+            'guardian_address': 'Kigobe',
+            'study_year': 'BAC I',
+            'program_option': 'Génie logiciel',
+            'terms_ack': '1',
+            'doc_label_0': 'Photo passeport',
+            'doc_file_0': photo,
+            'doc_label_1': 'Carte d’identité',
+            'doc_file_1': identity,
+            'doc_label_2': 'Diplôme',
+            'doc_file_2': pdf,
+        }, format='multipart')
+        self.assertEqual(response.status_code, 201, response.content)
+        application = EnrollmentApplication.objects.get(student_email='aline@example.com')
+        self.assertEqual(application.student_name, 'Aline Ndayishimiye')
+        self.assertEqual(application.profile_details['study_year'], 'BAC I')
+        self.assertEqual(application.profile_details['program_option'], 'Génie logiciel')
+        self.assertEqual(application.files.count(), 3)
+        self.assertTrue(application.files.filter(label='Carte d’identité').exists())
+        from unittest.mock import patch
+
+        from education.enrollment import decide_application
+
+        with patch('education.enrollment._mail_to') as mail:
+            decide_application(application, self.owner_b, 'REFUSEE')
+        application.refresh_from_db()
+        self.assertEqual(application.status, 'REFUSEE')
+        body = mail.call_args.args[2]
+        self.assertIn('ne peut pas accepter', body)
+        self.assertNotIn('Motif', body)
+
+    def test_admin_opens_bachelor_and_master_then_client_applies(self):
+        """Université : l’admin ouvre un baccalauréat et un master, le candidat envoie les deux dossiers."""
+        from datetime import date, timedelta
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        admin = APIClient()
+        admin.force_authenticate(self.owner_b)
+        faculty = admin.post('/api/v1/education/units/', {
+            'name': 'Faculté des sciences', 'kind': 'FACULTY',
+        }, format='json')
+        self.assertEqual(faculty.status_code, 201, faculty.content)
+
+        bachelor = admin.post('/api/v1/education/programs/', {
+            'title': 'Informatique',
+            'level': 'LICENCE',
+            'duration_years': '3',
+            'duration_label': '3 ans',
+            'unit': faculty.data['id'],
+            'options': ['Génie logiciel'],
+            'is_public': True,
+        }, format='json')
+        self.assertEqual(bachelor.status_code, 201, bachelor.content)
+        self.assertEqual(bachelor.data['level'], 'LICENCE')
+        self.assertEqual(bachelor.data['options'], ['Génie logiciel'])
+
+        master = admin.post('/api/v1/education/programs/', {
+            'title': 'Droit',
+            'domain': 'Sciences juridiques',
+            'level': 'MASTER',
+            'duration_years': '2',
+            'duration_label': '2 ans',
+            'unit': None,
+            'options': [],
+            'study_year_labels': [],
+            'is_public': True,
+        }, format='json')
+        self.assertEqual(master.status_code, 201, master.content)
+        self.assertEqual(master.data['level'], 'MASTER')
+        self.assertEqual(master.data['domain'], 'Sciences juridiques')
+        self.assertIsNone(master.data['unit'])
+        self.assertEqual(master.data['options'], [])
+        self.assertEqual(master.data['study_year_labels'], [])
+
+        listed = admin.get('/api/v1/education/programs/?mine=1')
+        by_level = {row['level'] for row in listed.data if row['title'] in ('Informatique', 'Droit')}
+        self.assertEqual(by_level, {'LICENCE', 'MASTER'})
+
+        today = date.today()
+        documents = [{'label': 'Diplôme', 'description': 'PDF'}]
+
+        def open_campaign(program_id):
+            return admin.post('/api/v1/education/campaigns/', {
+                'program': program_id,
+                'academic_year': '2026-2027',
+                'opens_on': (today - timedelta(days=1)).isoformat(),
+                'closes_on': (today + timedelta(days=30)).isoformat(),
+                'required_documents': documents,
+                'fee_mode': 'GRATUIT',
+                'is_public': True,
+            }, format='json')
+
+        bachelor_campaign = open_campaign(bachelor.data['id'])
+        master_campaign = open_campaign(master.data['id'])
+        self.assertEqual(bachelor_campaign.status_code, 201, bachelor_campaign.content)
+        self.assertEqual(master_campaign.status_code, 201, master_campaign.content)
+        self.assertEqual(bachelor_campaign.data['program_level'], 'LICENCE')
+        self.assertEqual(master_campaign.data['program_level'], 'MASTER')
+        self.assertEqual(bachelor_campaign.data['study_years'], ['BAC I', 'BAC II', 'BAC III'])
+        self.assertEqual(bachelor_campaign.data['program_options'], ['Génie logiciel'])
+        self.assertEqual(master_campaign.data['study_years'], ['Master I', 'Master II'])
+        self.assertEqual(master_campaign.data['program_options'], [])
+        self.assertTrue(bachelor_campaign.data['open_today'])
+        self.assertTrue(master_campaign.data['open_today'])
+        self.assertEqual(bachelor_campaign.data['enrollment_fee']['fee_mode'], 'GRATUIT')
+        self.assertEqual(master_campaign.data['enrollment_fee']['fee_mode'], 'GRATUIT')
+
+        visitor = APIClient()
+        public = visitor.get(f'/api/v1/education/campaigns/?business={self.school_b.id}')
+        public_ids = {row['id'] for row in public.data}
+        self.assertIn(bachelor_campaign.data['id'], public_ids)
+        self.assertIn(master_campaign.data['id'], public_ids)
+        seen_master = visitor.get(f"/api/v1/education/campaigns/{master_campaign.data['id']}/")
+        self.assertEqual(seen_master.status_code, 200)
+        self.assertEqual(seen_master.data['program_title'], 'Droit')
+        self.assertEqual(seen_master.data['program_options'], [])
+
+        def apply(campaign_id, email, study_year, option=''):
+            payload = {
+                'campaign': campaign_id,
+                'first_name': 'Aline',
+                'last_name': 'Ndayishimiye',
+                'student_email': email,
+                'student_phone': '79000000',
+                'birth_date': '2004-05-02',
+                'gender': 'F',
+                'nationality': 'Burundaise',
+                'marital_status': 'Célibataire',
+                'avenue': 'Av. du Cinquantenaire',
+                'zone': 'Kigobe',
+                'commune': 'Ntahangwa',
+                'province': 'Bujumbura Mairie',
+                'country': 'Burundi',
+                'previous_school': 'Lycée du Lac',
+                'last_percent': '70',
+                'state_exam_percent': '65',
+                'studies_declared': 'Non',
+                'guardian_link': 'Père',
+                'guardian_name': 'Jean Ndayishimiye',
+                'guardian_email': 'jean@example.com',
+                'guardian_phone': '79111111',
+                'guardian_address': 'Kigobe',
+                'study_year': study_year,
+                'terms_ack': '1',
+                'doc_label_0': 'Photo passeport',
+                'doc_file_0': SimpleUploadedFile('passeport.jpg', b'\xff\xd8\xff\xd8', content_type='image/jpeg'),
+                'doc_label_1': 'Carte d’identité',
+                'doc_file_1': SimpleUploadedFile('carte.pdf', b'%PDF-1.4', content_type='application/pdf'),
+                'doc_label_2': 'Diplôme',
+                'doc_file_2': SimpleUploadedFile('diplome.pdf', b'%PDF-1.4', content_type='application/pdf'),
+            }
+            if option:
+                payload['program_option'] = option
+            return visitor.post('/api/v1/education/applications/apply/', payload, format='multipart')
+
+        bachelor_apply = apply(bachelor_campaign.data['id'], 'aline.bac@example.com', 'BAC I', 'Génie logiciel')
+        self.assertEqual(bachelor_apply.status_code, 201, bachelor_apply.content)
+        master_apply = apply(master_campaign.data['id'], 'aline.master@example.com', 'Master I')
+        self.assertEqual(master_apply.status_code, 201, master_apply.content)
+        self.assertEqual(master_apply.data['application']['profile_details']['study_year'], 'Master I')
+        self.assertEqual(master_apply.data['application']['profile_details']['program_option'], '')
+
+        dossiers = admin.get('/api/v1/education/applications/')
+        emails = {row['student_email'] for row in dossiers.data}
+        self.assertIn('aline.bac@example.com', emails)
+        self.assertIn('aline.master@example.com', emails)
+
+    def test_same_program_can_be_paid_and_free(self):
+        client = APIClient()
+        client.force_authenticate(self.owner_b)
+        paid = client.post('/api/v1/education/campaigns/', {
+            'program': str(self.program_public.id),
+            'academic_year': '2028-2029',
+            'opens_on': '2028-06-01',
+            'closes_on': '2028-08-31',
+            'required_documents': [{'label': 'Diplôme', 'description': 'PDF'}],
+            'fee_mode': 'PAYANT',
+            'fee_label': 'Frais d’inscription',
+            'fee_amount_bif': 50000,
+        }, format='json')
+        self.assertEqual(paid.status_code, 201, paid.content)
+        self.assertEqual(paid.data['enrollment_fee']['fee_mode'], 'PAYANT')
+        self.assertEqual(paid.data['enrollment_fee']['amount_bif'], 50000)
+        free = client.post('/api/v1/education/campaigns/', {
+            'program': str(self.program_public.id),
+            'academic_year': '2028-2029',
+            'opens_on': '2028-06-01',
+            'closes_on': '2028-08-31',
+            'required_documents': [{'label': 'Diplôme', 'description': 'PDF'}],
+            'fee_mode': 'GRATUIT',
+        }, format='json')
+        self.assertEqual(free.status_code, 201, free.content)
+        self.assertEqual(free.data['enrollment_fee']['amount_bif'], 0)
+        self.assertNotEqual(free.data['id'], paid.data['id'])
+        duplicate = client.post('/api/v1/education/campaigns/', {
+            'program': str(self.program_public.id),
+            'academic_year': '2028-2029',
+            'opens_on': '2028-06-01',
+            'closes_on': '2028-08-31',
+            'fee_mode': 'PAYANT',
+            'fee_amount_bif': 10000,
+        }, format='json')
+        self.assertEqual(duplicate.status_code, 400)
+
+    def test_complement_and_faculty_scope(self):
+        from datetime import date, timedelta
+        from unittest.mock import patch
+
+        from businesses.models import BusinessEmployee, BusinessRole
+        from education.enrollment import decide_application
+        from education.models import AdmissionCampaign, EnrollmentApplication
+        from education.scope import restrict_programs
+
+        today = date.today()
+        campaign = AdmissionCampaign.objects.create(
+            business=self.school_b,
+            program=self.program_public,
+            academic_year='2029-2030',
+            opens_on=today - timedelta(days=1),
+            closes_on=today + timedelta(days=10),
+            fee_mode='GRATUIT',
+        )
+        application = EnrollmentApplication.objects.create(
+            business=self.school_b,
+            campaign=campaign,
+            student_name='Aline',
+            student_email='aline-scope@example.com',
+            status='ENVOYEE',
+        )
+        with patch('education.enrollment._mail_to'):
+            decide_application(application, self.owner_b, 'COMPLEMENT_DEMANDE', note='Relevé illisible')
+        application.refresh_from_db()
+        self.assertEqual(application.status, 'COMPLEMENT_DEMANDE')
+        self.assertIn('Relevé', application.decision_note)
+
+        faculty = EducationUnit.objects.create(business=self.school_b, name='Sciences appliquées', kind='FACULTY')
+        other = EducationUnit.objects.create(business=self.school_b, name='Droit', kind='FACULTY')
+        self.program_public.unit = faculty
+        self.program_public.save(update_fields=['unit'])
+        hidden = EducationProgram.objects.create(
+            business=self.school_b, unit=other, title='Droit privé', level='LICENCE', is_public=True,
+        )
+        staff = User.objects.create_user(email='faculte@edu.test', password='Pass123456!', role='PROFESSIONAL')
+        role = BusinessRole.objects.create(
+            business=self.school_b, name='Responsable faculté',
+            permissions=['education.admissions.manage', 'education.programs.manage'],
+        )
+        BusinessEmployee.objects.create(
+            user=staff, business=self.school_b, role=role, position='Doyen',
+            education_scope_unit=faculty.id,
+        )
+        visible = restrict_programs(
+            EducationProgram.objects.filter(business=self.school_b), faculty.id,
+        )
+        self.assertEqual(list(visible.values_list('id', flat=True)), [self.program_public.id])
+        self.assertFalse(visible.filter(pk=hidden.id).exists())
+        client = APIClient()
+        client.force_authenticate(staff)
+        listed = client.get('/api/v1/education/programs/?mine=1')
+        self.assertEqual(listed.status_code, 200, listed.content)
+        self.assertEqual([row['id'] for row in listed.data], [str(self.program_public.id)])
+
+
+class TenantProtectionTests(EducationBaseTests):
+    def test_program_create_is_written_to_the_audit_log(self):
+        from accounts.models import AuditLog
+
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(
+            '/api/v1/education/programs/', {'title': 'Licence auditée'}, format='json',
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action='EDUCATION_PROGRAM_CREATE',
+                details__business_id=str(self.school_a.id),
+            ).exists()
+        )
+
+    def test_dossier_personal_fields_are_encrypted_per_school(self):
+        from datetime import date
+
+        from django.db import connection
+
+        from education.models import AdmissionCampaign, EnrollmentApplication
+
+        campaign = AdmissionCampaign.objects.create(
+            business=self.school_b, academic_year='2026-2027',
+            opens_on=date(2026, 1, 1), closes_on=date(2026, 12, 31),
+        )
+        application = EnrollmentApplication.objects.create(
+            business=self.school_b, campaign=campaign, student_name='Aline',
+            student_email='aline-secret@edu.test', student_phone='79000000',
+            profile_details={'first_name': 'Aline'},
+        )
+        self.assertEqual(application.student_phone, '79000000')
+        self.assertEqual(application.profile_details['first_name'], 'Aline')
+        other = EnrollmentApplication.objects.create(
+            business=self.school_a, campaign=AdmissionCampaign.objects.create(
+                business=self.school_a, academic_year='2026-2027',
+                opens_on=date(2026, 1, 1), closes_on=date(2026, 12, 31),
+            ),
+            student_name='Aline', student_email='aline-a@edu.test', student_phone='79000000',
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT student_phone FROM education_enrollmentapplication WHERE student_name = %s',
+                ['Aline'],
+            )
+            stored = [row[0] for row in cursor.fetchall()]
+        self.assertEqual(len(stored), 2)
+        self.assertTrue(all(str(value).startswith('enc1:') for value in stored))
+        self.assertNotEqual(stored[0], stored[1])
+        application.refresh_from_db()
+        self.assertEqual(application.student_phone, '79000000')
+        self.assertEqual(application.profile_details['first_name'], 'Aline')
+

@@ -8,14 +8,8 @@ const examplesFor = (filiere) => (filiere.sections || []).join(', ');
 
 const yearLabel = (year) => (Number(year) === 1 ? '1ère année' : `${year}ème année`);
 
-const DEFAULT_SECTION_CLASSES = [
-  { value: '1', label: '1ère année' },
-  { value: '2', label: '2ème année' },
-  { value: '3', label: '3ème année' },
-];
-
 function normalizeClasses(raw) {
-  if (!Array.isArray(raw) || !raw.length) return DEFAULT_SECTION_CLASSES.map((row) => ({ ...row }));
+  if (!Array.isArray(raw) || !raw.length) return [];
   return raw.map((item) => {
     if (item && typeof item === 'object') {
       const value = String(item.value || '').trim();
@@ -45,8 +39,8 @@ export default function SchoolSectionsEditor({ sections, catalog, onChange, inpu
       {
         orientation,
         name,
-        classes: DEFAULT_SECTION_CLASSES.map((row) => ({ ...row })),
-        years: DEFAULT_SECTION_CLASSES.map((row) => row.value),
+        classes: [],
+        years: [],
       },
     ]);
     setDrafts((prev) => ({ ...prev, [orientation]: '' }));
@@ -84,7 +78,6 @@ export default function SchoolSectionsEditor({ sections, catalog, onChange, inpu
 
   const removeClass = (sectionIndex, classIndex) => {
     const current = normalizeClasses(rows[sectionIndex]?.classes || rows[sectionIndex]?.years);
-    if (current.length <= 1) return;
     setClasses(sectionIndex, current.filter((_, i) => i !== classIndex));
   };
 
@@ -152,6 +145,9 @@ export default function SchoolSectionsEditor({ sections, catalog, onChange, inpu
                         </button>
                       </div>
                       <p className="text-xs font-bold text-ink-muted">Classes de la section</p>
+                      {classes.length === 0 && (
+                        <p className="text-xs text-ink-muted">Aucune classe. Ajoutez le code et le libellé que cette école utilise.</p>
+                      )}
                       <div className="space-y-2">
                         {classes.map((item, classIndex) => (
                           <div key={`${item.value}-${classIndex}`} className="flex flex-col sm:flex-row gap-2">
@@ -170,8 +166,7 @@ export default function SchoolSectionsEditor({ sections, catalog, onChange, inpu
                             <button
                               type="button"
                               onClick={() => removeClass(index, classIndex)}
-                              disabled={classes.length <= 1}
-                              className="px-2 rounded-xl border-2 border-alert text-alert shrink-0 disabled:opacity-40"
+                              className="px-2 rounded-xl border-2 border-alert text-alert shrink-0"
                               title="Retirer la classe"
                             >
                               <Trash2 className="w-4 h-4" />

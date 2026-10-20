@@ -25,7 +25,7 @@ export default function ResetPasswordPage() {
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError('Les deux mots de passe ne correspondent pas.');
       return;
     }
 
@@ -50,15 +50,15 @@ export default function ResetPasswordPage() {
         <div className="w-16 h-16 bg-primary text-surface rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-accent">
           <CheckCircle2 className="w-8 h-8" />
         </div>
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Password reset</h2>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Mot de passe mis à jour</h2>
         <p className="text-base text-ink-muted font-medium mb-8">
-          Your password has been successfully reset. Click below to log in.
+          Vous pouvez maintenant vous connecter avec ce nouveau mot de passe.
         </p>
         <Link
           to="/login"
           className="inline-block w-full bg-primary hover:opacity-95 text-surface font-bold text-base py-3 rounded-xl border-2 border-accent shadow-sm transition cursor-pointer"
         >
-          Continue to Login
+          Aller à la connexion
         </Link>
       </div>
     );
@@ -67,9 +67,9 @@ export default function ResetPasswordPage() {
   return (
     <div className="w-full text-ink">
       <div className="mb-8">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Set new password</h2>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Nouveau mot de passe</h2>
         <p className="text-base text-ink-muted font-medium">
-          Your new password must be different from previously used passwords.
+          Choisissez un mot de passe différent de l’ancien.
         </p>
       </div>
 
@@ -81,28 +81,32 @@ export default function ResetPasswordPage() {
         )}
 
         <div>
-          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">New Password</label>
+          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+            Nouveau mot de passe
           <PasswordInput
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
             className="px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium transition"
-            placeholder="Create a strong password"
+            placeholder="Au moins 6 caractères"
           />
           <PasswordStrength password={password} />
+          </label>
         </div>
 
         <div>
-          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Confirm Password</label>
+          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+            Confirmer le mot de passe
           <PasswordInput
             required
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             autoComplete="new-password"
             className="px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium transition"
-            placeholder="Confirm your password"
+            placeholder="Le même mot de passe"
           />
+          </label>
         </div>
 
         <button
@@ -115,7 +119,7 @@ export default function ResetPasswordPage() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-          ) : 'Reset password'}
+          ) : 'Enregistrer le mot de passe'}
         </button>
       </form>
     </div>

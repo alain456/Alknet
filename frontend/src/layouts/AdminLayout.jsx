@@ -6,7 +6,9 @@ import {
   Activity, PanelsTopLeft, BarChart3, Shield, Mail,
 } from 'lucide-react';
 import Logo from '../shared/components/Logo';
+import PersonAvatar from '../shared/components/PersonAvatar';
 import ThemeToggle from '../shared/components/ThemeToggle';
+import SkipLink from '../shared/components/SkipLink';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
 import { canAccessZone, ZONE_ACCESS } from '../auth/roleAccess';
@@ -109,13 +111,6 @@ export default function AdminLayout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
-  };
-
-  const getInitials = () => {
-    if (user?.first_name || user?.last_name) {
-      return `${(user.first_name[0] || '').toUpperCase()}${(user.last_name[0] || '').toUpperCase()}`;
-    }
-    return 'SA';
   };
 
   const navGroups = [
@@ -287,6 +282,7 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-paper text-ink flex selection:bg-primary/15 transition-colors duration-200">
+      <SkipLink />
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-ink/50 dark:bg-black/60 backdrop-blur-sm z-40 xl:hidden"
@@ -317,9 +313,11 @@ export default function AdminLayout() {
 
         <div className="sidebar-account p-4 border-t border-white/15 shrink-0">
           <div className="flex items-center gap-3 px-3 py-2 text-sm">
-            <div className="sidebar-account-mark w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-display font-semibold text-[13px]">
-              {getInitials()}
-            </div>
+            <PersonAvatar
+              src={user?.avatar}
+              name={user?.first_name ? `${user.first_name} ${user.last_name || ''}` : user?.email}
+              className="w-8 h-8 text-[13px]"
+            />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold truncate">
                 {user?.first_name
@@ -342,7 +340,7 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-paper">
+      <main id="contenu" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-paper">
         <header className="h-[72px] bg-surface/80 backdrop-blur-md border-b border-border flex items-center justify-between px-6 lg:px-8 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-4 flex-1">
             <button

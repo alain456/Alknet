@@ -4,6 +4,7 @@ import {
   Mail, Phone, MapPin, CheckCircle2,
 } from 'lucide-react';
 import api from '../shared/api';
+import { extractMapCoordinates } from '../shared/mapLink';
 import useSiteContent from '../shared/useSiteContent';
 
 /** Icônes sociales SVG (lucide n’embarque plus les marques). */
@@ -60,9 +61,9 @@ function buildGoogleMapsEmbed({ mapsUrl, lat, lng, address }) {
     if (/google\.[^/]+\/maps\/embed/i.test(raw) || raw.includes('maps/embed?')) {
       return raw;
     }
-    const at = raw.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (at) {
-      return `https://www.google.com/maps?q=${at[1]},${at[2]}&z=16&output=embed`;
+    const pin = extractMapCoordinates(raw);
+    if (pin) {
+      return `https://www.google.com/maps?q=${pin.latitude},${pin.longitude}&z=16&output=embed`;
     }
     const q = raw.match(/[?&](?:q|query)=([^&]+)/i);
     if (q) {
@@ -71,10 +72,6 @@ function buildGoogleMapsEmbed({ mapsUrl, lat, lng, address }) {
     const place = raw.match(/\/maps\/place\/([^/?#]+)/i);
     if (place) {
       return `https://www.google.com/maps?q=${place[1]}&z=16&output=embed`;
-    }
-    const ll = raw.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/i);
-    if (ll) {
-      return `https://www.google.com/maps?q=${ll[1]},${ll[2]}&z=16&output=embed`;
     }
   }
   if (Number.isFinite(lat) && Number.isFinite(lng)) {

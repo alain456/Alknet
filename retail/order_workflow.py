@@ -135,7 +135,14 @@ def sync_draft_proforma(cart, patient_name='', patient_email=''):
     return proforma
 
 
+def ensure_sellable(product):
+    if product.stock_status == 'EXPIRED':
+        raise ValueError(f'{product.name} est périmé et ne peut pas être vendu.')
+
+
+@transaction.atomic
 def adjust_stock(product, new_real_qty, reason, user=None, order=None):
+    product = RetailProduct.objects.select_for_update().get(pk=product.pk)
     old = product.quantity_real
     new = max(0, int(new_real_qty))
     product.quantity_real = new
@@ -159,6 +166,7 @@ def validate_order_items(order):
         product = item.product
         if not product or product.status != 'ACTIVE':
             raise ValueError(f'Produit indisponible: {item.product_name_snapshot}')
+        ensure_sellable(product)
         if item.quantity > product.quantity_available:
             raise ValueError(f'Stock insuffisant pour {product.name}.')
 
@@ -174,17 +182,19 @@ def submit_order(order, user=None):
     recalculate_order_total(order)
     order.save(update_fields=['reference', 'status', 'submitted_at', 'updated_at'])
     log_order_event(order, 'SUBMITTED', 'Commande envoyee par le patient.', user)
-    # Accusé de réception : le client doit savoir que sa commande est arrivée
-    # avant d'attendre la décision de la pharmacie. Placé ici et non dans la
-    # vue pour couvrir tous les chemins de soumission. La fonction ne lève
-    # jamais : un échec SMTP ne doit pas faire échouer la commande (ni
-    # déclencher la suppression de l'ordre par l'appelant).
-    notify_order_submitted(order)
+    # Accusé de réception obligatoire : sans e-mail, la commande n'est pas enregistrée.
+    result = notify_order_submitted(order)
+    if result.get('status') != 'SENT':
+        raise ValueError(
+            'La commande n’a pas été enregistrée : le client n’a pas reçu l’e-mail. '
+            + (result.get('error') or '')
+        )
     return order
 
 
 @transaction.atomic
 def accept_order(order, user):
+    order = RetailOrder.objects.select_for_update().get(pk=order.pk)
     if order.status not in ('SUBMITTED', 'PROCESSING', 'CLARIFICATION_REQUESTED'):
         raise ValueError('Cette commande ne peut pas etre acceptee.')
     if order.payment_status != 'PAID':
@@ -197,6 +207,7 @@ def accept_order(order, user):
         if not item.product_id:
             raise ValueError(f'Produit indisponible: {item.product_name_snapshot}')
         product = RetailProduct.objects.select_for_update().get(pk=item.product_id)
+        ensure_sellable(product)
         if product.status != 'ACTIVE' or product.quantity_available < item.quantity:
             raise ValueError(f'Stock insuffisant ou produit indisponible: {product.name}')
         locked[item.product_id] = product
@@ -226,7 +237,44 @@ def accept_order(order, user):
         proforma.status = 'CONFIRMED'
         proforma.confirmed_at = timezone.now()
         proforma.save(update_fields=['status', 'confirmed_at', 'updated_at'])
-    return order, notify_order_accepted(order)
+    result = notify_order_accepted(order)
+    if result.get('status') != 'SENT':
+        raise ValueError(
+            'Acceptation impossible : le client n’a pas reçu l’e-mail. '
+            + (result.get('error') or '')
+        )
+    return order, result
+
+
+@transaction.atomic
+def complete_order(order, user):
+    """La livraison consomme la réservation : stock réel et réservé baissent ensemble."""
+    order = RetailOrder.objects.select_for_update().get(pk=order.pk)
+    if order.status != 'ACCEPTED':
+        raise ValueError('Seule une commande acceptée peut être marquée livrée.')
+    for item in order.items.select_related('product'):
+        if not item.product_id:
+            raise ValueError(f'Produit indisponible: {item.product_name_snapshot}')
+        product = RetailProduct.objects.select_for_update().get(pk=item.product_id)
+        if product.quantity_reserved < item.quantity or product.quantity_real < item.quantity:
+            raise ValueError(f'Stock réel insuffisant pour livrer {product.name}.')
+        old = product.quantity_real
+        product.quantity_reserved -= item.quantity
+        product.quantity_real -= item.quantity
+        product.save(update_fields=['quantity_reserved', 'quantity_real', 'updated_at'])
+        StockMovement.objects.create(
+            product=product,
+            old_quantity=old,
+            new_quantity=product.quantity_real,
+            difference=product.quantity_real - old,
+            reason=f'Livraison commande {order.reference}',
+            user=user,
+            order=order,
+        )
+    order.status = 'COMPLETED'
+    order.save(update_fields=['status', 'updated_at'])
+    log_order_event(order, 'COMPLETED', 'Commande livrée — stock réel déduit.', user)
+    return order
 
 
 @transaction.atomic
@@ -294,6 +342,11 @@ def reject_order(order, user, reason, comment=''):
     ProformaInvoice.objects.filter(order=order).update(status='REJECTED')
     log_order_event(order, 'REJECTED', f'Refus: {reason}. {comment}'.strip(), user)
     email_result = notify_order_rejected(order, reason=reason, comment=comment)
+    if email_result.get('status') != 'SENT':
+        raise ValueError(
+            'Refus impossible : le client n’a pas reçu l’e-mail. '
+            + (email_result.get('error') or '')
+        )
     return order, email_result
 
 
@@ -335,6 +388,7 @@ def create_order_from_items(
                 status='ACTIVE',
             )
             quantity = int(row.get('quantity') or 1)
+            ensure_sellable(product)
             if quantity < 1 or quantity > product.quantity_available:
                 raise ValueError(f'Quantite invalide ou stock insuffisant pour {product.name}.')
             RetailOrderItem.objects.create(
@@ -503,15 +557,26 @@ def notify_order_rejected(order, reason='', comment=''):
         log.save(update_fields=['status', 'error_message'])
         return {'status': 'FAILED', 'error': log.error_message}
 
-    pharmacy = order.retail_business.name
-    body = (
-        f'Bonjour {order.patient_name or "Client"},\n\n'
+    profile = ensure_retail_profile(order.retail_business)
+    pharmacy = profile.commercial_name or order.retail_business.name
+    context = {
+        'patient_name': order.patient_name or 'Client',
+        'reference': order.reference,
+        'pharmacy_name': pharmacy,
+        'total_amount': order.total_amount,
+        'currency': order.currency,
+        'reason': reason or 'Non précisé',
+        'comment': comment or '',
+    }
+    fallback = (
+        f'Bonjour {context["patient_name"]},\n\n'
         f'Votre commande {order.reference} a été refusée par {pharmacy}.\n\n'
-        f'Motif : {reason or "Non précisé"}\n'
-        + (f'Détail : {comment}\n' if comment else '')
-        + '\nPour toute question, contactez la pharmacie.\n'
-        f'\n— Isoko Hub\n'
+        f'Motif : {context["reason"]}\n'
     )
+    try:
+        body = (profile.rejection_email_message or '').format(**context) or fallback
+    except (KeyError, ValueError, IndexError):
+        body = fallback
     try:
         send_mail(
             subject=f'[Isoko Hub] Commande {order.reference} refusée',

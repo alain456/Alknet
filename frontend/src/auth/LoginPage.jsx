@@ -37,15 +37,15 @@ export default function LoginPage() {
       navigate(getRedirectPath(result));
     } catch (err) {
       setIsLoading(false);
-      setError(err.message || 'Unable to sign in. Please check your credentials.');
+      setError(err.message || 'Connexion impossible. Vérifiez l’e-mail et le mot de passe.');
     }
   });
 
   return (
     <div className="w-full text-ink">
       <div className="mb-8">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Welcome back</h2>
-        <p className="text-base text-ink-muted font-medium">Please enter your details to sign in.</p>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Bon retour</h2>
+        <p className="text-base text-ink-muted font-medium">Indiquez vos identifiants pour vous connecter.</p>
       </div>
 
       {infoMessage && (
@@ -77,8 +77,9 @@ export default function LoginPage() {
           }}
           className="space-y-5"
         >
-          <label className="block text-sm font-bold text-ink mb-1.5">Code e-mail</label>
-          <input
+          <label className="block text-sm font-bold text-ink mb-1.5">
+            Code e-mail
+            <input
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
             inputMode="numeric"
@@ -86,6 +87,7 @@ export default function LoginPage() {
             className="w-full px-4 py-3 border-2 border-accent rounded-xl bg-surface text-ink outline-none"
             placeholder="6 chiffres"
           />
+          </label>
           {error && (
             <p className="text-sm text-alert font-medium">{error}</p>
           )}
@@ -101,32 +103,36 @@ export default function LoginPage() {
         </div>
         )}
         <div>
-          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Email</label>
-          <input
-            type="email"
-            autoComplete="username"
-            className="w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition"
-            placeholder="Enter your email"
-            {...form.register('email', { required: true })}
-          />
+          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+            E-mail
+            <input
+              type="email"
+              autoComplete="username"
+              className="mt-1.5 w-full px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium outline-none transition"
+              placeholder="vous@exemple.com"
+              {...form.register('email', { required: true })}
+            />
+          </label>
         </div>
 
         <div>
-          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Password</label>
+          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+            Mot de passe
           <PasswordInput
             autoComplete="current-password"
             className="px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium transition"
             {...form.register('password', { required: true })}
           />
+          </label>
         </div>
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <label className="flex items-center cursor-pointer">
             <input type="checkbox" className="w-4 h-4 rounded border-2 border-accent text-primary focus:ring-accent" />
-            <span className="ml-2 text-sm sm:text-base text-ink font-medium">Remember me</span>
+            <span className="ml-2 text-sm sm:text-base text-ink font-medium">Rester connecté</span>
           </label>
           <Link to="/forgot-password" className="text-sm sm:text-base font-bold text-accent hover:text-alert">
-            Forgot password?
+            Mot de passe oublié ?
           </Link>
         </div>
 
@@ -140,7 +146,7 @@ export default function LoginPage() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-          ) : 'Sign in'}
+          ) : 'Se connecter'}
         </button>
       </form>
       )}
@@ -148,9 +154,9 @@ export default function LoginPage() {
       <SocialLogins nextPath={typeof returnTo === 'string' ? returnTo : undefined} />
 
       <p className="mt-8 text-center text-sm sm:text-base text-ink font-medium">
-        Don&apos;t have an account?{' '}
+        Pas encore de compte ?{' '}
         <Link to="/register" className="font-extrabold text-primary hover:text-accent">
-          Sign up
+          Créer un compte
         </Link>
       </p>
     </div>

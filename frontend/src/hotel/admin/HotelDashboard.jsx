@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  MessageSquare, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus,
-  BedDouble, Wallet, Users, CheckCircle2, Wrench, Sparkles,
+  MessageSquare, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, CheckCircle2,
 } from 'lucide-react';
 import hotelService from '../hotelService';
 import { HotelPage, StatCard, Panel, Empty } from '../ui';
@@ -38,33 +37,144 @@ function TrendHint({ pct }) {
   );
 }
 
-function OccupancyBars({ trend }) {
+function OccupancyChart({ trend }) {
   const rows = Array.isArray(trend) ? trend : [];
-  if (!rows.length) return null;
-  const max = Math.max(100, ...rows.map((r) => Number(r.occupancy_rate) || 0));
+  if (!rows.length) return <p className="text-sm text-ink-muted">Pas encore d’occupation sur la période.</p>;
+  const w = 640;
+  const h = 168;
+  const padX = 12;
+  const padY = 16;
+  const pts = rows.map((r, i) => {
+    const x = padX + (i * (w - padX * 2)) / Math.max(rows.length - 1, 1);
+    const rate = Math.max(0, Math.min(100, Number(r.occupancy_rate) || 0));
+    const y = h - padY - (rate / 100) * (h - padY * 2);
+    return { x, y, r };
+  });
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const area = `${line} L${pts[pts.length - 1].x.toFixed(1)},${h - padY} L${pts[0].x.toFixed(1)},${h - padY} Z`;
+  const today = pts.find((p) => p.r.is_today);
   return (
-    <div className="flex items-end gap-1.5 h-28">
-      {rows.map((r) => {
-        const rate = Number(r.occupancy_rate) || 0;
-        const h = Math.max(4, Math.round((rate / max) * 100));
-        return (
-          <div key={r.date} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-            <span className="text-[10px] font-bold text-ink-muted tabular-nums">{Math.round(rate)}%</span>
-            <div
-              className={`w-full rounded-t-md ${
-                r.is_today ? 'bg-accent' : r.is_future ? 'bg-primary/35' : 'bg-primary'
-              }`}
-              style={{ height: `${h}%` }}
-              title={`${r.label} · ${rate}% (${r.occupied} ch.)`}
-            />
-            <span className={`text-[9px] font-semibold truncate w-full text-center ${r.is_today ? 'text-accent' : 'text-ink-muted'}`}>
-              {r.label}
-            </span>
-          </div>
-        );
-      })}
+    <div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-40" role="img" aria-label="Occupation sur 13 jours">
+        <path d={area} fill="color-mix(in srgb, #32667F 18%, transparent)" />
+        <path d={line} fill="none" stroke="#32667F" strokeWidth="2.5" strokeLinejoin="round" />
+        {today && (
+          <>
+            <line x1={today.x} y1={padY} x2={today.x} y2={h - padY} stroke="#EA8B33" strokeDasharray="3 3" />
+            <circle cx={today.x} cy={today.y} r="5" fill="#EA8B33" stroke="#132F45" strokeWidth="1.5" />
+          </>
+        )}
+      </svg>
+      <div className="flex justify-between text-[10px] font-bold text-ink-muted px-1">
+        <span>{rows[0].label}</span>
+        <span>{today ? `Aujourd’hui ${Math.round(Number(today.r.occupancy_rate) || 0)}%` : ''}</span>
+        <span>{rows[rows.length - 1].label}</span>
+      </div>
     </div>
   );
+}
+
+function weekDays(trend) {
+  const rows = Array.isArray(trend) ? trend : [];
+  const today = rows.find((r) => r.is_today);
+  if (!today) return rows.slice(0, 7);
+  const start = new Date(`${today.date}T12:00:00`);
+  const mondayOffset = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - mondayOffset);
+  const keys = [];
+  for (let i = 0; i < 7; i += 1) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    keys.push(`${d.getFullYear()}-${m}-${day}`);
+  }
+  return keys.map((key) => rows.find((r) => r.date === key)).filter(Boolean);
+}
+
+function heatStyle(rate) {
+  const r = Number(rate) || 0;
+  if (r <= 0) return { background: '#F5F5F5', color: '#132F45' };
+  if (r < 34) return { background: 'color-mix(in srgb, #32667F 30%, #F5F5F5)', color: '#132F45' };
+  if (r < 67) return { background: 'color-mix(in srgb, #32667F 62%, #F5F5F5)', color: '#132F45' };
+  return { background: '#32667F', color: '#F5F5F5' };
+}
+
+function WeekHeat({ trend }) {
+  const days = weekDays(trend);
+  if (!days.length) return null;
+  return (
+    <div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {days.map((r) => {
+          const name = new Date(`${r.date}T12:00:00`).toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+          return (
+            <div key={r.date} className="text-center">
+              <p className="text-[10px] font-bold text-ink-muted capitalize mb-1">{name}</p>
+              <div
+                className="aspect-square rounded-lg flex items-center justify-center text-[11px] font-extrabold"
+                style={{
+                  ...heatStyle(r.occupancy_rate),
+                  outline: r.is_today ? '2px solid #EA8B33' : 'none',
+                  outlineOffset: '1px',
+                }}
+                title={`${r.label} · ${r.occupancy_rate}% · ${r.occupied} chambre(s)`}
+              >
+                {r.occupied || 0}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2 mt-3 text-[10px] font-bold text-ink-muted">
+        <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm" style={{ background: '#F5F5F5', border: '1px solid #32667F' }} /> 0</span>
+        <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm" style={{ background: 'color-mix(in srgb, #32667F 30%, #F5F5F5)' }} /> faible</span>
+        <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm" style={{ background: 'color-mix(in srgb, #32667F 62%, #F5F5F5)' }} /> moyen</span>
+        <span className="inline-flex items-center gap-1"><i className="w-2.5 h-2.5 rounded-sm" style={{ background: '#32667F' }} /> élevé</span>
+      </div>
+    </div>
+  );
+}
+
+function Meter({ label, value, max, color }) {
+  const width = max > 0 ? Math.max(value > 0 ? 8 : 0, Math.round((value / max) * 100)) : 0;
+  return (
+    <div>
+      <div className="flex justify-between text-xs font-bold text-ink mb-1">
+        <span>{label}</span>
+        <span className="tabular-nums">{value}</span>
+      </div>
+      <div className="h-2.5 rounded-full" style={{ background: 'color-mix(in srgb, #32667F 16%, #F5F5F5)' }}>
+        <div className="h-2.5 rounded-full" style={{ width: `${width}%`, background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function Ring({ pct, label, detail, color }) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  return (
+    <div className="flex flex-col items-center text-center gap-2">
+      <div
+        className="w-28 h-28 rounded-full grid place-items-center"
+        style={{ background: `conic-gradient(${color} ${p * 3.6}deg, color-mix(in srgb, ${color} 16%, #F5F5F5) 0deg)` }}
+      >
+        <div className="w-20 h-20 rounded-full bg-surface grid place-items-center">
+          <span className="text-lg font-extrabold text-ink">{Math.round(p)}%</span>
+        </div>
+      </div>
+      <p className="text-sm font-extrabold text-ink">{label}</p>
+      <p className="text-xs text-ink-muted font-medium">{detail}</p>
+    </div>
+  );
+}
+
+function ratioPct(done, waiting) {
+  const a = Number(done) || 0;
+  const b = Number(waiting) || 0;
+  const total = a + b;
+  if (!total) return 0;
+  return Math.round((a / total) * 100);
 }
 
 function PriorityItem({ tone = 'amber', title, detail, to, cta }) {
@@ -170,7 +280,7 @@ export default function HotelDashboard() {
         tone: 'red',
         title: `${unpaid} folio(s) ouvert(s) avec solde`,
         detail: 'Encaisser avant le départ pour éviter les impayés.',
-        to: '/hotel/folios',
+        to: '/hotel/cashier?section=encaisser',
         cta: 'Caisse / Folios',
       });
     }
@@ -258,7 +368,6 @@ export default function HotelDashboard() {
     if (canHk) links.push(['/hotel/housekeeping', 'Housekeeping']);
     if (canCalendar) links.push(['/hotel/calendar', 'Calendrier']);
     if (canReports) links.push(['/hotel/reports', 'Rapports']);
-    if (canCashier) links.push(['/hotel/invoices', 'Factures']);
     if (canRooms) links.push(['/hotel/rooms', 'Chambres']);
     if (canGuests) links.push(['/hotel/guests', 'Clients']);
     if (canStays) links.push(['/hotel/stays', 'Séjours']);
@@ -280,6 +389,14 @@ export default function HotelDashboard() {
   const todayLabel = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+  const dayMax = Math.max(
+    1,
+    Number(stats.arrivals_today) || 0,
+    Number(stats.in_house) || 0,
+    Number(stats.departures_today) || 0,
+  );
+  const checkInPct = ratioPct(stats.checked_in_today, stats.arrivals_today);
+  const checkOutPct = ratioPct(stats.checked_out_today, stats.departures_today);
 
   return (
     <HotelPage
@@ -320,91 +437,91 @@ export default function HotelDashboard() {
         </p>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        {canRooms && (
+      <div className="grid sm:grid-cols-3 gap-3">
+        {(canCashier || isManagerView) ? (
+          <StatCard
+            label="Revenu 7 jours"
+            value={formatBif(stats.revenue_7d)}
+            hint={<TrendHint pct={stats.revenue_7d_change_pct} />}
+          />
+        ) : canRooms ? (
           <StatCard
             label="Occupation"
             value={`${stats.occupancy_rate}%`}
             hint={`${stats.rooms_occupied}/${stats.rooms_total} chambres`}
           />
-        )}
-        {(canCashier || isManagerView) && (
-          <div className="bg-surface border-2 border-accent rounded-2xl p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-ink-muted inline-flex items-center gap-1">
-              <Wallet className="w-3.5 h-3.5" /> Revenu du jour
-            </p>
-            <p className="text-xl sm:text-2xl font-extrabold text-primary mt-1">{formatBif(stats.revenue_today)}</p>
-            <p className="text-xs text-ink-muted mt-1">7j : {formatBif(stats.revenue_7d)}</p>
-          </div>
-        )}
-        {(canCashier || isManagerView) && (
-          <div className="bg-surface border-2 border-accent rounded-2xl p-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-ink-muted">Revenu 7 jours</p>
-            <p className="text-xl sm:text-2xl font-extrabold text-primary mt-1">{formatBif(stats.revenue_7d)}</p>
-            <div className="mt-1"><TrendHint pct={stats.revenue_7d_change_pct} /></div>
-          </div>
-        )}
-        {(canArrivals || canResView) && (
+        ) : (
           <StatCard label="Arrivées" value={stats.arrivals_today} hint="aujourd’hui" />
         )}
-        {(canDepartures || canStays) && (
-          <StatCard label="Départs" value={stats.departures_today} hint="aujourd’hui" />
-        )}
-        {canStays && (
-          <StatCard
-            label="En séjour"
-            value={stats.in_house}
-            hint={`${stats.rooms_available || 0} dispo.`}
-          />
-        )}
-        {(canCashier || isManagerView) && (
-          <StatCard
-            label="Impayés"
-            value={stats.unpaid_folios || 0}
-            hint="folios ouverts"
-          />
-        )}
-        {(canResView || canReply) && !isManagerView && (
-          <StatCard label="Messages" value={stats.client_messages_pending || 0} hint="en attente" />
-        )}
-        {canHk && !isManagerView && (
-          <StatCard label="Ménage" value={stats.hk_pending} hint="tâches ouvertes" />
-        )}
+        <StatCard
+          label="Réservations"
+          value={stats.upcoming_reservations || 0}
+          hint="séjours à venir"
+        />
+        <StatCard
+          label="Nouveaux clients"
+          value={stats.guests_new_30d || 0}
+          hint={`${stats.guests_total || 0} au total · 30 jours`}
+        />
       </div>
 
-      {(isManagerView || canCashier) && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-surface border-2 border-accent/40 rounded-2xl p-3 flex items-center gap-3">
-            <BedDouble className="w-5 h-5 text-primary shrink-0" />
-            <div>
-              <p className="text-[11px] font-bold text-ink-muted uppercase">30 jours</p>
-              <p className="text-sm font-extrabold text-ink">{formatBif(stats.revenue_30d)}</p>
+      {(isManagerView || canRooms || canResView) && (
+        <div className="grid lg:grid-cols-5 gap-4">
+          <Panel className="lg:col-span-3">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-extrabold text-ink">Occupation</h2>
+              {canCalendar && (
+                <Link to="/hotel/calendar" className="text-xs font-bold text-accent hover:underline">
+                  Calendrier
+                </Link>
+              )}
             </div>
-          </div>
-          <div className="bg-surface border-2 border-accent/40 rounded-2xl p-3 flex items-center gap-3">
-            <Users className="w-5 h-5 text-primary shrink-0" />
-            <div>
-              <p className="text-[11px] font-bold text-ink-muted uppercase">À venir</p>
-              <p className="text-sm font-extrabold text-ink">{stats.upcoming_reservations || 0} résa.</p>
-            </div>
-          </div>
-          <div className="bg-surface border-2 border-accent/40 rounded-2xl p-3 flex items-center gap-3">
-            <Sparkles className="w-5 h-5 text-primary shrink-0" />
-            <div>
-              <p className="text-[11px] font-bold text-ink-muted uppercase">Chambres prêtes</p>
-              <p className="text-sm font-extrabold text-ink">{stats.rooms_available || 0}</p>
-            </div>
-          </div>
-          <div className="bg-surface border-2 border-accent/40 rounded-2xl p-3 flex items-center gap-3">
-            <Wrench className="w-5 h-5 text-primary shrink-0" />
-            <div>
-              <p className="text-[11px] font-bold text-ink-muted uppercase">Hors service</p>
-              <p className="text-sm font-extrabold text-ink">{stats.rooms_oos || 0}</p>
-            </div>
-          </div>
+            <p className="text-[11px] text-ink-muted font-medium mb-1">
+              7 jours passés et 7 jours à venir · le point orange est aujourd’hui
+            </p>
+            <OccupancyChart trend={stats.occupancy_trend} />
+          </Panel>
+          <Panel className="lg:col-span-2">
+            <h2 className="font-extrabold text-ink mb-1">Semaine</h2>
+            <p className="text-[11px] text-ink-muted font-medium mb-3">
+              Chambres occupées par jour
+            </p>
+            <WeekHeat trend={stats.occupancy_trend} />
+          </Panel>
         </div>
       )}
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Panel>
+          <h2 className="font-extrabold text-ink mb-4">Chambres du jour</h2>
+          <div className="space-y-3">
+            <Meter label="Arrivées encore attendues" value={stats.arrivals_today || 0} max={dayMax} color="#EA8B33" />
+            <Meter label="En séjour" value={stats.in_house || 0} max={dayMax} color="#32667F" />
+            <Meter label="Départs encore à faire" value={stats.departures_today || 0} max={dayMax} color="#132F45" />
+          </div>
+          <p className="text-xs text-ink-muted font-medium mt-3">
+            {stats.rooms_available || 0} prête(s) · {stats.rooms_oos || 0} hors service
+            {(canCashier || isManagerView) ? ` · revenu du jour ${formatBif(stats.revenue_today)}` : ''}
+          </p>
+        </Panel>
+        <Panel>
+          <h2 className="font-extrabold text-ink mb-4">Check-in et check-out</h2>
+          <div className="flex flex-wrap justify-around gap-4">
+            <Ring
+              pct={checkInPct}
+              color="#EA8B33"
+              label="Check-in"
+              detail={`${stats.checked_in_today || 0} fait(s) · ${stats.arrivals_today || 0} restant(s)`}
+            />
+            <Ring
+              pct={checkOutPct}
+              color="#32667F"
+              label="Check-out"
+              detail={`${stats.checked_out_today || 0} fait(s) · ${stats.departures_today || 0} restant(s)`}
+            />
+          </div>
+        </Panel>
+      </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
         {/* À faire */}
@@ -471,23 +588,6 @@ export default function HotelDashboard() {
 
         {/* Vision 7j + raccourcis */}
         <div className="lg:col-span-2 space-y-4">
-          {(isManagerView || canRooms || canResView) && (
-            <Panel>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-extrabold text-ink">Occupation 7j ±</h2>
-                {canCalendar && (
-                  <Link to="/hotel/calendar" className="text-xs font-bold text-accent hover:underline">
-                    Calendrier
-                  </Link>
-                )}
-              </div>
-              <p className="text-[11px] text-ink-muted mb-2 font-medium">
-                Plein = passé/aujourd’hui · clair = à venir · orange = aujourd’hui
-              </p>
-              <OccupancyBars trend={stats.occupancy_trend} />
-            </Panel>
-          )}
-
           <Panel>
             <h2 className="font-extrabold text-ink mb-3">Raccourcis</h2>
             <div className="flex flex-wrap gap-2">

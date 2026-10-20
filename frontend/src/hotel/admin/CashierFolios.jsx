@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import hotelService, { listOf } from '../hotelService';
 import BurundiPayPayerField from '../../shared/components/BurundiPayPayerField';
 import { isValidBurundiPayPhone } from '../../shared/components/burundiPayPhone';
 import { HotelPage, Panel, fieldClass, btnPrimary, btnGhost, Empty } from '../ui';
 import { useHotelPerm } from '../useHotelPerm';
 import PaymentReceiptModal from './PaymentReceiptModal';
+import CashierNav from './CashierNav';
 
 const METHOD_LABELS = {
   CASH: 'Espèces',
@@ -193,11 +194,10 @@ export default function CashierFolios() {
 
   return (
     <HotelPage
-      title="Caisse — Folios & paiements"
-      subtitle={canPay ? 'Encaissement (espèces / BurundiPay) et reçus' : 'Consultation des folios (lecture seule)'}
+      title="Caisse"
+      subtitle={canPay ? 'Folios ouverts, acompte déjà reçu, puis extras' : 'Consultation des folios (lecture seule)'}
       actions={(
         <div className="flex flex-wrap gap-2">
-          <Link to="/hotel/cashier" className={`${btnGhost} text-sm`}>Dashboard caisse</Link>
           <button
             type="button"
             className={`${unpaidOnly ? btnPrimary : btnGhost} text-sm`}
@@ -213,6 +213,7 @@ export default function CashierFolios() {
         </div>
       )}
     >
+      <CashierNav />
       {(err || msg) && (
         <p className={`text-sm font-bold mb-2 ${err ? 'text-alert' : 'text-primary'}`}>{err || msg}</p>
       )}
@@ -348,6 +349,7 @@ export default function CashierFolios() {
                   </p>
                   <p className="text-xs text-ink-muted">
                     {METHOD_LABELS[p.method] || p.method} · {p.status}
+                    {p.notes ? ` · ${p.notes}` : ''}
                   </p>
                 </div>
                 <div className="text-right shrink-0">

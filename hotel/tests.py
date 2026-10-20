@@ -12,7 +12,7 @@ from business_categories.models import BusinessCategory
 from businesses.models import Business, BusinessEmployee, BusinessRole
 from hotel.models import Guest, HotelProfile, HousekeepingTask, MaintenanceTicket, Reservation, Room, RoomType
 from hotel.role_defaults import HOTEL_DEFAULT_ROLES
-from hotel.services import check_in_reservation, check_out_stay, record_payment
+from hotel.services import check_in_reservation, check_out_stay
 
 User = get_user_model()
 
@@ -95,9 +95,12 @@ class HotelHousekeepingCircuitTests(TestCase):
             reference=f'RES-TEST-{User.objects.count():06d}',
         )
         stay = check_in_reservation(res, self.room, self.reception)
-        # Solde à 0 avant check-out (comme en caisse)
-        record_payment(stay.folio, stay.folio.balance, 'CASH', self.reception)
         stay.folio.refresh_from_db()
+        deposit = stay.folio.payments.get()
+        self.assertEqual(deposit.method, 'BURUNDIPAY')
+        self.assertEqual(deposit.notes, 'Acompte réservation')
+        self.assertEqual(stay.folio.balance, Decimal('0'))
+        self.assertEqual(stay.folio.paid_amount, Decimal('50000'))
         return stay
 
     def test_full_circuit_checkout_to_ready(self):

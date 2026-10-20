@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import retailService from './retailService';
+import MerchantAccountCard from '../business/MerchantAccountCard';
 
 const FIELD_LABELS = {
   commercial_name: 'Nom commercial',
@@ -53,6 +54,7 @@ export default function RetailCompany() {
       </div>
       {message && <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-sm">{message}</div>}
       {error && <div className="p-3 rounded-xl bg-red-50 text-error text-sm">{error}</div>}
+      <MerchantAccountCard hint="Ce compte reçoit le paiement des commandes patients. Il est distinct de l’abonnement Isoko Hub." />
       {profile && (
         <form onSubmit={save} className="bg-white border border-border rounded-2xl p-6 grid md:grid-cols-2 gap-4">
           {Object.keys(FIELD_LABELS).map((key) => (

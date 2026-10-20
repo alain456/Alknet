@@ -184,8 +184,32 @@ def check_in_reservation(reservation, room, actor, walk_in=False):
         added_by=actor,
     )
     folio.recalculate()
+    _credit_reservation_deposit(folio, reservation, actor)
     audit(reservation.hotel, actor, 'CHECK_IN', 'Stay', stay.id, new={'room': room.number})
     return stay
+
+
+def _credit_reservation_deposit(folio, reservation, actor):
+    """L'argent déjà reçu à la réservation devient un acompte : les nuitées ne sont pas redemandées."""
+    if reservation.payment_status != 'PAID':
+        return
+    amount = Decimal(str(reservation.total_amount or 0))
+    if amount <= 0:
+        return
+    from .models import Payment
+    if folio.payments.filter(notes='Acompte réservation').exists():
+        return
+    Payment.objects.create(
+        folio=folio,
+        amount=amount,
+        method='BURUNDIPAY',
+        status='PAID',
+        reference=(reservation.payment_provider_reference or reservation.reference or '')[:100],
+        received_by=actor,
+        notes='Acompte réservation',
+        paid_at=reservation.paid_at or timezone.now(),
+    )
+    folio.recalculate()
 
 
 @transaction.atomic

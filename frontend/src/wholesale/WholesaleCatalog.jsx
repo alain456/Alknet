@@ -19,6 +19,7 @@ const emptyForm = {
   manufacturer: '',
   packaging: '',
   wholesale_unit: 'Boîte',
+  purchase_price: '',
   wholesale_price: '',
   currency: 'BIF',
   quantity_real: '',
@@ -124,14 +125,19 @@ export default function WholesaleCatalog({ clientMode = false }) {
     try {
       const payload = {
         ...form,
+        purchase_price: Number(form.purchase_price),
         wholesale_price: Number(form.wholesale_price),
-        quantity_real: Number(form.quantity_real || 0),
         low_stock_threshold: Number(form.low_stock_threshold || 10),
         min_order_quantity: Number(form.min_order_quantity || 1),
       };
       if (!payload.expiration_date) delete payload.expiration_date;
-      if (editingId) await wholesaleService.updateProduct(editingId, payload);
-      else await wholesaleService.createProduct(payload);
+      if (editingId) {
+        delete payload.quantity_real;
+        await wholesaleService.updateProduct(editingId, payload);
+      } else {
+        payload.quantity_real = Number(form.quantity_real || 0);
+        await wholesaleService.createProduct(payload);
+      }
       setOpen(false);
       setEditingId(null);
       setForm(emptyForm);
@@ -341,7 +347,11 @@ export default function WholesaleCatalog({ clientMode = false }) {
               <h4 className="text-xs font-bold uppercase tracking-wide text-primary">Prix & stock</h4>
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="text-sm space-y-1">
-                  <span className="font-medium">Prix de gros (BIF) *</span>
+                  <span className="font-medium">Prix d’achat (BIF) *</span>
+                  <input type="number" min="0" step="1" required className="w-full border border-border rounded-lg px-3 py-2" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} />
+                </label>
+                <label className="text-sm space-y-1">
+                  <span className="font-medium">Prix de vente (BIF) *</span>
                   <input type="number" min="0" step="1" required className="w-full border border-border rounded-lg px-3 py-2" value={form.wholesale_price} onChange={(e) => setForm({ ...form, wholesale_price: e.target.value })} />
                 </label>
                 <label className="text-sm space-y-1">
@@ -349,8 +359,9 @@ export default function WholesaleCatalog({ clientMode = false }) {
                   <input type="number" min="1" className="w-full border border-border rounded-lg px-3 py-2" value={form.min_order_quantity} onChange={(e) => setForm({ ...form, min_order_quantity: e.target.value })} />
                 </label>
                 <label className="text-sm space-y-1">
-                  <span className="font-medium">Quantité réelle en stock</span>
-                  <input type="number" min="0" className="w-full border border-border rounded-lg px-3 py-2" value={form.quantity_real} onChange={(e) => setForm({ ...form, quantity_real: e.target.value })} />
+                  <span className="font-medium">Quantité réelle{editingId ? '' : ' initiale'}</span>
+                  <input type="number" min="0" disabled={Boolean(editingId)} className="w-full border border-border rounded-lg px-3 py-2 disabled:bg-gray-100" value={form.quantity_real} onChange={(e) => setForm({ ...form, quantity_real: e.target.value })} />
+                  {editingId && <span className="text-xs text-ink-muted">Ajustez le stock depuis la page Stock.</span>}
                 </label>
                 <label className="text-sm space-y-1">
                   <span className="font-medium">Seuil stock faible</span>

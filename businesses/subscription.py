@@ -438,12 +438,13 @@ def list_all_catalog_plans():
             'description': p.description or '',
             'price_bif': p.price_bif,
             'duration_days': p.duration_days,
+            'max_employees': p.max_employees,
             'is_trial': p.is_trial,
             'is_active': p.is_active,
             'editable_fields': (
                 ['duration_days', 'name', 'description']
                 if code == FREE_PLAN_CODE
-                else ['price_bif', 'name', 'description', 'is_active']
+                else ['price_bif', 'name', 'description', 'is_active', 'max_employees']
             ),
         })
     return ordered
@@ -475,6 +476,8 @@ def update_catalog_plan(code, data):
         plan.price_bif = 0
         plan.is_trial = True
         plan.is_active = True
+        if 'max_employees' in data and data['max_employees'] is not None:
+            plan.max_employees = max(0, int(data['max_employees']))
         plan.save()
         return plan
 
@@ -495,6 +498,8 @@ def update_catalog_plan(code, data):
     # Durées catalogue stables
     plan.duration_days = 30 if code == 'monthly' else 365
     plan.is_trial = False
+    if 'max_employees' in data and data['max_employees'] is not None:
+        plan.max_employees = max(0, int(data['max_employees']))
     plan.save()
     return plan
 
@@ -654,7 +659,9 @@ def activate_subscription_from_payment(payment):
     payment.status = 'SUCCESS'
     payment.paid_at = now
     payment.subscription = sub
-    payment.save(update_fields=['status', 'paid_at', 'subscription', 'updated_at'])
+    if not payment.invoice_number:
+        payment.invoice_number = f"FAC-{now.strftime('%Y%m')}-{str(payment.id)[:8].upper()}"
+    payment.save(update_fields=['status', 'paid_at', 'subscription', 'invoice_number', 'updated_at'])
 
     payment = type(payment).objects.select_related(
         'business', 'business__owner', 'plan', 'subscription', 'initiated_by'

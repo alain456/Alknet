@@ -243,6 +243,33 @@ class SeedLocationsAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+def maps_link(request):
+    """Extrait la latitude et la longitude d'un lien Google Maps, y compris un lien court."""
+    from django.http import JsonResponse
+
+    from .maps_link import resolve_maps_link
+
+    raw = (request.GET.get('url') or '').strip()
+    if not raw:
+        return JsonResponse({'detail': 'Collez un lien Google Maps.'}, status=400)
+    try:
+        found = resolve_maps_link(raw)
+    except ValueError as exc:
+        return JsonResponse({'detail': str(exc)}, status=400)
+    except Exception:
+        return JsonResponse(
+            {'detail': 'Ce lien court n’a pas pu être lu. Collez l’adresse complète de Google Maps.'},
+            status=503,
+        )
+    if not found:
+        return JsonResponse(
+            {'detail': 'Aucune coordonnée dans ce lien. Ouvrez le lieu puis copiez l’adresse du navigateur.'},
+            status=422,
+        )
+    latitude, longitude = found
+    return JsonResponse({'latitude': latitude, 'longitude': longitude})
+
+
 def map_tile(request, z, x, y):
     """Sert une tuile OpenStreetMap depuis notre domaine.
 
@@ -252,6 +279,7 @@ def map_tile(request, z, x, y):
     import urllib.error
     import urllib.request
 
+    from django.core.cache import cache
     from django.http import HttpResponse, HttpResponseBadRequest
 
     try:
@@ -260,16 +288,20 @@ def map_tile(request, z, x, y):
         return HttpResponseBadRequest('Tuile invalide.')
     if not 0 <= zoom <= 19 or col < 0 or row < 0 or col >= 2 ** zoom or row >= 2 ** zoom:
         return HttpResponseBadRequest('Tuile invalide.')
-    upstream = f'https://tile.openstreetmap.org/{zoom}/{col}/{row}.png'
-    request_up = urllib.request.Request(
-        upstream,
-        headers={'User-Agent': 'IsokoHub/1.0 (education map; contact info.isokohub@gmail.com)'},
-    )
-    try:
-        with urllib.request.urlopen(request_up, timeout=8) as upstream_response:
-            content = upstream_response.read()
-    except (urllib.error.URLError, TimeoutError):
-        return HttpResponse('Carte indisponible.', status=502, content_type='text/plain')
+    cache_key = f'map-tile:{zoom}:{col}:{row}'
+    content = cache.get(cache_key)
+    if content is None:
+        upstream = f'https://tile.openstreetmap.org/{zoom}/{col}/{row}.png'
+        request_up = urllib.request.Request(
+            upstream,
+            headers={'User-Agent': 'IsokoHub/1.0 (education map; contact info.isokohub@gmail.com)'},
+        )
+        try:
+            with urllib.request.urlopen(request_up, timeout=20) as upstream_response:
+                content = upstream_response.read()
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return HttpResponse('Carte indisponible.', status=502, content_type='text/plain')
+        cache.set(cache_key, content, 60 * 60 * 24)
     response = HttpResponse(content, content_type='image/png')
     response['Cache-Control'] = 'public, max-age=86400'
     return response

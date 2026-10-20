@@ -4,6 +4,7 @@ import hotelService from '../hotelService';
 import { HotelPage, Panel, fieldClass, btnPrimary, Empty } from '../ui';
 import { useHotelPerm } from '../useHotelPerm';
 import { readImageAsDataUrl } from '../../shared/components/BusinessRegistrationForm';
+import MerchantAccountCard from '../../business/MerchantAccountCard';
 
 const emptyGuestInfo = () => ({
   wifi: '',
@@ -120,6 +121,9 @@ export default function HotelCompany() {
         ? (form.business_name || '')
         : `${form.business_name || ''} · lecture seule`}
     >
+      {canEdit && (
+        <MerchantAccountCard hint="Ce compte reçoit le paiement des réservations. Il est distinct de l’abonnement Isoko Hub." />
+      )}
       <Panel>
         <form onSubmit={save} className="space-y-6 max-w-3xl">
           <fieldset disabled={!canEdit} className="space-y-6 border-0 p-0 m-0 min-w-0 disabled:opacity-90">

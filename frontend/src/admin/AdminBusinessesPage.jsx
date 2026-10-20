@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, CheckCircle2, Mail, Plus, X, Edit, Trash2, Power, Star, ShieldCheck, Utensils, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Crown } from 'lucide-react';
+import { Search, Filter, CheckCircle2, Mail, Plus, X, Edit, Trash2, Power, Star, ShieldCheck, Utensils, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Crown, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
@@ -496,6 +496,43 @@ export default function AdminBusinessesPage() {
                             className="icon-btn"
                           >
                             <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const data = await api.post(`businesses/admin/${business.id}/offboard/`, { action: 'export' }, { auth: true });
+                                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = `export-${business.name}.json`;
+                                link.click();
+                                URL.revokeObjectURL(url);
+                              } catch (err) {
+                                alert(err.message || 'Export impossible');
+                              }
+                            }}
+                            title="Exporter les données avant résiliation"
+                            className="icon-btn"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm(`Fermer l'accès de « ${business.name} » ? L'abonnement passe à résilié. Les données restent exportables.`)) return;
+                              try {
+                                await api.post(`businesses/admin/${business.id}/offboard/`, { action: 'close' }, { auth: true });
+                                fetchBusinessesAndCategories();
+                              } catch (err) {
+                                alert(err.message || 'Fermeture impossible');
+                              }
+                            }}
+                            title="Résilier : couper l'accès"
+                            className="icon-btn"
+                          >
+                            <ShieldAlert className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => handleDeleteBusiness(business)}

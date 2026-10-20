@@ -121,6 +121,19 @@ export default function AdminSupportPage() {
     setNotice('Message supprimé.');
   };
 
+  const updateTicket = async (patch) => {
+    if (!selected) return;
+    setError('');
+    try {
+      const updated = await api.patch(`cms/admin/contact-messages/${selected.id}/`, patch, authOpts);
+      const next = { ...selected, ...updated };
+      setSelected(next);
+      setMessages((prev) => prev.map((m) => (m.id === selected.id ? next : m)));
+    } catch (err) {
+      setError(err.message || 'Mise à jour impossible');
+    }
+  };
+
   const saveNotesAndReply = async () => {
     if (!selected) return;
     const body = replyDraft.trim();
@@ -209,6 +222,8 @@ export default function AdminSupportPage() {
                       </div>
                       <div className="text-xs text-gray-500 truncate">{msg.name} · {msg.email}</div>
                       <div className="text-[11px] text-gray-400 mt-1">
+                        {(msg.priority === 'URGENT' ? 'Urgent · ' : '')}
+                        {msg.ticket_status === 'RESOLVED' ? 'Résolu · ' : msg.ticket_status === 'IN_PROGRESS' ? 'En cours · ' : ''}
                         {msg.created_at ? new Date(msg.created_at).toLocaleString('fr-FR') : ''}
                       </div>
                     </button>
@@ -253,6 +268,34 @@ export default function AdminSupportPage() {
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <label className="text-sm space-y-1">
+                      <span className="font-medium text-gray-700">Statut</span>
+                      <select
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={selected.ticket_status || 'OPEN'}
+                        onChange={(e) => updateTicket({ ticket_status: e.target.value })}
+                      >
+                        <option value="OPEN">Ouvert</option>
+                        <option value="IN_PROGRESS">En cours</option>
+                        <option value="WAITING">En attente du client</option>
+                        <option value="RESOLVED">Résolu</option>
+                      </select>
+                    </label>
+                    <label className="text-sm space-y-1">
+                      <span className="font-medium text-gray-700">Priorité</span>
+                      <select
+                        className="w-full border rounded-lg px-3 py-2"
+                        value={selected.priority || 'NORMAL'}
+                        onChange={(e) => updateTicket({ priority: e.target.value })}
+                      >
+                        <option value="LOW">Basse</option>
+                        <option value="NORMAL">Normale</option>
+                        <option value="URGENT">Urgente</option>
+                      </select>
+                    </label>
                   </div>
 
                   <div className="rounded-xl bg-gray-50 border p-4 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">

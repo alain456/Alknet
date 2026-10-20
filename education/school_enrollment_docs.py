@@ -1,7 +1,8 @@
-"""Pièces d'inscription scolaire par parcours.
+"""Pièces d'inscription scolaire.
 
-Catalogue plateforme : l'admin d'école n'a pas à retaper ces libellés.
-Il peut seulement ajouter des pièces locales (optionnelles) sur la campagne.
+L'école nomme les documents de chaque parcours ou classe à l'ouverture.
+Le catalogue ci-dessous ne sert que pour les inscriptions déjà ouvertes
+avant ce choix.
 """
 
 from .school_years import year_label
@@ -29,6 +30,71 @@ def _item(label, description=''):
 def _is_first_year(year):
     raw = str(year or '').strip().lower().replace('è', 'e').replace('é', 'e')
     return raw in ('1', '01', 'first', '1ere', '1ere annee')
+
+
+def clean_school_documents(raw):
+    """Libellés saisis par l'école, sans doublon."""
+    out = []
+    seen = set()
+    for row in raw or []:
+        if not isinstance(row, dict):
+            continue
+        label = str(row.get('label') or '').strip()
+        if not label or label.lower() in seen:
+            continue
+        seen.add(label.lower())
+        out.append({
+            'label': label[:200],
+            'description': str(row.get('description') or '').strip()[:300],
+            'required': True,
+        })
+    return out
+
+
+def school_slot_documents(plan, track, year='', section=''):
+    """Documents choisis pour cette classe.
+
+    None si la ligne du plan n'a pas de liste : l'inscription ancienne
+    garde alors le catalogue.
+    """
+    track = (track or '').strip()
+    year = str(year or '').strip()
+    section = str(section or '').strip()
+    if track == TRACK_PRESCOLAIRE:
+        year = ''
+        section = ''
+    elif track == TRACK_ECOFO:
+        section = ''
+    elif track == TRACK_POST and (not year or not section):
+        return None
+    for item in plan or []:
+        if not isinstance(item, dict) or str(item.get('track') or '').strip() != track:
+            continue
+        item_year = '' if track == TRACK_PRESCOLAIRE else str(item.get('year') or '').strip()
+        item_section = section and str(item.get('section') or '').strip() or ''
+        if track != TRACK_PRESCOLAIRE and item_year != year:
+            continue
+        if track == TRACK_POST and item_section != section:
+            continue
+        if 'documents' not in item:
+            return None
+        return clean_school_documents(item.get('documents'))
+    return None
+
+
+def resolved_school_documents(campaign, track, year='', section=''):
+    """Pièces de la classe : celles de l'école, ou le catalogue des anciennes inscriptions."""
+    chosen = school_slot_documents(getattr(campaign, 'enrollment_plan', None), track, year, section)
+    from .enrollment import with_standard_pieces
+
+    if chosen is None:
+        ecofo_year = year if track == TRACK_ECOFO else ''
+        post_year = year if track == TRACK_POST else ''
+        chosen = merge_optional_documents(
+            documents_for_track(track, ecofo_year, post_year),
+            getattr(campaign, 'required_documents', None) or [],
+        )
+    return with_standard_pieces(chosen)
 
 
 def documents_for_track(track, ecofo_year='', post_year=''):

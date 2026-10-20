@@ -1,4 +1,6 @@
 """Demandes d'inscription et paiement des frais."""
+import logging
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
@@ -23,6 +25,8 @@ from .school_years import (
     open_tracks_from_plan,
     slot_is_full,
 )
+
+logger = logging.getLogger(__name__)
 
 STAFF_NEXT = {
     'ENVOYEE': {'EN_INSTRUCTION', 'COMPLEMENT_DEMANDE', 'ACCEPTEE', 'REFUSEE'},
@@ -76,6 +80,178 @@ def education_merchant_account(business):
 def campaign_open(campaign, day=None):
     day = day or timezone.localdate()
     return campaign.is_open_on(day)
+
+
+_ROMAN = ('I', 'II', 'III', 'IV', 'V', 'VI')
+IDENTITY_CARD_LABEL = 'Carte d’identité'
+PASSPORT_PHOTO_LABEL = 'Photo passeport'
+_PHOTO_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.webp')
+
+
+def is_passport_photo(label):
+    return (label or '').strip().casefold() == PASSPORT_PHOTO_LABEL.casefold()
+
+
+def with_standard_pieces(docs, *, university=False):
+    """Photo passeport obligatoire. À l'université, la carte d'identité l'est aussi."""
+    rows = []
+    for item in docs or []:
+        if isinstance(item, dict):
+            rows.append(dict(item))
+        elif str(item).strip():
+            rows.append({'label': str(item).strip(), 'description': '', 'required': True})
+    labels = {(row.get('label') or '').strip().casefold() for row in rows}
+    if PASSPORT_PHOTO_LABEL.casefold() not in labels:
+        rows.insert(0, {
+            'label': PASSPORT_PHOTO_LABEL,
+            'description': 'JPEG, PNG ou WebP',
+            'required': True,
+        })
+    if university and IDENTITY_CARD_LABEL.casefold() not in labels:
+        rows.insert(1, {'label': IDENTITY_CARD_LABEL, 'description': 'PDF', 'required': True})
+    return rows
+UNIVERSITY_CATEGORY_SLUG = 'universite'
+
+
+def is_university_business(business):
+    return getattr(getattr(business, 'primary_category', None), 'slug', '') == UNIVERSITY_CATEGORY_SLUG
+
+
+def university_study_years(program):
+    """Niveaux du programme. Les libellés enregistrés priment sur le modèle du cycle."""
+    custom = [
+        str(item).strip()
+        for item in (getattr(program, 'study_year_labels', None) or [])
+        if str(item).strip()
+    ]
+    if custom:
+        return custom[:len(_ROMAN)]
+    defaults = {'LICENCE': 3, 'MASTER': 2, 'DOCTORATE': 3, 'CERTIFICATE': 1}
+    raw = getattr(program, 'duration_years', None)
+    try:
+        count = int(raw) if raw is not None else 0
+    except (TypeError, ValueError):
+        count = 0
+    if count <= 0:
+        count = defaults.get(getattr(program, 'level', ''), 1)
+    count = max(1, min(count, len(_ROMAN)))
+    prefix = {
+        'LICENCE': 'BAC',
+        'MASTER': 'Master',
+        'DOCTORATE': 'Doctorat',
+        'CERTIFICATE': 'Année',
+    }.get(getattr(program, 'level', ''), 'Année')
+    return [f'{prefix} {_ROMAN[index]}' for index in range(count)]
+
+
+def _parse_birth(raw):
+    from datetime import datetime as date_time
+    raw = str(raw or '').strip()
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+        try:
+            return date_time.strptime(raw[:10], fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _percent(raw, field):
+    text = str(raw or '').strip().replace(',', '.')
+    if not text:
+        raise ValidationError({field: 'Indiquez la note en pourcentage.'})
+    try:
+        value = float(text)
+    except ValueError as exc:
+        raise ValidationError({field: 'La note doit être un pourcentage.'}) from exc
+    if value < 0 or value > 100:
+        raise ValidationError({field: 'La note doit être comprise entre 0 et 100.'})
+    return text
+
+
+def read_university_candidature(data, program):
+    """Champs du formulaire d'inscription université, sur le modèle BIU."""
+    first = str(data.get('first_name') or '').strip()
+    middle = str(data.get('middle_name') or '').strip()
+    last = str(data.get('last_name') or '').strip()
+    if not first:
+        raise ValidationError({'first_name': 'Indiquez le prénom.'})
+    if not last:
+        raise ValidationError({'last_name': 'Indiquez le nom.'})
+    birth = _parse_birth(data.get('birth_date'))
+    if birth is None:
+        raise ValidationError({'birth_date': 'Indiquez la date de naissance.'})
+    gender = str(data.get('gender') or '').strip().upper()[:1]
+    if gender not in ('F', 'M'):
+        raise ValidationError({'gender': 'Indiquez le sexe.'})
+    nationality = str(data.get('nationality') or '').strip()[:20]
+    if not nationality:
+        raise ValidationError({'nationality': 'Indiquez la nationalité.'})
+    marital = str(data.get('marital_status') or '').strip()[:40]
+    if marital not in ('Célibataire', 'Marié(e)'):
+        raise ValidationError({'marital_status': 'Indiquez l’état civil.'})
+    avenue = str(data.get('avenue') or '').strip()[:120]
+    zone = str(data.get('zone') or '').strip()[:120]
+    commune = str(data.get('commune') or '').strip()[:120]
+    province = str(data.get('province') or '').strip()[:120]
+    country = str(data.get('country') or '').strip()[:80]
+    if not all((avenue, zone, commune, province, country)):
+        raise ValidationError({'student_address': 'Indiquez l’adresse complète.'})
+    previous_school = str(data.get('previous_school') or '').strip()[:200]
+    if not previous_school:
+        raise ValidationError({'previous_school': 'Indiquez le dernier établissement fréquenté.'})
+    declared = str(data.get('studies_declared') or '').strip()
+    if declared not in ('Oui', 'Non'):
+        raise ValidationError({'studies_declared': 'Indiquez si ces études ont déjà été déclarées.'})
+    guardian_link = str(data.get('guardian_link') or '').strip()[:40]
+    guardian_name = str(data.get('guardian_name') or '').strip()[:200]
+    guardian_email = str(data.get('guardian_email') or '').strip()[:254]
+    guardian_phone = str(data.get('guardian_phone') or '').strip()[:40]
+    guardian_address = str(data.get('guardian_address') or '').strip()[:120]
+    if not guardian_link or not guardian_name or not guardian_phone or not guardian_address or not guardian_email:
+        raise ValidationError({'guardian_name': 'Indiquez une personne de contact complète.'})
+    years = university_study_years(program)
+    study_year = str(data.get('study_year') or '').strip()
+    if study_year not in years:
+        raise ValidationError({'study_year': 'Choisissez le niveau d’inscription.'})
+    options = [str(item).strip() for item in (program.options or []) if str(item).strip()]
+    option = str(data.get('program_option') or '').strip()
+    if options and option not in options:
+        raise ValidationError({'program_option': 'Choisissez une option du programme.'})
+    ack = str(data.get('terms_ack') or '').strip().lower()
+    if ack not in ('1', 'true', 'yes', 'on'):
+        raise ValidationError({'terms_ack': 'Confirmez avoir lu les conditions d’inscription.'})
+    address = ', '.join([avenue, zone, commune, province, country])
+    name = ' '.join(part for part in (first, middle, last) if part)
+    return {
+        'student_name': name[:200],
+        'birth_date': birth,
+        'gender': gender,
+        'previous_school': previous_school,
+        'student_address': address[:255],
+        'guardian_name': guardian_name,
+        'guardian_phone': guardian_phone,
+        'guardian_link': guardian_link,
+        'profile_details': {
+            'first_name': first,
+            'middle_name': middle,
+            'last_name': last,
+            'nationality': nationality,
+            'marital_status': marital,
+            'avenue': avenue,
+            'zone': zone,
+            'commune': commune,
+            'province': province,
+            'country': country,
+            'last_percent': _percent(data.get('last_percent'), 'last_percent'),
+            'state_exam_percent': _percent(data.get('state_exam_percent'), 'state_exam_percent'),
+            'studies_declared': declared,
+            'guardian_email': guardian_email,
+            'guardian_address': guardian_address,
+            'study_year': study_year,
+            'program_option': option,
+            'terms_accepted': True,
+        },
+    }
 
 
 def _mail_to(email, subject, body, *, from_name=None, reply_to=None):
@@ -135,6 +311,34 @@ def school_message_defaults():
     }
 
 
+def message_defaults(business=None):
+    if is_university_business(business):
+        return {
+            'received': (
+                'Bonjour {student_name},\n\n'
+                '{school_name} confirme que votre dossier d’inscription est bien arrivé.\n'
+                '{wait_note}\n\n'
+                'Programme : {title}\n'
+                'Année académique : {academic_year}\n'
+                'Suivez votre dossier ici :\n{dossier_url}\n\n'
+                '— {school_name}'
+            ),
+            'refusal': (
+                'Bonjour {student_name},\n\n'
+                '{school_name} ne peut pas accepter votre dossier pour {title} ({academic_year}).\n\n'
+                'Suivre le dossier : {dossier_url}\n\n'
+                '— {school_name}'
+            ),
+            'accepted': (
+                'Bonjour {student_name},\n\n'
+                '{school_name} accepte votre inscription pour {title} ({academic_year}).\n\n'
+                'Suivre le dossier : {dossier_url}\n\n'
+                '— {school_name}'
+            ),
+        }
+    return school_message_defaults()
+
+
 def render_school_message(template, application, *, name='', note='', criteria_lines=''):
     campaign = application.campaign
     school_name = campaign.business.name
@@ -143,8 +347,9 @@ def render_school_message(template, application, *, name='', note='', criteria_l
             'La classe est complète : vous êtes sur la liste d’attente. '
             'L’école vous écrira si une place se libère.'
         )
-    elif application.status == 'LISTE_ATTENTE':
-        wait_note = 'Votre dossier est en liste d’attente. L’école va l’accepter ou le refuser.'
+    elif application.status == 'LISTE_ATTENTE' or application.campaign.program_id:
+        who = 'L’université' if is_university_business(campaign.business) else 'L’école'
+        wait_note = f'Votre dossier est en liste d’attente. {who} va l’accepter ou le refuser.'
     else:
         wait_note = ''
     values = {
@@ -175,29 +380,17 @@ def school_message_template(business, kind):
         'accepted': 'enrollment_accepted_message',
     }[kind]
     custom = (getattr(profile, field, '') or '').strip() if profile else ''
-    return custom or school_message_defaults()[kind]
+    return custom or message_defaults(business)[kind]
 
 
 def _confirm_arrival_to_student(application, name, criteria_lines=''):
     """L'école confirme à l'élève que le dossier est bien arrivé."""
     campaign = application.campaign
     school_name = campaign.business.name
-    if campaign.program_id is None:
-        body = render_school_message(
-            school_message_template(campaign.business, 'received'),
-            application, name=name, criteria_lines=criteria_lines,
-        )
-    else:
-        body = (
-            f'Bonjour {name},\n\n'
-            f'{school_name} confirme que votre dossier d’inscription est bien arrivé.\n\n'
-            f'Parcours : {_application_title(application)}\n'
-            f'Année scolaire : {campaign.academic_year}\n'
-            f'{criteria_lines}'
-            'Suivez votre dossier ici :\n'
-            f'{dossier_url(application)}\n\n'
-            f'— {school_name}'
-        )
+    body = render_school_message(
+        school_message_template(campaign.business, 'received'),
+        application, name=name, criteria_lines=criteria_lines,
+    )
     _mail_to(
         _application_email(application) or getattr(application, 'student_email', ''),
         f'{school_name} — votre dossier est bien arrivé',
@@ -205,6 +398,40 @@ def _confirm_arrival_to_student(application, name, criteria_lines=''):
         from_name=school_name,
         reply_to=_school_reply_email(campaign) or None,
     )
+    _notify_establishment(application, name)
+
+
+def _notify_establishment(application, name):
+    """Prévenir l'établissement. Le candidat seul ne suffit pas : l'admin ne lit pas sa boîte."""
+    campaign = application.campaign
+    student = (_application_email(application) or getattr(application, 'student_email', '') or '').strip()
+    recipients = []
+    for raw in (
+        _school_reply_email(campaign),
+        getattr(getattr(campaign.business, 'owner', None), 'email', ''),
+    ):
+        email = (raw or '').strip()
+        if email and email.lower() not in {item.lower() for item in recipients} and email.lower() != student.lower():
+            recipients.append(email)
+    if not recipients:
+        return
+    title = _application_title(application)
+    body = (
+        f'Une candidature vient d’arriver pour {campaign.business.name}.\n\n'
+        f'Candidat : {name or application.student_name}\n'
+        f'E-mail : {student or "—"}\n'
+        f'Téléphone : {application.student_phone or "—"}\n'
+        f'Formation : {title}\n'
+        f'Année : {campaign.academic_year}\n\n'
+        f'Ouvrez Candidatures, file Liste d’attente.'
+    )
+    for email in recipients:
+        _mail_to(
+            email,
+            f'{campaign.business.name} — nouvelle candidature',
+            body,
+            from_name='Isoko Hub',
+        )
 
 
 def _application_email(application):
@@ -291,9 +518,12 @@ def resolve_school_track_fields(campaign, track, ecofo_year, post_section, post_
 
     on_waitlist = slot_is_full(campaign, track, ecofo_year, post_section, post_year)
 
-    docs = merge_optional_documents(
-        documents_for_track(track, ecofo_year, post_year),
-        campaign.required_documents or [],
+    from .school_enrollment_docs import resolved_school_documents
+    docs = resolved_school_documents(
+        campaign,
+        track,
+        ecofo_year if track == TRACK_ECOFO else post_year,
+        post_section if track == TRACK_POST else '',
     )
     return track, ecofo_year, post_section, post_year, docs, on_waitlist
 
@@ -324,6 +554,8 @@ def store_document(application, uploaded, label, *, allow_extra=False):
 
 
 def apply_public_candidature(*, campaign, actor, data, files_by_label):
+    from .rls import allow_write
+    allow_write(campaign.business_id)
     """Formulaire public one-shot : candidature envoyée + pièces + e-mail."""
     if not campaign.is_public:
         raise ValidationError({'campaign': 'Cette campagne n’est pas ouverte au public.'})
@@ -350,13 +582,6 @@ def apply_public_candidature(*, campaign, actor, data, files_by_label):
     else:
         applicant = None
 
-    if not name:
-        raise ValidationError({'student_name': 'Indiquez le nom de l’élève.'})
-    if not email:
-        raise ValidationError({'student_email': 'Indiquez un e-mail pour recevoir la confirmation.'})
-    if not phone:
-        raise ValidationError({'student_phone': 'Indiquez un numéro de téléphone.'})
-
     birth = None
     gender = ''
     previous_school = ''
@@ -364,6 +589,7 @@ def apply_public_candidature(*, campaign, actor, data, files_by_label):
     guardian_name = ''
     guardian_phone = ''
     guardian_link = ''
+    profile_details = {}
     if campaign.program_id is None:
         raw_birth = str(data.get('birth_date') or '').strip()
         birth = None
@@ -388,6 +614,39 @@ def apply_public_candidature(*, campaign, actor, data, files_by_label):
             raise ValidationError({'guardian_name': 'Indiquez le parent ou le tuteur.'})
         if not guardian_phone:
             raise ValidationError({'guardian_phone': 'Indiquez le téléphone du parent ou du tuteur.'})
+    else:
+        university = read_university_candidature(data, campaign.program)
+        name = university['student_name']
+        birth = university['birth_date']
+        gender = university['gender']
+        previous_school = university['previous_school']
+        student_address = university['student_address']
+        guardian_name = university['guardian_name']
+        guardian_phone = university['guardian_phone']
+        guardian_link = university['guardian_link']
+        profile_details = university['profile_details']
+        for label, uploaded in files_by_label.items():
+            filename = (getattr(uploaded, 'name', '') or '').lower()
+            if is_passport_photo(label):
+                continue
+            if not filename.endswith('.pdf'):
+                raise ValidationError({'document': f'{label} doit être un fichier PDF.'})
+
+    for label, uploaded in files_by_label.items():
+        if not is_passport_photo(label):
+            continue
+        filename = (getattr(uploaded, 'name', '') or '').lower()
+        if not filename.endswith(_PHOTO_EXTENSIONS):
+            raise ValidationError({
+                'document': 'La photo passeport doit être une image JPEG, PNG ou WebP.',
+            })
+
+    if not name:
+        raise ValidationError({'student_name': 'Indiquez le nom de l’élève.'})
+    if not email:
+        raise ValidationError({'student_email': 'Indiquez un e-mail pour recevoir la confirmation.'})
+    if not phone:
+        raise ValidationError({'student_phone': 'Indiquez un numéro de téléphone.'})
 
     existing = EnrollmentApplication.objects.filter(
         campaign=campaign, student_email__iexact=email,
@@ -414,6 +673,8 @@ def apply_public_candidature(*, campaign, actor, data, files_by_label):
     school = campaign.program_id is None
     status = 'LISTE_ATTENTE' if school else 'ENVOYEE'
     class_full = bool(school and on_waitlist)
+
+    docs = with_standard_pieces(docs, university=not school)
 
     needed = [item.get('label', '').strip() for item in docs if item.get('label')]
     missing = [label for label in needed if label not in files_by_label]
@@ -449,8 +710,15 @@ def apply_public_candidature(*, campaign, actor, data, files_by_label):
                 post_section=post_section,
                 post_year=post_year,
                 required_documents=docs,
+                profile_details=profile_details,
                 criteria_acknowledged=bool(criteria and acknowledged),
                 status=status,
+            )
+            from .audit import audit_education
+            audit_education(
+                'EDUCATION_APPLICATION_CREATE', campaign.business,
+                f'education.application:{application.pk}', user=actor,
+                academic_year=campaign.academic_year,
             )
             for label, uploaded in files_by_label.items():
                 if label in needed:
@@ -474,6 +742,12 @@ def apply_public_candidature(*, campaign, actor, data, files_by_label):
         raise ValidationError({
             'campaign': 'Une candidature existe déjà pour cet e-mail sur cette année.',
         }) from exc
+
+    try:
+        from .dossier_pdf import store_compiled_dossier
+        store_compiled_dossier(application)
+    except Exception:
+        logger.exception('Dossier PDF non généré pour %s', application.pk)
 
     criteria_lines = ''
     if criteria:
@@ -531,9 +805,11 @@ def decide_application(application, actor, new_status, note=''):
             ),
         })
     school = application.campaign.program_id is None
-    if new_status == 'REFUSEE' and application.status in ('ACCEPTEE', 'CONFIRMEE') and school:
+    university = is_university_business(application.campaign.business)
+    templated = school or university
+    if new_status == 'REFUSEE' and application.status in ('ACCEPTEE', 'CONFIRMEE') and templated:
         raise ValidationError({'status': 'Une inscription déjà acceptée ne peut plus être refusée.'})
-    if new_status == 'REFUSEE' and not school and not (note or '').strip():
+    if new_status == 'REFUSEE' and not templated and not (note or '').strip():
         raise ValidationError({'note': 'Le motif de refus est obligatoire.'})
     if new_status == 'COMPLEMENT_DEMANDE' and not (note or '').strip():
         raise ValidationError({'note': 'Indiquez la pièce ou l’information demandée.'})
@@ -564,13 +840,12 @@ def decide_application(application, actor, new_status, note=''):
     )
     title = _application_title(application)
     school_name = application.campaign.business.name
-    school = application.campaign.program_id is None
-    if school and new_status == 'ACCEPTEE':
+    if templated and new_status == 'ACCEPTEE':
         body = render_school_message(
             school_message_template(application.campaign.business, 'accepted'),
             application, note=note,
         )
-    elif school and new_status == 'REFUSEE':
+    elif templated and new_status == 'REFUSEE':
         body = render_school_message(
             school_message_template(application.campaign.business, 'refusal'),
             application, note=note,
@@ -634,6 +909,8 @@ def application_by_access_token(token):
     token = (token or '').strip()
     if not token:
         return None
+    from .rls import allow_dossier_token
+    allow_dossier_token(token)
     return EnrollmentApplication.objects.select_related(
         'campaign', 'campaign__business', 'campaign__program', 'business',
     ).prefetch_related('files', 'fee_payments').filter(access_token=token).first()
@@ -673,6 +950,8 @@ def start_fee_payment(fee, applicant, payer_phone, application=None):
         raise ValidationError({'detail': 'Ce frais n’est pas ouvert au paiement.'})
     phone = burundipay.normalize_phone(payer_phone)
     merchant = education_merchant_account(fee.business)
+    from .rls import allow_write
+    allow_write(fee.business_id)
 
     with transaction.atomic():
         payment = _lock_fee_payment(fee, applicant, application)
@@ -715,6 +994,7 @@ def start_fee_payment(fee, applicant, payer_phone, application=None):
         if locked.status == 'PAID':
             return locked, {'ok': True, 'already_paid': True, 'message': 'Déjà payé.'}
         locked.payer_phone = phone
+        locked.method = 'BURUNDIPAY'
         locked.merchant_account = merchant
         if not locked.payment_token:
             locked.payment_token = issue_payment_token()
@@ -724,7 +1004,7 @@ def start_fee_payment(fee, applicant, payer_phone, application=None):
         else:
             locked.status = 'FAILED'
         locked.save(update_fields=[
-            'payer_phone', 'merchant_account', 'status',
+            'payer_phone', 'method', 'merchant_account', 'status',
             'provider_reference', 'payment_token', 'applicant', 'application',
         ])
     return locked, result
@@ -747,6 +1027,48 @@ def _lock_fee_payment(fee, applicant, application):
             .first()
         )
     return None
+
+
+def ensure_bordereau_pdf(uploaded):
+    """Refuse tout fichier qui n’est pas un PDF, avant d’enregistrer le dossier."""
+    from config.uploads import validate_binary_upload
+    if not uploaded:
+        raise ValidationError({'bordereau': 'Joignez le bordereau en PDF.'})
+    try:
+        ext = validate_binary_upload(uploaded)
+    except DjangoValidationError as exc:
+        message = exc.messages[0] if getattr(exc, 'messages', None) else str(exc)
+        raise ValidationError({'bordereau': message}) from exc
+    if ext != '.pdf':
+        raise ValidationError({'bordereau': 'Le bordereau doit être un PDF.'})
+    if hasattr(uploaded, 'seek'):
+        uploaded.seek(0)
+
+
+def record_inscription_bordereau(fee, application, uploaded):
+    """Reçoit le PDF du bordereau. Ce n’est pas un encaissement BurundiPay."""
+    ensure_bordereau_pdf(uploaded)
+    from .rls import allow_write
+    allow_write(fee.business_id)
+    with transaction.atomic():
+        payment = _lock_fee_payment(fee, application.applicant, application)
+        if payment and payment.status == 'PAID':
+            raise ValidationError({'bordereau': 'Ce dossier est déjà payé par BurundiPay.'})
+        if payment is None:
+            payment = EducationFeePayment.objects.create(
+                fee=fee,
+                applicant=application.applicant,
+                application=application,
+                status='BORDEREAU_RECU',
+                method='BORDEREAU',
+                payment_token=issue_payment_token(),
+            )
+        payment.status = 'BORDEREAU_RECU'
+        payment.method = 'BORDEREAU'
+        payment.payer_phone = ''
+        payment.bordereau.save(getattr(uploaded, 'name', '') or 'bordereau.pdf', uploaded, save=False)
+        payment.save(update_fields=['status', 'method', 'payer_phone', 'bordereau', 'applicant', 'application'])
+    return payment
 
 
 def confirm_fee_stub(payment):

@@ -27,7 +27,9 @@ export default function WholesaleOperationalSettings() {
     try {
       const updated = await wholesaleService.updateProfile({
         order_reference_prefix: profile.order_reference_prefix,
+        submission_email_message: profile.submission_email_message,
         acceptance_email_message: profile.acceptance_email_message,
+        rejection_email_message: profile.rejection_email_message,
         status: profile.status,
       });
       setProfile({ ...profile, ...updated });
@@ -68,15 +70,26 @@ export default function WholesaleOperationalSettings() {
             <option value="CLOSED">Fermée</option>
           </select>
         </label>
-        <label className="text-sm space-y-1 block sm:col-span-2">
-          <span className="font-medium text-gray-700 dark:text-gray-300">Modèle email d&apos;acceptation</span>
-          <textarea
-            rows={5}
-            className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800"
-            value={profile.acceptance_email_message || ''}
-            onChange={(e) => setProfile({ ...profile, acceptance_email_message: e.target.value })}
-          />
-        </label>
+        <p className="text-sm text-gray-600 dark:text-gray-300 sm:col-span-2">
+          Variables : {'{client_name}'} {'{reference}'} {'{wholesale_name}'} {'{total_amount}'} {'{currency}'} {'{reason}'}.
+          Accepter ou refuser sans e-mail délivré est impossible.
+        </p>
+        {[
+          ['submission_email_message', 'Commande enregistrée'],
+          ['acceptance_email_message', 'Commande acceptée'],
+          ['rejection_email_message', 'Commande refusée'],
+        ].map(([key, label]) => (
+          <label key={key} className="text-sm space-y-1 block sm:col-span-2">
+            <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
+            <textarea
+              rows={5}
+              required
+              className="w-full px-4 py-2.5 border rounded-lg bg-gray-50 dark:bg-gray-800"
+              value={profile[key] || ''}
+              onChange={(e) => setProfile({ ...profile, [key]: e.target.value })}
+            />
+          </label>
+        ))}
       </div>
       <button
         type="submit"

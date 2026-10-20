@@ -5,9 +5,11 @@ import {
   LayoutDashboard, Menu, X, Bell, LogOut, FileText,
   Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck, FolderPlus,
   Package, Warehouse, ShoppingCart, History, User, FlaskConical, Crown, AlertTriangle,
-  BedDouble, Wrench, CreditCard, Plus, Mail, MessageSquare, Wallet, BookOpen, GraduationCap
+  BedDouble, Wrench, CreditCard, Plus, MessageSquare, Wallet, BookOpen, GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import SkipLink from '../shared/components/SkipLink';
+import { BUSINESS_UPDATED, firstBusiness } from '../shared/businessSync';
 import {
   canAccessZone,
   ZONE_ACCESS,
@@ -20,6 +22,7 @@ import {
 } from '../auth/roleAccess';
 import { userHasPermission } from '../lib/permissions';
 import ThemeToggle from '../shared/components/ThemeToggle';
+import StockAlertsMenu from '../shared/StockAlertsMenu';
 
 const isSubscriptionPath = (pathname) => /\/subscription\/?$/.test(pathname || '');
 
@@ -71,9 +74,10 @@ export default function BusinessLayout() {
         return res.ok ? res.json() : [];
       })
       .then(data => {
-        if (data && data.length > 0) {
-          setBusiness(data[0]);
-        } else {
+        const row = firstBusiness(data);
+        if (row) {
+          setBusiness(row);
+        } else if (data) {
           setBusiness(null);
           setLoadError('Aucune entreprise associée à votre compte.');
         }
@@ -81,6 +85,27 @@ export default function BusinessLayout() {
       .catch(() => setLoadError('Impossible de charger votre entreprise.'))
       .finally(() => setLoading(false));
   }, [token, user, isRetailClientPath]);
+
+  useEffect(() => {
+    if (!token || isRetailClientPath) return undefined;
+    const apply = (row) => {
+      if (!row) return;
+      setBusiness((current) => (current ? { ...current, ...row } : row));
+    };
+    const onUpdate = (event) => apply(event.detail);
+    const refresh = () => {
+      authFetch('/api/v1/businesses/me/')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => apply(firstBusiness(data)))
+        .catch(() => {});
+    };
+    window.addEventListener(BUSINESS_UPDATED, onUpdate);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener(BUSINESS_UPDATED, onUpdate);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [token, isRetailClientPath, authFetch]);
 
   // Alertes hôtel : ménage + messages clients + anticiper/reporter
   useEffect(() => {
@@ -211,7 +236,6 @@ export default function BusinessLayout() {
           anyPerm: ['hotel.reservations.view', 'hotel.reservations.confirm'],
           badgeKey: 'rescheduleRequests',
         },
-        { name: 'Emails réservation', icon: Mail, path: '/hotel/reservation-settings', perm: 'hotel.reservations.update', hideForOwner: true },
         { name: 'Arrivées', icon: UserCheck, path: '/hotel/front-desk/arrivals', anyPerm: ['hotel.stays.check_in', 'hotel.front_desk'] },
         { name: 'Départs', icon: Users, path: '/hotel/front-desk/departures', anyPerm: ['hotel.stays.check_out', 'hotel.front_desk'] },
         { name: 'Calendrier', icon: Calendar, path: '/hotel/calendar', anyPerm: ['hotel.reservations.view', 'hotel.front_desk', 'hotel.stays.view'] },
@@ -225,8 +249,6 @@ export default function BusinessLayout() {
         { name: 'Housekeeping', icon: Sparkles, path: '/hotel/housekeeping', perm: 'hotel.housekeeping.view' },
         { name: 'Maintenance', icon: Wrench, path: '/hotel/maintenance', perm: 'hotel.maintenance.view' },
         { name: 'Caisse', icon: CreditCard, path: '/hotel/cashier', perm: 'hotel.cashier.view' },
-        { name: 'Folios & paiements', icon: CreditCard, path: '/hotel/folios', perm: 'hotel.cashier.view' },
-        { name: 'Facturation', icon: CreditCard, path: '/hotel/invoices', perm: 'hotel.cashier.view' },
         { name: 'Rapports', icon: LayoutDashboard, path: '/hotel/reports', perm: 'hotel.reports.view' },
         { name: "Journal d'Audit", icon: FileText, path: '/hotel/audit', perm: 'hotel.audit.view' },
       ],
@@ -482,7 +504,6 @@ export default function BusinessLayout() {
       items: [
         { name: 'Tableau de Bord', icon: LayoutDashboard, path: '/commerce/dashboard' },
         { name: 'Profil boutique', icon: Store, path: '/commerce/profile' },
-        { name: 'Employés', icon: Users, path: '/commerce/employees' },
       ]
     },
     {
@@ -537,33 +558,62 @@ export default function BusinessLayout() {
   // l'établissement et les formations sont gérées dans le module Éducation.
   // Le menu générique exposait « Réservations », qui ouvre des rendez-vous
   // hospitaliers.
-  const isSchoolAdmin = labelsFromBusiness(business).slug === 'ecole'
-    || user?.business_info?.category_slug === 'ecole';
+  const categorySlug = labelsFromBusiness(business).slug || user?.business_info?.category_slug || '';
+  const isSchoolAdmin = categorySlug === 'ecole';
+  const isUniversityAdmin = categorySlug === 'universite';
   const schoolPerms = user?.business_info?.permissions || [];
-  const isSchoolAccountant = isSchoolAdmin
+  const feesOnlyEducation = (isSchoolAdmin || isUniversityAdmin)
     && user?.role !== ROLES.BUSINESS_OWNER
     && (
       (user?.business_info?.role_name || '').toLowerCase().includes('comptable')
       || (
         schoolPerms.includes('education.fees.manage')
         && !schoolPerms.includes('education.admissions.manage')
+        && !schoolPerms.includes('education.programs.manage')
+        && !schoolPerms.includes('education.structure.manage')
+        && !schoolPerms.includes('education.profile.update')
         && !schoolPerms.includes('*')
         && !schoolPerms.includes('education.manage')
       )
     );
-  const educationNavGroups = isSchoolAccountant
+  const universityNavGroups = [
+    {
+      title: 'Université',
+      items: [
+        { name: 'Tableau de bord', icon: LayoutDashboard, path: '/education/dashboard' },
+        { name: 'Facultés', icon: Building2, path: '/education/dashboard/facultes' },
+        { name: 'Programmes', icon: BookOpen, path: '/education/dashboard/programmes' },
+        { name: 'Candidatures', icon: GraduationCap, path: '/education/dashboard/admissions' },
+        { name: 'Employés', icon: Users, path: '/business/employees' },
+        { name: 'Comptabilité', icon: Wallet, path: '/education/accounting' },
+        { name: 'Rôles & Permissions', icon: Shield, path: '/business/roles' },
+      ],
+    },
+    {
+      title: 'Système',
+      items: [
+        { name: "Journal d'Audit", icon: FileText, path: '/business/audit' },
+        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
+        { name: 'Abonnement', icon: Crown, path: '/business/subscription' },
+      ],
+    },
+  ];
+
+  const educationNavGroups = feesOnlyEducation
     ? [{
       title: 'Comptabilité',
       items: [
         { name: 'Frais d’inscription', icon: Wallet, path: '/education/accounting' },
       ],
     }]
-    : [
+    : isUniversityAdmin
+      ? universityNavGroups
+      : [
     {
       title: 'Principal',
       items: [
         { name: 'Tableau de bord', icon: LayoutDashboard, path: '/education/dashboard' },
-        ...(!isSchoolAdmin ? [{ name: 'Formations', icon: BookOpen, path: '/education/staff' }] : []),
+        ...(isSchoolAdmin ? [{ name: 'Mon école', icon: Building2, path: '/education/dashboard/ecole' }] : []),
         { name: 'Admissions', icon: GraduationCap, path: '/education/dashboard/admissions' },
         ...(isSchoolAdmin
           ? [{ name: 'Frais d’inscription', icon: Wallet, path: '/education/accounting' }]
@@ -582,7 +632,7 @@ export default function BusinessLayout() {
   ];
 
   const activeNavGroups = (() => {
-    const groups = isRetailClientPath
+    let groups = isRetailClientPath
       ? patientNavGroups
       : isWholesale
         ? wholesaleNavGroups
@@ -597,6 +647,14 @@ export default function BusinessLayout() {
                 : isEducation
                   ? educationNavGroups
                   : genericNavGroups;
+    if (isCommerce || isRetailPharmacy || isWholesale) {
+      groups = groups
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => !String(item.path || '').includes('/employees')),
+        }))
+        .filter((group) => group.items.length > 0);
+    }
     if (!subscriptionBlocked) return groups;
     const renewItem = { name: 'Abonnement', icon: Crown, path: subscriptionHome };
     if (isHotel && user?.role !== ROLES.BUSINESS_OWNER) {
@@ -641,7 +699,7 @@ export default function BusinessLayout() {
             : isCommerce
               ? '/commerce/dashboard'
               : isEducation
-                ? (isSchoolAccountant ? '/education/accounting' : '/education/dashboard')
+                ? (feesOnlyEducation ? '/education/accounting' : '/education/dashboard')
                 : '/business';
 
   const closeSidebar = () => setIsSidebarOpen(false);
@@ -719,6 +777,7 @@ export default function BusinessLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex transition-colors duration-200">
+      <SkipLink />
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 xl:hidden backdrop-blur-sm"
@@ -770,6 +829,7 @@ export default function BusinessLayout() {
                     '/retail-pharmacy/dashboard',
                     '/retail-pharmacy/client/dashboard',
                     '/hotel/reservations',
+                    '/education/dashboard',
                   ];
                   const isActive = location.pathname === basePath
                     || (item.path.includes('tab=queue') && location.pathname === '/hospital/appointments' && location.search.includes('tab=queue'))
@@ -824,8 +884,14 @@ export default function BusinessLayout() {
 
         <div className="sidebar-account p-4 border-t border-white/15 shrink-0">
           <div className="flex items-center gap-3 mb-3 px-1">
-            <div className="sidebar-account-mark w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0">
-              <UserCheck className="w-4 h-4" />
+            <div className="sidebar-account-mark w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shrink-0 p-0.5">
+              {business?.logo ? (
+                <img src={business.logo} alt="" className="w-full h-full object-contain" />
+              ) : (
+                <span className="font-bold text-xs">
+                  {(business?.name || spaceLabel || 'E').slice(0, 1).toUpperCase()}
+                </span>
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-xs font-bold truncate">
@@ -850,7 +916,7 @@ export default function BusinessLayout() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+      <main id="contenu" className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 sm:px-6 lg:px-8 shrink-0">
           <div className="flex items-center gap-4">
             <button
@@ -859,9 +925,13 @@ export default function BusinessLayout() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+            <div className="flex items-center gap-2 min-w-0">
+              {business?.logo ? (
+                <img src={business.logo} alt="" className="w-7 h-7 rounded-lg object-contain bg-surface shrink-0" />
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              )}
+              <span className="text-xs font-bold text-gray-700 dark:text-gray-300 truncate">
                 {business?.name || spaceLabel}
               </span>
             </div>
@@ -869,6 +939,15 @@ export default function BusinessLayout() {
 
           <div className="flex items-center gap-2 sm:gap-3">
             <ThemeToggle variant="ghost" size="sm" />
+            {(isCommerce || isRetailPharmacy || isWholesale) ? (
+              <StockAlertsMenu inventoryPath={
+                isWholesale
+                  ? '/wholesale-pharmacy/inventory'
+                  : isRetailPharmacy
+                    ? '/retail-pharmacy/inventory'
+                    : '/commerce/inventory'
+              } />
+            ) : (
             <button
               type="button"
               className="relative p-2 text-gray-400 hover:text-gray-700 dark:hover:text-white transition cursor-pointer rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -915,6 +994,7 @@ export default function BusinessLayout() {
                 </span>
               )}
             </button>
+            )}
           </div>
         </header>
 

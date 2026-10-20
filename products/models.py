@@ -44,6 +44,10 @@ class Product(models.Model):
     description = models.TextField(blank=True, default='')
     sku = models.CharField(max_length=80, blank=True, default='')
     price = models.DecimalField(max_digits=14, decimal_places=2)
+    purchase_price = models.DecimalField(
+        max_digits=14, decimal_places=2, default=0,
+        help_text="Prix d'achat unitaire. Le vendeur le saisit pour calculer le bénéfice.",
+    )
     discount_price = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=10, default='BIF')
 
@@ -90,6 +94,7 @@ class ProductVariant(models.Model):
     sku = models.CharField(max_length=80, blank=True, default='')
     size = models.CharField(max_length=60, blank=True, default='')
     color = models.CharField(max_length=60, blank=True, default='')
+    image_url = models.TextField(blank=True, default='')
     stock = models.IntegerField(default=0)
     price_override = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
     is_active = models.BooleanField(default=True)

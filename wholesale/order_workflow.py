@@ -141,7 +141,14 @@ def recalculate_order_total(order):
     return total
 
 
+def ensure_sellable(product):
+    if product.stock_status == 'EXPIRED':
+        raise ValueError(f'{product.name} est périmé et ne peut pas être vendu.')
+
+
+@transaction.atomic
 def adjust_stock(product, new_real_qty, reason, user=None, order=None):
+    product = WholesaleProduct.objects.select_for_update().get(pk=product.pk)
     old = product.quantity_real
     new = max(0, int(new_real_qty))
     diff = new - old
@@ -161,6 +168,7 @@ def adjust_stock(product, new_real_qty, reason, user=None, order=None):
 
 @transaction.atomic
 def accept_order(order, user):
+    order = WholesaleOrder.objects.select_for_update().get(pk=order.pk)
     if order.status not in ('SUBMITTED', 'PROCESSING'):
         raise ValueError('Seules les commandes envoyees peuvent etre acceptees.')
     if order.payment_status != 'PAID':
@@ -168,18 +176,23 @@ def accept_order(order, user):
             'L\'acheteur doit d\'abord payer via BurundiPay avant que la commande puisse être acceptée.'
         )
 
+    locked = {}
     for item in order.items.select_related('product'):
-        product = item.product
-        if not product or product.status != 'ACTIVE':
+        if not item.product_id:
+            raise ValueError(f'Produit indisponible: {item.product_name_snapshot}')
+        product = WholesaleProduct.objects.select_for_update().get(pk=item.product_id)
+        ensure_sellable(product)
+        if product.status != 'ACTIVE':
             raise ValueError(f'Produit indisponible: {item.product_name_snapshot}')
         if product.quantity_available < item.quantity:
             raise ValueError(
                 f'Stock insuffisant pour {product.name} '
                 f'(disponible: {product.quantity_available}, demande: {item.quantity})'
             )
+        locked[item.product_id] = product
 
-    for item in order.items.select_related('product'):
-        product = item.product
+    for item in order.items.all():
+        product = locked[item.product_id]
         old_reserved = product.quantity_reserved
         product.quantity_reserved = old_reserved + item.quantity
         product.save(update_fields=['quantity_reserved', 'updated_at'])
@@ -206,7 +219,43 @@ def accept_order(order, user):
         proforma.save(update_fields=['status', 'confirmed_at', 'updated_at'])
 
     email_result = notify_order_accepted(order)
+    if email_result.get('status') != 'SENT':
+        raise ValueError(
+            'Acceptation impossible : le client n’a pas reçu l’e-mail. '
+            + (email_result.get('error') or '')
+        )
     return order, email_result
+
+
+@transaction.atomic
+def complete_order(order, user):
+    """La livraison consomme la réservation : stock réel et réservé baissent ensemble."""
+    order = WholesaleOrder.objects.select_for_update().get(pk=order.pk)
+    if order.status != 'ACCEPTED':
+        raise ValueError('Seule une commande acceptée peut être marquée livrée.')
+    for item in order.items.select_related('product'):
+        if not item.product_id:
+            raise ValueError(f'Produit indisponible: {item.product_name_snapshot}')
+        product = WholesaleProduct.objects.select_for_update().get(pk=item.product_id)
+        if product.quantity_reserved < item.quantity or product.quantity_real < item.quantity:
+            raise ValueError(f'Stock réel insuffisant pour livrer {product.name}.')
+        old = product.quantity_real
+        product.quantity_reserved -= item.quantity
+        product.quantity_real -= item.quantity
+        product.save(update_fields=['quantity_reserved', 'quantity_real', 'updated_at'])
+        StockMovement.objects.create(
+            product=product,
+            old_quantity=old,
+            new_quantity=product.quantity_real,
+            difference=product.quantity_real - old,
+            reason=f'Livraison commande {order.reference}',
+            user=user,
+            order=order,
+        )
+    order.status = 'COMPLETED'
+    order.save(update_fields=['status', 'updated_at'])
+    log_order_event(order, 'COMPLETED', 'Commande livrée — stock réel déduit.', user)
+    return order
 
 
 @transaction.atomic
@@ -275,24 +324,13 @@ def reject_order(order, user, reason, comment=''):
         proforma.status = 'REJECTED'
         proforma.save(update_fields=['status', 'updated_at'])
 
-    # Libérer toute réservation éventuelle (si acceptation partielle / état incohérent)
-    for item in order.items.select_related('product'):
-        product = item.product
-        if not product:
-            continue
-        if product.quantity_reserved >= item.quantity:
-            product.quantity_reserved = product.quantity_reserved - item.quantity
-            product.save(update_fields=['quantity_reserved', 'updated_at'])
-            StockMovement.objects.create(
-                product=product,
-                old_quantity=product.quantity_real,
-                new_quantity=product.quantity_real,
-                difference=0,
-                reason=f'Liberation reservation {order.reference} (-{item.quantity})',
-                user=user,
-                order=order,
-            )
+    # Un refus n'arrive qu'avant acceptation : aucune réservation n'a été créée.
     email_result = notify_order_rejected(order, reason=reason, comment=comment)
+    if email_result.get('status') != 'SENT':
+        raise ValueError(
+            'Refus impossible : le client n’a pas reçu l’e-mail. '
+            + (email_result.get('error') or '')
+        )
     return order, email_result
 
 
@@ -304,6 +342,44 @@ def _wholesale_client_email(order):
         or (order.created_by.email if order.created_by_id else '')
         or ''
     ).strip()
+
+
+def notify_order_submitted(order):
+    """Accusé : la commande vient d'être enregistrée."""
+    client_name = (
+        order.client_business.name if order.client_business_id else (order.buyer_name or 'Client')
+    )
+    recipient = _wholesale_client_email(order)
+    profile = ensure_wholesale_profile(order.wholesale_business)
+    shop = profile.commercial_name or order.wholesale_business.name
+    context = {
+        'client_name': client_name,
+        'reference': order.reference,
+        'wholesale_name': shop,
+        'total_amount': order.total_amount,
+        'currency': order.currency,
+    }
+    fallback = (
+        f'Bonjour {client_name},\n\n'
+        f'Votre commande {order.reference} a bien été enregistrée par {shop}.'
+    )
+    try:
+        body = (profile.submission_email_message or '').format(**context) or fallback
+    except (KeyError, ValueError, IndexError):
+        body = fallback
+    if not recipient:
+        return {'status': 'FAILED', 'error': 'Aucun email destinataire.'}
+    try:
+        send_mail(
+            subject=f'[Isoko Hub] Commande {order.reference} enregistrée',
+            message=body,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', None),
+            recipient_list=[recipient],
+            fail_silently=False,
+        )
+        return {'status': 'SENT', 'recipient': recipient}
+    except Exception as exc:
+        return {'status': 'FAILED', 'recipient': recipient, 'error': str(exc)}
 
 
 def notify_order_rejected(order, reason='', comment=''):
@@ -324,16 +400,26 @@ def notify_order_rejected(order, reason='', comment=''):
         log.save(update_fields=['status', 'error_message'])
         return {'status': 'FAILED', 'error': log.error_message, 'label': "Echec de l'envoi"}
 
-    body = (
-        f'Bonjour,\n\n'
-        f'La pharmacie de gros {order.wholesale_business.name} a refusé votre commande.\n\n'
-        f'Référence : {order.reference}\n'
-        f'Pharmacie cliente : {client_name}\n'
-        f'Motif : {reason or "Non précisé"}\n'
-        + (f'Détail : {comment}\n' if comment else '')
-        + '\nVeuillez consulter votre espace professionnel pour plus de détails.\n'
-        f'\n— Isoko Hub\n'
+    profile = ensure_wholesale_profile(order.wholesale_business)
+    shop = profile.commercial_name or order.wholesale_business.name
+    context = {
+        'client_name': client_name,
+        'reference': order.reference,
+        'wholesale_name': shop,
+        'total_amount': order.total_amount,
+        'currency': order.currency,
+        'reason': reason or 'Non précisé',
+        'comment': comment or '',
+    }
+    fallback = (
+        f'Bonjour {client_name},\n\n'
+        f'Votre commande {order.reference} a été refusée par {shop}.\n'
+        f'Motif : {context["reason"]}\n'
     )
+    try:
+        body = (profile.rejection_email_message or '').format(**context) or fallback
+    except (KeyError, ValueError, IndexError):
+        body = fallback
     try:
         send_mail(
             subject=f'[Isoko Hub] Commande {order.reference} refusée',
@@ -381,22 +467,24 @@ def notify_order_accepted(order):
         log.save(update_fields=['status', 'error_message'])
         return {'status': 'FAILED', 'error': log.error_message, 'label': 'Echec de l\'envoi'}
 
-    items_txt = '\n'.join(
-        f'- {i.product_name_snapshot} — {i.quantity} — {i.packaging_snapshot}'
-        for i in order.items.all()
+    profile = ensure_wholesale_profile(order.wholesale_business)
+    shop = profile.commercial_name or order.wholesale_business.name
+    context = {
+        'client_name': client_name,
+        'reference': order.reference,
+        'wholesale_name': shop,
+        'total_amount': order.total_amount,
+        'currency': order.currency,
+    }
+    fallback = (
+        f'Bonjour {client_name},\n\n'
+        f'Votre commande {order.reference} a été acceptée par {shop}.\n'
+        f'Montant total : {order.total_amount} {order.currency}.\n'
     )
-    accept_date = timezone.now().strftime('%d/%m/%Y %H:%M')
-    body = (
-        f'Bonjour,\n\n'
-        f'La pharmacie de gros {order.wholesale_business.name} confirme l\'acceptation de votre commande.\n\n'
-        f'Reférence : {order.reference}\n'
-        f'Pharmacie cliente : {client_name}\n'
-        f'Date d\'acceptation : {accept_date}\n'
-        f'Montant total : {order.total_amount} {order.currency}\n'
-        f'Statut : Acceptée\n\n'
-        f'Détail des produits :\n{items_txt}\n\n'
-        f'Veuillez consulter votre espace professionnel pour voir le détail de la commande.\n'
-    )
+    try:
+        body = (profile.acceptance_email_message or '').format(**context) or fallback
+    except (KeyError, ValueError, IndexError):
+        body = fallback
     try:
         send_mail(
             subject=f'[Isoko Hub] Commande {order.reference} acceptée',

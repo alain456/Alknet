@@ -67,6 +67,14 @@ const SCHOOL_PERMISSIONS = [
   { key: 'education.profile.update', label: 'Fiche de l’école', desc: 'Modifier la fiche et les messages' },
 ];
 
+const UNIVERSITY_PERMISSIONS = [
+  { key: 'education.fees.manage', label: 'Frais d’inscription', desc: 'Liste des dossiers et suivi des paiements' },
+  { key: 'education.admissions.manage', label: 'Admissions', desc: 'Accepter, refuser ou demander un complément' },
+  { key: 'education.profile.update', label: 'Fiche de l’université', desc: 'Modifier la fiche et les messages' },
+  { key: 'education.structure.manage', label: 'Facultés', desc: 'Créer et modifier les facultés et les départements' },
+  { key: 'education.programs.manage', label: 'Programmes', desc: 'Créer et modifier les programmes et leurs niveaux' },
+];
+
 const GENERIC_PERMISSIONS = [
   { key: 'can_manage_staff', label: 'Gérer le personnel', desc: 'Créer et modifier les collaborateurs' },
   { key: 'can_manage_roles', label: 'Gérer les rôles', desc: 'Créer et modifier les rôles & permissions' },
@@ -119,6 +127,8 @@ export default function ManageRoles() {
   const isHotel = categoryKey === 'hotel' || location.pathname.startsWith('/hotel');
   const isHospital = !isHotel && (categoryKey === 'hospital' || location.pathname.startsWith('/hospital'));
   const isSchool = !isHotel && !isHospital && user?.business_info?.category_slug === 'ecole';
+  const isUniversity = !isHotel && !isHospital && user?.business_info?.category_slug === 'universite';
+  const isEducation = isSchool || isUniversity;
 
   // Accès via hotel.roles.* / hotel.manage — même règle pour propriétaire et employés
   const { canCreate, canUpdate, canDelete, can } = useHotelPerm();
@@ -142,20 +152,22 @@ export default function ManageRoles() {
     ? HOTEL_PERMISSIONS_FLAT
     : isHospital
       ? HOSPITAL_PERMISSIONS
-      : isSchool
-        ? SCHOOL_PERMISSIONS
-        : GENERIC_PERMISSIONS;
+      : isUniversity
+        ? UNIVERSITY_PERMISSIONS
+        : isSchool
+          ? SCHOOL_PERMISSIONS
+          : GENERIC_PERMISSIONS;
 
   useEffect(() => {
     if (isAuthenticated) fetchRoles();
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (!isAuthenticated || !isSchool) return;
+    if (!isAuthenticated || !isEducation) return;
     api.get('businesses/my-business/employees/', { auth: true })
       .then((rows) => setAccountants(Array.isArray(rows) ? rows : []))
       .catch(() => setAccountants([]));
-  }, [isAuthenticated, isSchool, roles]);
+  }, [isAuthenticated, isEducation, roles]);
 
   const fetchRoles = async () => {
     try {
@@ -556,7 +568,7 @@ export default function ManageRoles() {
               ? 'Droits CRUD (créer / voir / modifier / supprimer) par module — attribuables à n’importe quel rôle.'
               : isHospital
                 ? 'Droits CRUD par module : rendez-vous, dossiers, laboratoire, comptabilité, personnel.'
-                : isSchool
+                : isEducation
                   ? 'Donnez le rôle Comptable à la personne qui suit les frais d’inscription.'
                   : 'Créez et assignez les rôles d\'accès de votre entreprise.'}
           </p>
@@ -665,12 +677,12 @@ export default function ManageRoles() {
         </div>
       )}
 
-      {isSchool && (
+      {isEducation && (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-teal-200 shadow-sm p-5 space-y-4">
           <div>
-            <h2 className="font-bold text-gray-900">Comptable de l’école</h2>
+            <h2 className="font-bold text-gray-900">Comptable de {isUniversity ? 'l’université' : 'l’école'}</h2>
             <p className="text-xs text-gray-500 mt-1">
-              Cette personne voit uniquement les élèves de l’école et les frais d’inscription. Elle ne gère pas les admissions.
+              Cette personne voit uniquement les frais d’inscription. Elle ne gère pas les admissions{isUniversity ? ', les facultés ni les programmes' : ''}.
             </p>
           </div>
           {accountantError && <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{accountantError}</p>}
@@ -763,7 +775,7 @@ export default function ManageRoles() {
                   onChange={(e) => setName(e.target.value)}
                   disabled={isHotel && isEditMode && isOwnerRoleRow({ name, system_access_level: systemAccessLevel })}
                   className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm disabled:opacity-70"
-                  placeholder={isHotel ? 'ex: Réceptionniste' : 'ex: Agent d\'accueil'}
+                  placeholder={isEducation ? 'ex: Comptable' : isHotel ? 'ex: Réceptionniste' : 'ex: Agent d\'accueil'}
                 />
                 {isHotel && isEditMode && isOwnerRoleRow({ name, system_access_level: systemAccessLevel }) && (
                   <p className="text-[11px] text-amber-700 mt-1">

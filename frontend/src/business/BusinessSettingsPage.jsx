@@ -7,10 +7,13 @@ import LocationSelector from '../shared/components/LocationSelector';
 import { readImageAsDataUrl } from '../shared/imageUpload';
 import api from '../shared/api';
 import { normalizeWebsiteUrl } from '../shared/websiteUrl';
+import { firstBusiness, publishBusinessUpdate } from '../shared/businessSync';
 import WholesaleOperationalSettings from './WholesaleOperationalSettings';
 import RetailOperationalSettings from './RetailOperationalSettings';
+import CommerceOperationalSettings from './CommerceOperationalSettings';
 import HospitalOperationalSettings from './HospitalOperationalSettings';
 import SchoolMessageSettings from '../education/SchoolMessageSettings';
+import HotelReservationSettings from '../hotel/admin/HotelReservationSettings';
 
 export default function BusinessSettingsPage() {
   const [categories, setCategories] = useState([]);
@@ -150,6 +153,12 @@ export default function BusinessSettingsPage() {
           .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(', ') : value}`)
           .join(' · ');
         throw new Error(err.detail || fieldErrors || err.error || 'Enregistrement impossible');
+      }
+      const saved = firstBusiness(await response.json());
+      if (saved) {
+        publishBusinessUpdate(saved);
+        setFormData((prev) => ({ ...prev, logo: saved.logo || '' }));
+        setHasExistingLogo(Boolean(saved.has_logo || saved.logo));
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -362,17 +371,24 @@ export default function BusinessSettingsPage() {
         </form>
       </div>
 
-      {(sectorKey === 'wholesale' || sectorKey === 'retail_pharmacy' || sectorKey === 'hospital') && (
+      {(sectorKey === 'wholesale' || sectorKey === 'retail_pharmacy' || sectorKey === 'hospital' || sectorKey === 'commerce') && (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 md:p-8">
           {sectorKey === 'wholesale' && <WholesaleOperationalSettings />}
           {sectorKey === 'retail_pharmacy' && <RetailOperationalSettings />}
           {sectorKey === 'hospital' && <HospitalOperationalSettings />}
+          {sectorKey === 'commerce' && <CommerceOperationalSettings />}
+        </div>
+      )}
+
+      {sectorKey === 'hotel' && (
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 md:p-8">
+          <HotelReservationSettings focus="all" embedded />
         </div>
       )}
 
       {sectorKey === 'education' && (
-        user?.business_info?.category_slug === 'ecole'
-        || categories.find((c) => String(c.id) === String(formData.primary_category))?.slug === 'ecole'
+        ['ecole', 'universite'].includes(user?.business_info?.category_slug)
+        || ['ecole', 'universite'].includes(categories.find((c) => String(c.id) === String(formData.primary_category))?.slug)
       ) && (
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6 md:p-8">
           <SchoolMessageSettings />

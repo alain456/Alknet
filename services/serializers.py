@@ -8,7 +8,7 @@ class ServiceSerializer(serializers.ModelSerializer):
     category_detail = ServiceCategorySerializer(source='category', read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True, default='')
     business_name = serializers.CharField(source='business.name', read_only=True, default='')
-    business_logo = serializers.CharField(source='business.logo', read_only=True, default='')
+    business_logo = serializers.SerializerMethodField()
     business_address = serializers.CharField(source='business.address', read_only=True, default='')
     provider_name = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
@@ -28,6 +28,10 @@ class ServiceSerializer(serializers.ModelSerializer):
                 or obj.professional.email
             )
         return 'Prestataire'
+
+    def get_business_logo(self, obj):
+        from profiles.images import display_business_logo
+        return display_business_logo(obj.business)
 
     def get_image(self, obj):
         urls = obj.image_urls or []

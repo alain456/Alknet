@@ -1,14 +1,90 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  HeartPulse, Users, Calendar, DollarSign, TrendingUp,
-  Stethoscope, Clock, CheckCircle, AlertCircle, Activity
-} from 'lucide-react';
+import { Calendar, DollarSign, Stethoscope, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import hospitalService from '../hospitalService';
 import { ApiError } from '../../shared/api';
 
 const normalizeList = (data) => (Array.isArray(data) ? data : (data?.results || []));
+
+const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+const SLICE_COLORS = ['#32667F', '#EA8B33', '#132F45', '#8AA8B8', '#F3B940', '#E1302A'];
+
+function monthCounts(appointments, year) {
+  const counts = Array(12).fill(0);
+  appointments.forEach((apt) => {
+    if (!apt.appointment_date) return;
+    const date = new Date(apt.appointment_date);
+    if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) return;
+    counts[date.getMonth()] += 1;
+  });
+  return counts;
+}
+
+function serviceSlices(appointments) {
+  const totals = new Map();
+  appointments.forEach((apt) => {
+    const name = apt.service_name || 'Sans service';
+    totals.set(name, (totals.get(name) || 0) + 1);
+  });
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  const top = sorted.slice(0, 5);
+  const rest = sorted.slice(5).reduce((sum, [, count]) => sum + count, 0);
+  const slices = top.map(([label, value], index) => ({
+    label,
+    value,
+    color: SLICE_COLORS[index],
+  }));
+  if (rest > 0) slices.push({ label: 'Autres', value: rest, color: SLICE_COLORS[5] });
+  return slices;
+}
+
+function ServiceDonut({ slices }) {
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-6">
+      <svg viewBox="0 0 120 120" className="w-40 h-40 shrink-0" aria-hidden="true">
+        <circle cx="60" cy="60" r={radius} fill="none" stroke="#F5F5F5" strokeWidth="16" />
+        {total > 0 && slices.map((slice) => {
+          const length = (slice.value / total) * circumference;
+          const circle = (
+            <circle
+              key={slice.label}
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke={slice.color}
+              strokeWidth="16"
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={-offset}
+              transform="rotate(-90 60 60)"
+            />
+          );
+          offset += length;
+          return circle;
+        })}
+        <circle cx="60" cy="60" r="28" fill="#FFFFFF" />
+        <text x="60" y="64" textAnchor="middle" fill="#132F45" fontSize="16" fontWeight="700">{total}</text>
+      </svg>
+      <ul className="space-y-2 text-sm min-w-0">
+        {slices.length === 0 && <li className="text-ink-muted">Aucun rendez-vous.</li>}
+        {slices.map((slice) => (
+          <li key={slice.label} className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: slice.color }} />
+            <span className="text-ink truncate">{slice.label}</span>
+            <span className="text-ink-muted ml-auto pl-3">
+              {slice.value} · {total ? Math.round((slice.value / total) * 100) : 0}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function doctorLabel(apt) {
   if (apt?.doctor_name) return `Dr. ${apt.doctor_name}`;
@@ -38,6 +114,7 @@ export default function HospitalDashboard() {
     activeMedicalRecords: 0
   });
   const [recentAppointments, setRecentAppointments] = useState([]);
+  const [chartAppointments, setChartAppointments] = useState([]);
   const [recentInvoices, setRecentInvoices] = useState([]);
 
   useEffect(() => {
@@ -73,14 +150,14 @@ export default function HospitalDashboard() {
         hospitalService.getDoctors({ hospital: hid }),
         hospitalService.getServices(hid, true),
         hospitalService.getStats(hid),
-        hospitalService.getAppointments({ hospital: hid, ordering: '-appointment_date', limit: '8' }),
+        hospitalService.getAppointments({ hospital: hid, ordering: '-appointment_date', limit: '200' }),
         hospitalService.getInvoices(hid),
         hospitalService.getMedicalRecords(hid),
       ]);
 
       const doctors = normalizeList(docsRaw);
       const services = normalizeList(svcRaw);
-      const appointments = normalizeList(recentAptsRaw).slice(0, 8);
+      const appointments = normalizeList(recentAptsRaw);
       const invoices = normalizeList(invRaw);
       const records = normalizeList(recRaw);
 
@@ -105,6 +182,7 @@ export default function HospitalDashboard() {
       });
 
       setRecentAppointments(appointments.slice(0, 5));
+      setChartAppointments(appointments);
       setRecentInvoices(invoices.slice(0, 5));
     } catch (err) {
       console.error(err);
@@ -122,31 +200,41 @@ export default function HospitalDashboard() {
     return parseFloat(amount || 0).toLocaleString('fr-FR') + ' BIF';
   };
 
-  const StatCard = ({ icon: Icon, title, value, subtitle, borderClass = 'border-accent' }) => (
-    <div className={`bg-surface rounded-2xl border-2 ${borderClass} shadow-sm p-6 text-ink`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-ink mb-1">{title}</p>
-          <p className="text-3xl font-extrabold text-ink">{value}</p>
-          {subtitle && <p className="text-sm text-ink-muted mt-1 font-medium">{subtitle}</p>}
-        </div>
-        <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-primary text-surface border-2 border-accent shrink-0">
-          <Icon className="w-6 h-6" />
-        </div>
-      </div>
-    </div>
-  );
+  const chartYear = new Date().getFullYear();
+  const bars = useMemo(() => monthCounts(chartAppointments, chartYear), [chartAppointments, chartYear]);
+  const slices = useMemo(() => serviceSlices(chartAppointments), [chartAppointments]);
+  const barMax = Math.max(1, ...bars);
+
+  const highlights = [
+    { icon: Calendar, label: "RDV aujourd'hui", value: stats.todayAppointments },
+    { icon: Clock, label: 'En attente', value: stats.pendingAppointments },
+    { icon: Stethoscope, label: 'Médecins', value: stats.totalDoctors },
+    { icon: DollarSign, label: 'Factures en attente', value: formatCurrency(stats.pendingRevenue) },
+  ];
+  const secondary = [
+    { label: 'Services', value: stats.totalServices },
+    { label: 'Terminés (jour)', value: stats.completedAppointments },
+    { label: 'Patients', value: stats.totalPatients },
+    { label: 'Revenus encaissés', value: formatCurrency(stats.totalRevenue) },
+  ];
 
   if (loading) return <div className="p-8 text-ink font-semibold">Chargement du dashboard...</div>;
 
   return (
-    <div className="space-y-6 pb-10 text-ink">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-ink flex items-center gap-2">
-          <HeartPulse className="text-accent" />
-          Dashboard Hôpital
-        </h1>
-        <p className="text-ink-muted text-base mt-1 font-medium">Vue d&apos;ensemble de l&apos;activité de votre établissement.</p>
+    <div className="space-y-8 pb-10 text-ink">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink">Tableau de bord</h1>
+          <p className="text-ink-muted text-sm mt-1">Vue d&apos;ensemble de l&apos;activité de votre établissement.</p>
+        </div>
+        {hospitalId && (
+          <div className="flex flex-wrap gap-2">
+            <Link to="/hospital/appointments" className="px-4 py-2 rounded-full bg-white border border-border text-sm font-bold text-ink">Rendez-vous</Link>
+            <Link to="/hospital/doctors" className="px-4 py-2 rounded-full bg-white border border-border text-sm font-bold text-ink">Médecins</Link>
+            <Link to="/hospital/patients" className="px-4 py-2 rounded-full bg-white border border-border text-sm font-bold text-ink">Patients</Link>
+            <Link to="/hospital/services" className="px-4 py-2 rounded-full bg-white border border-border text-sm font-bold text-ink">Services</Link>
+          </div>
+        )}
       </div>
 
       {loadError && (
@@ -163,87 +251,112 @@ export default function HospitalDashboard() {
 
       {hospitalId && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={Stethoscope} title="Médecins" value={stats.totalDoctors} borderClass="border-accent" />
-            <StatCard icon={Activity} title="Services" value={stats.totalServices} borderClass="border-alert" />
-            <StatCard icon={Calendar} title="RDV aujourd'hui" value={stats.todayAppointments} borderClass="border-accent" />
-            <StatCard icon={Clock} title="En attente" value={stats.pendingAppointments} borderClass="border-alert" />
-            <StatCard icon={CheckCircle} title="Terminés (jour)" value={stats.completedAppointments} borderClass="border-accent" />
-            <StatCard icon={Users} title="Patients (récents)" value={stats.totalPatients} borderClass="border-alert" />
-            <StatCard icon={DollarSign} title="Revenus encaissés" value={formatCurrency(stats.totalRevenue)} borderClass="border-accent" />
-            <StatCard icon={TrendingUp} title="Factures en attente" value={formatCurrency(stats.pendingRevenue)} borderClass="border-alert" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {highlights.map((item) => (
+              <article key={item.label} className="rounded-3xl bg-white p-5 shadow-sm">
+                <item.icon className="w-5 h-5 text-accent" />
+                <p className="mt-4 text-sm text-ink-muted">{item.label}</p>
+                <p className="mt-1 text-2xl font-extrabold text-ink break-words">{item.value}</p>
+              </article>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-surface rounded-2xl border-2 border-accent shadow-sm p-6">
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <h2 className="font-extrabold text-ink text-lg">Rendez-vous par mois</h2>
+              <p className="text-xs text-ink-muted mt-1">{chartYear}</p>
+              <div className="mt-6 flex items-end gap-2 h-40">
+                {bars.map((count, index) => (
+                  <div key={MONTHS[index]} className="flex-1 flex flex-col items-center gap-2 h-full">
+                    <div className="flex-1 w-full flex items-end">
+                      <div
+                        className="w-full rounded-t-md"
+                        style={{
+                          height: `${Math.max(count ? 8 : 0, (count / barMax) * 100)}%`,
+                          backgroundColor: index === new Date().getMonth() ? '#EA8B33' : '#32667F',
+                        }}
+                        title={`${MONTHS[index]} : ${count}`}
+                      />
+                    </div>
+                    <span className="text-[10px] text-ink-muted">{MONTHS[index]}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <h2 className="font-extrabold text-ink text-lg">Rendez-vous par service</h2>
+              <p className="text-xs text-ink-muted mt-1">Répartition des rendez-vous enregistrés</p>
+              <div className="mt-6">
+                <ServiceDonut slices={slices} />
+              </div>
+            </section>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {secondary.map((item) => (
+              <div key={item.label} className="rounded-3xl bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs text-ink-muted">{item.label}</p>
+                <p className="mt-1 text-lg font-extrabold text-ink break-words">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4 gap-3">
                 <h2 className="font-extrabold text-ink text-lg">Rendez-vous récents</h2>
-                <Link to="/hospital/appointments" className="text-sm font-bold text-primary hover:text-accent">
+                <Link to="/hospital/appointments" className="text-sm font-bold text-ink underline underline-offset-2">
                   Voir tout
                 </Link>
               </div>
               {recentAppointments.length === 0 ? (
-                <p className="text-sm text-ink-muted font-medium">Aucun rendez-vous.</p>
+                <p className="text-sm text-ink-muted">Aucun rendez-vous.</p>
               ) : (
-                <ul className="space-y-3">
+                <ul className="divide-y divide-border">
                   {recentAppointments.map((apt) => (
-                    <li key={apt.id} className="flex items-start justify-between gap-3 text-sm border-b border-border pb-3 last:border-0">
-                      <div>
-                        <p className="font-bold text-ink text-base">{apt.patient_name || 'Patient'}</p>
-                        <p className="text-ink-muted font-medium">{doctorLabel(apt)}</p>
+                    <li key={apt.id} className="flex items-start justify-between gap-3 py-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-bold text-ink">{apt.patient_name || 'Patient'}</p>
+                        <p className="text-ink-muted">{doctorLabel(apt)}</p>
+                        {apt.appointment_date && (
+                          <p className="text-xs text-ink-muted mt-0.5">{apt.appointment_date}</p>
+                        )}
                       </div>
-                      <span className="text-xs font-bold text-ink whitespace-nowrap bg-primary/10 border border-accent px-2 py-1 rounded-lg">
+                      <span className="text-xs font-bold text-ink whitespace-nowrap bg-surface px-2 py-1 rounded-full">
                         {apt.status_display || apt.status}
                       </span>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
+            </section>
 
-            <div className="bg-surface rounded-2xl border-2 border-alert shadow-sm p-6">
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4 gap-3">
                 <h2 className="font-extrabold text-ink text-lg">Factures récentes</h2>
-                <Link to="/hospital/invoices" className="text-sm font-bold text-primary hover:text-accent">
+                <Link to="/hospital/billing" className="text-sm font-bold text-ink underline underline-offset-2">
                   Voir tout
                 </Link>
               </div>
               {recentInvoices.length === 0 ? (
-                <p className="text-sm text-ink-muted font-medium">Aucune facture.</p>
+                <p className="text-sm text-ink-muted">Aucune facture.</p>
               ) : (
-                <ul className="space-y-3">
+                <ul className="divide-y divide-border">
                   {recentInvoices.map((inv) => (
-                    <li key={inv.id} className="flex items-start justify-between gap-3 text-sm border-b border-border pb-3 last:border-0">
-                      <div>
-                        <p className="font-bold text-ink text-base">{inv.patient_name || inv.invoice_number || 'Facture'}</p>
-                        <p className="text-ink-muted font-medium">{inv.status}</p>
+                    <li key={inv.id} className="flex items-start justify-between gap-3 py-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="font-bold text-ink">{inv.patient_name || inv.invoice_number || 'Facture'}</p>
+                        <p className="text-ink-muted">{inv.status_display || inv.status}</p>
                       </div>
-                      <span className="text-xs font-bold text-ink whitespace-nowrap">
+                      <span className="text-sm font-bold text-ink whitespace-nowrap">
                         {formatCurrency(inv.amount)}
                       </span>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
-          </div>
-
-          <div className="bg-primary rounded-2xl p-6 text-surface border-2 border-accent">
-            <h2 className="font-bold mb-3 text-surface text-lg">Accès rapide</h2>
-            <div className="flex flex-wrap gap-3">
-              <Link to="/hospital/appointments" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
-                <Calendar className="w-4 h-4" /> Rendez-vous
-              </Link>
-              <Link to="/hospital/doctors" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
-                <Stethoscope className="w-4 h-4" /> Médecins
-              </Link>
-              <Link to="/hospital/patients" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
-                <Users className="w-4 h-4" /> Patients
-              </Link>
-              <Link to="/hospital/services" className="flex items-center gap-2 bg-surface/15 hover:bg-surface/25 text-surface font-semibold p-3 rounded-xl transition border border-surface/40">
-                <AlertCircle className="w-4 h-4" /> Services
-              </Link>
-            </div>
+            </section>
           </div>
         </>
       )}

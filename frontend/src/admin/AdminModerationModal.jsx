@@ -79,21 +79,15 @@ export default function AdminModerationModal({
   const openDecision = (mode) => {
     if (!selectedBusiness) return;
     setDecisionMode(mode);
-    setDecisionMessage(
-      mode === 'approve'
-        ? `Bonjour,\n\nNous avons le plaisir de vous confirmer que l’inscription de « ${selectedBusiness.name} » a été approuvée sur Isoko Hub. Vous pouvez dès à présent vous connecter à votre espace professionnel.\n\nCordialement,\nL’équipe Isoko Hub`
-        : `Bonjour,\n\nAprès examen de votre dossier, l’inscription de « ${selectedBusiness.name} » n’a pas pu être acceptée.\n\nMotif : [précisez ici]\n\nCordialement,\nL’équipe Isoko Hub`
-    );
+    setDecisionMessage('');
   };
 
   const handleDecisionSubmit = async (e) => {
     e.preventDefault();
     if (!selectedBusiness || !decisionMode) return;
     const message = decisionMessage.trim();
-    if (!message) {
-      alert(decisionMode === 'approve'
-        ? 'Veuillez rédiger le message de confirmation envoyé à l’entreprise.'
-        : 'Veuillez rédiger le motif de refus envoyé à l’entreprise.');
+    if (decisionMode === 'reject' && !message) {
+      alert('Veuillez indiquer le motif de refus envoyé à l’entreprise.');
       return;
     }
 
@@ -288,7 +282,7 @@ export default function AdminModerationModal({
                       onClick={() => openDecision('approve')}
                       className="px-3 py-2 text-xs font-semibold bg-green-700 text-white rounded-md hover:bg-green-800 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Approuver avec message
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approuver
                     </button>
                     <button
                       type="button"
@@ -296,7 +290,7 @@ export default function AdminModerationModal({
                       onClick={() => openDecision('reject')}
                       className="px-3 py-2 text-xs font-semibold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 rounded-md hover:bg-red-200 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
-                      <XCircle className="w-3.5 h-3.5" /> Refuser avec message
+                      <XCircle className="w-3.5 h-3.5" /> Refuser
                     </button>
                   </div>
                   <p className="text-[11px] text-ink-muted dark:text-green-100/50 flex items-center gap-1">
@@ -325,18 +319,18 @@ export default function AdminModerationModal({
               </h4>
               <p className="text-xs text-ink-muted dark:text-green-100/70 mb-3">
                 {decisionMode === 'approve'
-                  ? <>Rédigez le message de confirmation qui sera envoyé par email à <strong>{selectedBusiness.email || selectedBusiness.owner_email}</strong> pour <strong>{selectedBusiness.name}</strong>.</>
-                  : <>Rédigez le motif de refus qui sera envoyé par email à <strong>{selectedBusiness.email || selectedBusiness.owner_email}</strong> pour <strong>{selectedBusiness.name}</strong>.</>}
+                  ? <>Le message d’approbation enregistré part à <strong>{selectedBusiness.email || selectedBusiness.owner_email}</strong>. Le complément ci-dessous remplace {'{note}'}.</>
+                  : <>Le message de refus enregistré part à <strong>{selectedBusiness.email || selectedBusiness.owner_email}</strong>. Le motif remplace {'{note}'}.</>}
               </p>
 
               <form onSubmit={handleDecisionSubmit} className="space-y-3">
                 <textarea
-                  required
-                  rows={8}
+                  required={decisionMode === 'reject'}
+                  rows={4}
                   value={decisionMessage}
                   onChange={(e) => setDecisionMessage(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-paper dark:bg-black/30 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700 resize-y min-h-[140px]"
-                  placeholder={decisionMode === 'approve' ? 'Message de confirmation…' : 'Motif de refus…'}
+                  placeholder={decisionMode === 'approve' ? 'Complément facultatif' : 'Motif du refus'}
                 />
                 <div className="flex justify-end gap-2">
                   <button

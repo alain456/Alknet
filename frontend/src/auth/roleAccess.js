@@ -175,8 +175,8 @@ export const HOTEL_STAFF_PATH_REDIRECTS = {
   '/hotel/staff/housekeeping': '/hotel/housekeeping',
   '/hotel/staff/housekeeping/tasks': '/hotel/housekeeping',
   '/hotel/staff/cashier': '/hotel/cashier',
-  '/hotel/staff/cashier/folios': '/hotel/folios',
-  '/hotel/staff/cashier/invoices': '/hotel/invoices',
+  '/hotel/staff/cashier/folios': '/hotel/cashier?section=encaisser',
+  '/hotel/staff/cashier/invoices': '/hotel/cashier?section=factures',
   '/hotel/staff/maintenance': '/hotel/maintenance',
   '/hotel/staff/maintenance/tickets': '/hotel/maintenance',
 };
@@ -421,11 +421,14 @@ export function getHomePathForUser(user) {
       const feesOnly = roleName.includes('comptable') || (
         perms.includes('education.fees.manage')
         && !perms.includes('education.admissions.manage')
+        && !perms.includes('education.programs.manage')
+        && !perms.includes('education.structure.manage')
+        && !perms.includes('education.profile.update')
         && !perms.includes('*')
         && !perms.includes('education.manage')
       );
       if (feesOnly) return '/education/accounting';
-      return '/education/staff';
+      return '/education/dashboard';
     }
     return getStaffHomePath(user);
   }

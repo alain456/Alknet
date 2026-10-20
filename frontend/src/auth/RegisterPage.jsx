@@ -25,7 +25,7 @@ export default function RegisterPage() {
       navigate(newUser?.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard');
     } catch (err) {
       setIsLoading(false);
-      setError(err.message || 'Registration failed. Please check your information.');
+      setError(err.message || 'Inscription impossible. Vérifiez les informations.');
     }
   });
 
@@ -35,8 +35,8 @@ export default function RegisterPage() {
   return (
     <div className="w-full text-ink">
       <div className="mb-6">
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Create an account</h2>
-        <p className="text-base text-ink-muted font-medium">Join Isoko Hub today and explore endless possibilities.</p>
+        <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-2">Créer un compte</h2>
+        <p className="text-base text-ink-muted font-medium">Rejoignez Isoko Hub pour réserver, commander et vous inscrire.</p>
       </div>
 
       {error && (
@@ -48,28 +48,36 @@ export default function RegisterPage() {
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">First Name</label>
-            <input type="text" className={fieldClass} placeholder="John" {...form.register('firstName', { required: true })} />
+            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+              Prénom
+              <input type="text" className={`${fieldClass} mt-1.5`} placeholder="Aline" {...form.register('firstName', { required: true })} />
+            </label>
           </div>
           <div>
-            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Last Name</label>
-            <input type="text" className={fieldClass} placeholder="Doe" {...form.register('lastName', { required: true })} />
+            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+              Nom
+              <input type="text" className={`${fieldClass} mt-1.5`} placeholder="Ndayishimiye" {...form.register('lastName', { required: true })} />
+            </label>
           </div>
         </div>
 
         <div>
-          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Email</label>
-          <input type="email" className={fieldClass} placeholder="john@example.com" {...form.register('email', { required: true })} />
+          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+            E-mail
+            <input type="email" className={`${fieldClass} mt-1.5`} placeholder="vous@exemple.com" {...form.register('email', { required: true })} />
+          </label>
         </div>
 
         <div>
-          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Password</label>
+          <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+            Mot de passe
           <PasswordInput
             autoComplete="new-password"
             className="px-4 py-3 border-2 border-accent rounded-xl focus:border-alert bg-surface text-ink text-base font-medium transition"
-            placeholder="Create a strong password"
+            placeholder="Au moins 6 caractères"
             {...form.register('password', { required: true, minLength: 6 })}
           />
+          </label>
           <PasswordStrength password={password} />
         </div>
 
@@ -83,16 +91,16 @@ export default function RegisterPage() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-          ) : 'Create Account'}
+          ) : 'Créer le compte'}
         </button>
       </form>
 
       <SocialLogins nextPath="/dashboard" />
 
       <p className="mt-6 text-center text-sm sm:text-base text-ink font-medium">
-        Already have an account?{' '}
+        Déjà un compte ?{' '}
         <Link to="/login" className="font-extrabold text-primary hover:text-accent">
-          Sign in
+          Se connecter
         </Link>
       </p>
     </div>

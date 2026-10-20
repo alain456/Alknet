@@ -33,7 +33,7 @@
   --color-paper: #F5F5F5;
   --color-ink: #132F45;
   --color-ink-muted: color-mix(in srgb, #132F45 72%, #F5F5F5);
-  --color-ink-faint: color-mix(in srgb, #132F45 48%, #F5F5F5);
+  --color-ink-faint: color-mix(in srgb, #132F45 68%, #F5F5F5);
   --color-border: color-mix(in srgb, #132F45 22%, #F5F5F5);
   --color-border-strong: color-mix(in srgb, #132F45 40%, #F5F5F5);
   --color-success: #EA8B33;
@@ -365,7 +365,7 @@ html.dark {
   --color-paper: #0B1C2A;
   --color-ink: #F5F5F5;
   --color-ink-muted: color-mix(in srgb, #F5F5F5 72%, #32667F);
-  --color-ink-faint: color-mix(in srgb, #F5F5F5 52%, #32667F);
+  --color-ink-faint: color-mix(in srgb, #F5F5F5 82%, #32667F);
   --color-border: color-mix(in srgb, #F5F5F5 16%, #32667F);
   --color-border-strong: color-mix(in srgb, #F5F5F5 28%, #32667F);
   --color-secondary: #32667F;
@@ -615,6 +615,15 @@ html.dark {
 
   thead th {
     border-bottom: 1.5px solid var(--ih-border-strong);
+    text-align: left;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: var(--color-surface);
+  }
+
+  html.dark thead th {
+    background-color: #132F45;
   }
 
   tbody td {
@@ -674,36 +683,48 @@ html.dark {
     border-top: 3px solid var(--color-alert);
   }
 
-  /* Cartes : bordure uniquement — NE PAS forcer color (casse les boutons primary) */
-  main div[class*='rounded-2xl'][class*='border'],
-  main div[class*='rounded-xl'][class*='border'],
-  main section[class*='rounded-2xl'],
-  main section[class*='rounded-xl'],
-  main article[class*='rounded-2xl'],
-  main article[class*='rounded-xl'] {
-    border-width: 2px !important;
+  /*
+    Cartes : contour pétrole 3px et fond légèrement teinté,
+    pour qu’elles se détachent du blanc cassé sans alterner orange / rouge.
+  */
+  main :is(div, section, article, a):is(
+    [class*='rounded-xl'],
+    [class*='rounded-2xl'],
+    [class*='rounded-3xl']
+  ):is(
+    [class*='bg-white']:not([class*='bg-white/']),
+    [class*='bg-surface'],
+    [class*='bg-paper']
+  ):not([class*='rounded-full']):not([class*='bg-ink']):not([class*='school-dash-hero']):not([class*='bg-accent']):not([class*='bg-primary']):not([class*='bg-alert']) {
+    border-width: 3px !important;
     border-style: solid !important;
+    border-color: #32667F !important;
+    background-color: color-mix(in srgb, #32667F 8%, #FFFFFF) !important;
   }
 
-  main .grid > div[class*='rounded-2xl']:nth-child(odd),
-  main .grid > div[class*='rounded-xl']:nth-child(odd),
-  main .space-y-4 > div[class*='rounded-2xl']:nth-child(odd) {
-    border-color: var(--color-accent) !important;
+  /* Barre de recherche catalogue : fond blanc, sans le contour des cartes. */
+  .search-panel {
+    border-radius: 1.5rem;
+    background-color: #ffffff;
+    border: none !important;
+    box-shadow: none !important;
   }
 
-  main .grid > div[class*='rounded-2xl']:nth-child(even),
-  main .grid > div[class*='rounded-xl']:nth-child(even),
-  main .space-y-4 > div[class*='rounded-2xl']:nth-child(even) {
-    border-color: var(--color-alert) !important;
+  html.dark .search-panel {
+    background-color: var(--color-surface);
   }
 
-  /* Fonds clairs sans border */
-  main div[class*='rounded-xl'][class*='bg-white']:not([class*='border']):not([class*='rounded-full']),
-  main div[class*='rounded-2xl'][class*='bg-white']:not([class*='border']):not([class*='rounded-full']),
-  main div[class*='rounded-xl'][class*='bg-surface']:not([class*='border']):not([class*='rounded-full']),
-  main div[class*='rounded-2xl'][class*='bg-surface']:not([class*='border']):not([class*='rounded-full']) {
-    border: 2px solid var(--color-accent);
-    color: var(--color-ink);
+  html.dark main :is(div, section, article, a):is(
+    [class*='rounded-xl'],
+    [class*='rounded-2xl'],
+    [class*='rounded-3xl']
+  ):is(
+    [class*='bg-white']:not([class*='bg-white/']),
+    [class*='bg-surface'],
+    [class*='bg-paper']
+  ):not([class*='rounded-full']):not([class*='bg-ink']):not([class*='school-dash-hero']):not([class*='bg-accent']):not([class*='bg-primary']):not([class*='bg-alert']) {
+    border-color: color-mix(in srgb, #F5F5F5 55%, #32667F) !important;
+    background-color: color-mix(in srgb, #F5F5F5 10%, #132F45) !important;
   }
 
   /* Boutons secondaires (texte) */
@@ -1019,7 +1040,7 @@ html.dark {
   }
 
   main .school-dash-hero,
-  main .school-dash-hero :is(h1, p, span, a, button) {
+  main .school-dash-hero :is(h1, h2, h3, h4, p, span, a, button) {
     color: #F5F5F5 !important;
     -webkit-text-fill-color: #F5F5F5 !important;
   }
@@ -1158,6 +1179,25 @@ html.dark .bg-white {
 :focus-visible {
   outline: 2px solid #EA8B33;
   outline-offset: 2px;
+  scroll-margin-top: 5.5rem;
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: 0;
+  z-index: 80;
+  transform: translateY(-140%);
+  background: #EA8B33;
+  color: #132F45;
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0 0 0.75rem 0.75rem;
+}
+
+.skip-link:focus {
+  transform: none;
 }
 
 button,
@@ -1166,6 +1206,19 @@ input,
 select,
 textarea {
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+}
+
+button {
+  user-select: none;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 button:not(:disabled):hover,

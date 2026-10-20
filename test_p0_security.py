@@ -148,6 +148,70 @@ class PaymentTokenIsolationTests(TestCase):
         )
         self.assertEqual(response.status_code, 404, response.content)
 
+    def test_customer_cannot_patch_order_status(self):
+        self.client.force_authenticate(self.stranger)
+        response = self.client.patch(
+            f'/api/v1/orders/{self.order.id}/',
+            {'status': 'COMPLETED'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 405, response.content)
+        self.order.refresh_from_db()
+        self.assertNotEqual(self.order.status, 'COMPLETED')
+
+    def test_order_detail_does_not_return_payment_token(self):
+        self.client.force_authenticate(self.stranger)
+        response = self.client.get(f'/api/v1/orders/{self.order.id}/')
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertNotIn('payment_token', response.data)
+
+    def test_wholesale_status_cannot_be_patched(self):
+        self.wholesale_order.created_by = self.stranger
+        self.wholesale_order.save(update_fields=['created_by'])
+        self.client.force_authenticate(self.stranger)
+        response = self.client.patch(
+            f'/api/v1/wholesale/orders/{self.wholesale_order.id}/',
+            {'status': 'ACCEPTED'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 405, response.content)
+        self.wholesale_order.refresh_from_db()
+        self.assertNotEqual(self.wholesale_order.status, 'ACCEPTED')
+
+    def test_reject_restores_stock_and_completed_cannot_skip_ready(self):
+        from products.models import Product
+        from orders.models import OrderItem
+        from orders.views import _decrement_stock
+
+        product = Product.objects.create(
+            business=self.business, name='Chemise', price=1000, stock=5,
+        )
+        self.order.guest_email = 'client@pay.test'
+        self.order.status = 'PENDING'
+        self.order.save(update_fields=['guest_email', 'status'])
+        OrderItem.objects.create(
+            order=self.order, product=product, product_name='Chemise',
+            quantity=2, price_at_time=1000,
+        )
+        _decrement_stock(self.order)
+        product.refresh_from_db()
+        self.assertEqual(product.stock, 3)
+
+        self.client.force_authenticate(self.owner)
+        skipped = self.client.post(f'/api/v1/orders/{self.order.id}/mark-completed/', {}, format='json')
+        self.assertEqual(skipped.status_code, 400, skipped.content)
+
+        refused = self.client.post(
+            f'/api/v1/orders/{self.order.id}/reject/',
+            {'reason': 'Indisponible'},
+            format='json',
+        )
+        self.assertEqual(refused.status_code, 200, refused.content)
+        product.refresh_from_db()
+        self.order.refresh_from_db()
+        self.assertEqual(product.stock, 5)
+        self.assertEqual(self.order.status, 'REJECTED')
+
     def test_payment_token_is_unique_per_order(self):
         other = Order.objects.create(
             business=self.business, customer=self.stranger, reference_code='CMD-TEST-2'

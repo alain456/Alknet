@@ -37,8 +37,8 @@ export default function VerifyEmailPage() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">Verifying your email...</h2>
-          <p className="text-base text-ink-muted font-medium">Please wait while we confirm your account.</p>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-ink mb-2">Vérification de l’e-mail…</h2>
+          <p className="text-base text-ink-muted font-medium">Patientez pendant la confirmation du compte.</p>
         </div>
       )}
 
@@ -47,15 +47,15 @@ export default function VerifyEmailPage() {
           <div className="w-20 h-20 bg-primary text-surface rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-accent">
             <CheckCircle2 className="w-10 h-10" />
           </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-4">Email Verified!</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-4">E-mail confirmé</h2>
           <p className="text-base text-ink-muted font-medium mb-8 max-w-sm mx-auto">
-            Your account is now fully active. Welcome to the Isoko Hub community!
+            Le compte est actif. Vous pouvez vous connecter.
           </p>
           <Link
             to="/login"
             className="inline-block w-full bg-primary hover:opacity-95 text-surface font-bold text-base py-3 rounded-xl border-2 border-accent shadow-sm transition cursor-pointer"
           >
-            Continue to Login
+            Aller à la connexion
           </Link>
         </div>
       )}
@@ -65,15 +65,15 @@ export default function VerifyEmailPage() {
           <div className="w-20 h-20 bg-alert text-surface rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-accent">
             <XCircle className="w-10 h-10" />
           </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-4">Verification Failed</h2>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-ink mb-4">Vérification impossible</h2>
           <p className="text-base text-ink-muted font-medium mb-8 max-w-sm mx-auto">
-            The verification link is invalid or has expired. Please request a new verification email.
+            Le lien est invalide ou expiré. Demandez un nouvel e-mail de confirmation.
           </p>
           <Link
             to="/login"
             className="inline-block w-full bg-surface border-2 border-accent hover:bg-primary/5 text-ink font-bold text-base py-3 rounded-xl shadow-sm transition cursor-pointer"
           >
-            Return to Login
+            Retour à la connexion
           </Link>
         </div>
       )}

@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { getBusinessCategoryKey } from '../auth/roleAccess';
 import { readImageAsDataUrl } from '../shared/imageUpload';
 import { normalizeWebsiteUrl } from '../shared/websiteUrl';
+import { firstBusiness, publishBusinessUpdate } from '../shared/businessSync';
 
 const emptyHospitalExtras = {
   category_type: 'Hôpital Général de Référence',
@@ -119,8 +120,9 @@ export default function BusinessProfilePage() {
       if (!response.ok) throw new Error('Impossible de charger le profil');
       const data = await response.json();
 
-      const b = Array.isArray(data) ? data[0] : data;
+      const b = firstBusiness(data);
       if (b) {
+        publishBusinessUpdate(b);
         setBusinessId(b.id);
         setFormData({
           name: b.name || '',
@@ -897,6 +899,24 @@ export default function BusinessProfilePage() {
             </div>
           </div>
           </>
+        )}
+
+        {!isHospital && (
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm space-y-3">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">Compte marchand BurundiPay</h2>
+            <p className="text-sm text-gray-500">Ce compte reçoit les paiements des clients. Il est distinct de l’abonnement Isoko Hub.</p>
+            <input
+              type="text"
+              value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+              onChange={(e) => setFormData({
+                ...formData,
+                burundipay_merchant_account: e.target.value,
+                lumicash_merchant_account: e.target.value,
+              })}
+              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
+              placeholder="Compte fourni par BurundiPay"
+            />
+          </div>
         )}
 
         <div className="flex justify-end pt-4">

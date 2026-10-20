@@ -1,51 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Building2, User, Lock, Mail, ChevronRight, Camera, ImagePlus, Star, ArrowRight,
+  Building2, User, Lock, Mail, ChevronRight, ImagePlus, Star, ArrowRight,
 } from 'lucide-react';
 import { categoryKeyFromLabels } from '../../auth/roleAccess';
 import { loadEducationEnums } from '../../education/educationEnums';
 import SchoolSectionsEditor from '../../education/SchoolSectionsEditor';
+import SchoolEcofoClassesEditor from '../../education/SchoolEcofoClassesEditor';
 import SectorSpecificFields from './SectorSpecificFields';
 import LocationSelector from './LocationSelector';
 import PasswordInput from './PasswordInput';
+import { readImageAsDataUrl } from '../imageUpload';
+import AvatarPicker from './AvatarPicker';
 
 const fieldClass =
   'w-full px-4 py-3 bg-surface border-2 border-accent rounded-xl focus:border-alert text-ink text-base font-medium outline-none';
 
-/** Lit un fichier image et renvoie un data URL compressé (JPEG). */
-export function readImageAsDataUrl(file, { maxSide = 512, quality = 0.72 } = {}) {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type?.startsWith('image/')) {
-      reject(new Error('Veuillez choisir un fichier image (JPG, PNG, WebP…).'));
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      reject(new Error('Image trop volumineuse (max 8 Mo).'));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Impossible de lire le fichier.'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('Image invalide.'));
-      img.onload = () => {
-        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-        const w = Math.max(1, Math.round(img.width * scale));
-        const h = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#F5F5F5';
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+export { readImageAsDataUrl } from '../imageUpload';
 
 export function emptyBusinessRegistrationForm(overrides = {}) {
   return {
@@ -75,6 +45,7 @@ export function emptyBusinessRegistrationForm(overrides = {}) {
       offers_ecofo: false,
       offers_post_fondamental: false,
       ecofo_cycles: [],
+      ecofo_classes: [],
       post_fondamental_sections: [],
     },
     ...overrides,
@@ -126,12 +97,17 @@ export function validateBusinessRegistrationForm(formData, categories, {
     if (!tracks.offers_prescolaire && !tracks.offers_ecofo && !tracks.offers_post_fondamental) {
       return 'École : précisez le préscolaire, l’ECOFO, le post-fondamental, ou une combinaison.';
     }
-    if (tracks.offers_ecofo && !(tracks.ecofo_cycles || []).length) {
-      return 'ECOFO : indiquez au moins un cycle.';
+    const ecofoClasses = (tracks.ecofo_classes || []).filter((row) => (row?.value || '').trim());
+    if (tracks.offers_ecofo && !ecofoClasses.length && !(tracks.ecofo_cycles || []).length) {
+      return 'ECOFO : ajoutez au moins une classe.';
     }
     const sections = (tracks.post_fondamental_sections || []).filter((section) => (section.name || '').trim());
     if (tracks.offers_post_fondamental && !sections.length) {
       return 'Post-fondamental : ajoutez au moins une section.';
+    }
+    const sectionWithoutClass = sections.find((section) => !(section.classes || []).some((row) => (row?.value || '').trim()));
+    if (sectionWithoutClass) {
+      return `Section « ${sectionWithoutClass.name} » : ajoutez au moins une classe.`;
     }
   }
   return null;
@@ -159,6 +135,7 @@ export function buildBusinessRegistrationPayload(formData) {
         offers_ecofo: !!tracks.offers_ecofo,
         offers_post_fondamental: !!tracks.offers_post_fondamental,
         ecofo_cycles: tracks.ecofo_cycles || [],
+        ecofo_classes: (tracks.ecofo_classes || []).filter((row) => (row?.value || '').trim()),
         post_fondamental_sections: sections,
       },
     },
@@ -196,6 +173,7 @@ export default function BusinessRegistrationForm({
     offers_ecofo: false,
     offers_post_fondamental: false,
     ecofo_cycles: [],
+    ecofo_classes: [],
     post_fondamental_sections: [],
   };
 
@@ -244,41 +222,12 @@ export default function BusinessRegistrationForm({
           <User className="w-5 h-5 text-accent" /> Vos informations de connexion
         </h3>
 
-        <div className="mb-5 flex flex-col sm:flex-row gap-4 items-start">
-          <div className="w-24 h-24 rounded-2xl border-2 border-accent overflow-hidden bg-primary/5 flex items-center justify-center shrink-0">
-            {formData.owner_avatar ? (
-              <img src={formData.owner_avatar} alt="Photo profil" className="w-full h-full object-cover" />
-            ) : (
-              <Camera className="w-8 h-8 text-accent" />
-            )}
-          </div>
-          <div className="flex-1 w-full">
-            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
-              Votre photo de profil *
-            </label>
-            <p className="text-xs sm:text-sm text-ink-muted font-medium mb-2">
-              Visible dans la gestion des utilisateurs (Super Admin).
-            </p>
-            <input
-              type="file"
-              accept="image/*"
-              required={!formData.owner_avatar}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImagePick('owner_avatar', file);
-              }}
-              className="block w-full text-sm text-ink file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-2 file:border-accent file:bg-surface file:text-ink file:font-bold"
-            />
-            {formData.owner_avatar && (
-              <button
-                type="button"
-                onClick={() => patchForm({ owner_avatar: '' })}
-                className="mt-2 text-sm font-bold text-alert"
-              >
-                Retirer la photo
-              </button>
-            )}
-          </div>
+        <div className="mb-5">
+          <p className="block text-sm sm:text-base font-bold text-ink mb-2">Votre photo de profil *</p>
+          <AvatarPicker
+            value={formData.owner_avatar}
+            onChange={(dataUrl) => patchForm({ owner_avatar: dataUrl })}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -446,7 +395,13 @@ export default function BusinessRegistrationForm({
               École fondamentale (ECOFO)
             </label>
             {tracks.offers_ecofo && (
-              <div className="grid sm:grid-cols-2 gap-2 pl-6">
+              <div className="pl-6 space-y-3">
+                <SchoolEcofoClassesEditor
+                  classes={tracks.ecofo_classes || []}
+                  inputClass={fieldClass}
+                  onChange={(ecofo_classes) => patchTracks({ ecofo_classes })}
+                />
+                <div className="grid sm:grid-cols-2 gap-2">
                 {(schoolEnums.ecofo_cycles || []).map((cycle) => (
                   <label key={cycle.value} className="flex items-center gap-2 text-sm text-ink">
                     <input
@@ -464,6 +419,7 @@ export default function BusinessRegistrationForm({
                     {cycle.label}
                   </label>
                 ))}
+                </div>
               </div>
             )}
             <label className="flex items-center gap-2 text-sm text-ink">

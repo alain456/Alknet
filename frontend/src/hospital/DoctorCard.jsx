@@ -46,8 +46,8 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
   const photo = doctor.public_photo_url || doctor.photo_url || doctor.user_details?.avatar;
 
   return (
-    <div className="bg-surface text-ink border-2 border-accent rounded-2xl shadow-sm hover:shadow-md transition p-5 flex flex-col sm:flex-row gap-5">
-      <div className="w-24 h-24 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 border-2 border-accent/40 overflow-hidden">
+    <div className="bg-white text-ink ring-1 ring-border rounded-3xl p-5 flex flex-col sm:flex-row gap-5">
+      <div className="w-24 h-24 rounded-3xl bg-surface flex items-center justify-center shrink-0 overflow-hidden">
         {photo ? (
           <img src={photo} alt={name} className="w-full h-full object-cover" />
         ) : (
@@ -95,7 +95,7 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
             </div>
           ) : null}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 bg-primary/5 p-3 rounded-xl border-2 border-alert/40">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
             <InfoRow icon={Globe} label="Langues" value={languages} />
             <InfoRow
               icon={Award}
@@ -114,7 +114,7 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
                 {assignedServices.map((svc) => (
                   <span
                     key={svc.id || svc.name}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-ink border border-accent/50"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-surface text-ink"
                   >
                     {svc.name}
                   </span>
@@ -127,12 +127,12 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
 
           <div className="flex flex-wrap gap-2 mb-4">
             {isPhysical && (
-              <span className="px-2.5 py-1 bg-primary/10 text-ink text-xs font-semibold rounded-lg border border-accent/40">
+              <span className="px-2.5 py-1 bg-surface text-ink text-xs font-semibold rounded-full">
                 Consultation présentielle
               </span>
             )}
             {isTelemed && (
-              <span className="px-2.5 py-1 bg-primary/10 text-ink-muted text-xs font-semibold rounded-lg border border-border flex items-center gap-1">
+              <span className="px-2.5 py-1 bg-surface text-ink-muted text-xs font-semibold rounded-full flex items-center gap-1">
                 <Video className="w-3 h-3" /> Téléconsultation — bientôt
               </span>
             )}
@@ -143,7 +143,7 @@ export default function DoctorCard({ doctor, onBook, hasPublishedSlots = false }
           <button
             type="button"
             onClick={() => onBook(doctor)}
-            className="w-full sm:w-auto px-5 py-2.5 bg-primary hover:bg-primary text-surface font-semibold rounded-xl transition flex items-center justify-center gap-2 text-sm cursor-pointer border-2 border-accent"
+            className="w-full sm:w-auto px-5 py-2.5 bg-accent text-ink font-bold rounded-full transition flex items-center justify-center gap-2 text-sm"
           >
             Prendre Rendez-vous <ChevronRight className="w-4 h-4" />
           </button>

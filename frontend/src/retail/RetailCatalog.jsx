@@ -15,6 +15,7 @@ const emptyForm = {
   administration_route: 'Orale',
   expiration_date: '',
   sales_unit: 'Boîte',
+  purchase_price: '',
   retail_price: '',
   quantity_real: 0,
   prescription_required: false,
@@ -123,15 +124,20 @@ export default function RetailCatalog({ clientMode = false }) {
         ...form,
         name: form.name.trim(),
         packaging: form.sales_unit,
+        purchase_price: Number(form.purchase_price),
         retail_price: Number(form.retail_price),
-        quantity_real: Number(form.quantity_real || 0),
         prescription_required: Boolean(form.prescription_required),
         currency: 'BIF',
         status: form.status || 'ACTIVE',
       };
       if (!payload.expiration_date) delete payload.expiration_date;
-      if (editingId) await retailService.updateProduct(editingId, payload);
-      else await retailService.createProduct(payload);
+      if (editingId) {
+        delete payload.quantity_real;
+        await retailService.updateProduct(editingId, payload);
+      } else {
+        payload.quantity_real = Number(form.quantity_real || 0);
+        await retailService.createProduct(payload);
+      }
       setOpen(false);
       setForm(emptyForm);
       setEditingId(null);
@@ -299,12 +305,17 @@ export default function RetailCatalog({ clientMode = false }) {
                 </select>
               </label>
               <label className="text-sm space-y-1">
-                <span className="font-medium text-gray-700">Prix détail (BIF) *</span>
+                <span className="font-medium text-gray-700">Prix d’achat (BIF) *</span>
+                <input required type="number" min="0" step="1" value={form.purchase_price} onChange={(event) => setForm({ ...form, purchase_price: event.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm outline-none focus:ring-2 focus:ring-primary" />
+              </label>
+              <label className="text-sm space-y-1">
+                <span className="font-medium text-gray-700">Prix de vente (BIF) *</span>
                 <input required type="number" min="0" step="1" value={form.retail_price} onChange={(event) => setForm({ ...form, retail_price: event.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm outline-none focus:ring-2 focus:ring-primary" />
               </label>
               <label className="text-sm space-y-1">
-                <span className="font-medium text-gray-700">Quantité réelle</span>
-                <input type="number" min="0" value={form.quantity_real} onChange={(event) => setForm({ ...form, quantity_real: event.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm outline-none focus:ring-2 focus:ring-primary" />
+                <span className="font-medium text-gray-700">Quantité réelle{editingId ? '' : ' initiale'}</span>
+                <input type="number" min="0" value={form.quantity_real} disabled={Boolean(editingId)} onChange={(event) => setForm({ ...form, quantity_real: event.target.value })} className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100" />
+                {editingId && <span className="text-xs text-ink-muted">Ajustez le stock depuis la page Stock.</span>}
               </label>
               <label className="flex items-center gap-2 text-sm sm:self-end sm:pb-2 text-gray-700">
                 <input type="checkbox" checked={form.prescription_required} onChange={(event) => setForm({ ...form, prescription_required: event.target.checked })} />

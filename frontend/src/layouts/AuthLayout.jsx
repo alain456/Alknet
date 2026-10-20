@@ -1,10 +1,12 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import ThemeToggle from '../shared/components/ThemeToggle';
+import SkipLink from '../shared/components/SkipLink';
 
 export default function AuthLayout() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-surface text-ink relative">
+      <SkipLink />
       <div className="absolute top-4 right-4 z-20 md:top-6 md:right-6">
         <ThemeToggle />
       </div>
@@ -26,20 +28,20 @@ export default function AuthLayout() {
             <span className="font-extrabold text-2xl lg:text-3xl text-surface tracking-tight">Isoko Hub</span>
           </Link>
           <h1 className="text-3xl lg:text-4xl xl:text-5xl font-extrabold leading-tight mb-5 text-surface max-w-lg">
-            Empowering your business and career in Africa.
+            Vos services, entreprises et soins au même endroit.
           </h1>
           <p className="text-base lg:text-lg text-surface/90 max-w-md font-medium leading-relaxed">
-            Join thousands of professionals and businesses building the future of the digital economy.
+            Particuliers et établissements du Burundi utilisent la même plateforme.
           </p>
         </div>
 
         <div className="relative z-10 text-sm lg:text-base font-semibold text-accent">
-          © {new Date().getFullYear()} Isoko Hub. All rights reserved.
+          © {new Date().getFullYear()} Isoko Hub. Tous droits réservés.
         </div>
       </div>
 
       {/* Right side: Form */}
-      <div className="flex-1 flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 bg-surface">
+      <div id="contenu" className="flex-1 flex flex-col justify-center items-center p-6 sm:p-10 lg:p-12 bg-surface">
         <div className="w-full max-w-md rounded-2xl border-2 border-accent bg-surface p-6 sm:p-8 shadow-sm text-ink">
           <Link to="/" className="flex md:hidden items-center gap-2 mb-8 w-fit mx-auto">
             <div className="w-9 h-9 rounded-full border-2 border-primary flex items-center justify-center">

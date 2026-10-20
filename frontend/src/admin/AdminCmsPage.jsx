@@ -11,7 +11,7 @@ import { userHasPlatformPerm } from '../auth/platformPermissions';
 import { notifyContactUnread } from './contactInbox';
 
 const TABS = [
-  { key: 'home', label: 'Home', icon: Home },
+  { key: 'home', label: 'Accueil', icon: Home },
   { key: 'footer', label: 'Footer', icon: Link2 },
   { key: 'partners', label: 'Partners', icon: Handshake },
   { key: 'pages', label: 'Pages', icon: FileText },
@@ -488,7 +488,7 @@ export default function AdminCmsPage() {
     <div className="space-y-6 pb-12 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contenu du site (Home, Footer & Messages)</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Contenu du site (accueil, pied de page et messages)</h1>
           <p className="text-sm text-gray-500 mt-1">
             Contenu public et boîte de réception Contact Us.
             {' '}
@@ -661,7 +661,7 @@ export default function AdminCmsPage() {
           </div>
 
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-4">
-            <h3 className="font-bold text-primary text-sm uppercase tracking-wide">Page Contact Us</h3>
+            <h3 className="font-bold text-primary text-sm uppercase tracking-wide">Page Nous contacter</h3>
             <Field label="Sous-titre hero">
               <input className={inputClass} value={settings.contact_hero_subtitle || ''} onChange={(e) => setSettings({ ...settings, contact_hero_subtitle: e.target.value })} />
             </Field>
@@ -931,7 +931,7 @@ export default function AdminCmsPage() {
           </div>
 
           <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white rounded-xl font-semibold disabled:opacity-60">
-            <Save className="w-4 h-4" /> {saving ? 'Enregistrement...' : 'Enregistrer Home'}
+            <Save className="w-4 h-4" /> {saving ? 'Enregistrement...' : 'Enregistrer l’accueil'}
           </button>
         </form>
       )}

@@ -1,11 +1,11 @@
 import { lazyPage } from './shared/lazyPage';
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import ProtectedRoute from './auth/ProtectedRoute';
 import { ZONE_ACCESS } from './auth/roleAccess';
 import PublicLayout from './layouts/PublicLayout';
 import HospitalStaffLayout from './layouts/HospitalStaffLayout';
-import LandingPage from './public/LandingPage';
+import TenantHome from './public/TenantHome';
 import PermissionGuard from './auth/PermissionGuard';
 import { PERMISSIONS } from './lib/permissions';
 import AuthLayout from './layouts/AuthLayout';
@@ -63,11 +63,15 @@ const ManageGuests = lazyPage(() => load_hotel().then((m) => ({ default: m.Manag
 const ManageHotelServices = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageHotelServices })));
 const ManageHousekeeping = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageHousekeeping })));
 const ManageMaintenance = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageMaintenance })));
-const ManageHotelInvoices = lazyPage(() => load_hotel().then((m) => ({ default: m.ManageHotelInvoices })));
 const HotelReports = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelReports })));
 const FrontDeskArrivals = lazyPage(() => load_hotel().then((m) => ({ default: m.FrontDeskArrivals })));
 const FrontDeskDepartures = lazyPage(() => load_hotel().then((m) => ({ default: m.FrontDeskDepartures })));
-const CashierFolios = lazyPage(() => load_hotel().then((m) => ({ default: m.CashierFolios })));
+function HotelCashierRedirect({ section }) {
+  const [params] = useSearchParams();
+  const next = new URLSearchParams(params);
+  next.set('section', section);
+  return <Navigate to={`/hotel/cashier?${next.toString()}`} replace />;
+}
 const HotelCashierDashboard = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelCashierDashboard })));
 const HotelReservationSettings = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelReservationSettings })));
 const HotelClientMessages = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelClientMessages })));
@@ -105,10 +109,11 @@ const load_education = () => import('./zones/education.js');
 const EducationDirectory = lazyPage(() => load_education().then((m) => ({ default: m.EducationDirectory })));
 const EducationEstablishment = lazyPage(() => load_education().then((m) => ({ default: m.EducationEstablishment })));
 const EducationDashboard = lazyPage(() => load_education().then((m) => ({ default: m.EducationDashboard })));
-const EducationStaff = lazyPage(() => load_education().then((m) => ({ default: m.EducationStaff })));
 const EducationAdmissions = lazyPage(() => load_education().then((m) => ({ default: m.EducationAdmissions })));
+const UniversityStructure = lazyPage(() => load_education().then((m) => ({ default: m.UniversityStructure })));
 const PublicSchoolEnrollment = lazyPage(() => load_education().then((m) => ({ default: m.PublicSchoolEnrollment })));
 const EnrollmentDossier = lazyPage(() => load_education().then((m) => ({ default: m.EnrollmentDossier })));
+const MyEnrollments = lazyPage(() => load_education().then((m) => ({ default: m.MyEnrollments })));
 const SchoolAccounting = lazyPage(() => load_education().then((m) => ({ default: m.SchoolAccounting })));
 const load_admin = () => import('./zones/admin.js');
 const AdminDashboardPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminDashboardPage })));
@@ -158,7 +163,7 @@ function App() {
     <BrowserRouter>
       <Routes>
           <Route path="/" element={<PublicLayout />}>
-            <Route index element={<LandingPage />} />
+            <Route index element={<TenantHome />} />
             <Route path="search" element={<SearchResultsPage />} />
             <Route path="services" element={<ServicesPage />} />
             <Route path="businesses" element={<BusinessesPage />} />
@@ -205,6 +210,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<UserDashboardPage />} />
               <Route path="bookings" element={<UserBookingsPage />} />
+              <Route path="inscriptions" element={<MyEnrollments />} />
               <Route path="lab-results" element={<PatientLabResults />} />
               <Route path="profile" element={<UserProfilePage />} />
               <Route path="notifications" element={<Notifications />} />
@@ -242,7 +248,7 @@ function App() {
               <Route path="orders" element={<CommerceOrders />} />
               <Route path="profile" element={<Navigate to="/business/profile" replace />} />
               <Route path="settings" element={<Navigate to="/business/settings" replace />} />
-              <Route path="employees" element={<Navigate to="/business/employees" replace />} />
+              <Route path="employees" element={<Navigate to="/commerce/dashboard" replace />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
               <Route path="audit" element={<BusinessAuditLogsPage />} />
             </Route>
@@ -250,7 +256,11 @@ function App() {
             {/* Module Éducation — propriétaire de l'établissement */}
             <Route path="/education/dashboard" element={<BusinessLayout />}>
               <Route index element={<EducationDashboard />} />
+              <Route path="ecole" element={<EducationDashboard />} />
               <Route path="admissions" element={<EducationAdmissions />} />
+              <Route path="dossiers" element={<EducationAdmissions />} />
+              <Route path="facultes" element={<UniversityStructure mode="faculties" />} />
+              <Route path="programmes" element={<UniversityStructure mode="programs" />} />
               <Route path="profile" element={<Navigate to="/business/profile" replace />} />
               <Route path="settings" element={<Navigate to="/business/settings" replace />} />
               <Route path="employees" element={<Navigate to="/business/employees" replace />} />
@@ -330,8 +340,8 @@ function App() {
               <Route path="housekeeping" element={<ManageHousekeeping />} />
               <Route path="maintenance" element={<ManageMaintenance />} />
               <Route path="cashier" element={<HotelCashierDashboard />} />
-              <Route path="folios" element={<CashierFolios />} />
-              <Route path="invoices" element={<ManageHotelInvoices />} />
+              <Route path="folios" element={<HotelCashierRedirect section="encaisser" />} />
+              <Route path="invoices" element={<HotelCashierRedirect section="factures" />} />
               <Route path="reports" element={<HotelReports />} />
               <Route path="audit" element={<BusinessAuditLogsPage />} />
               <Route path="front-desk/arrivals" element={<FrontDeskArrivals />} />
@@ -401,7 +411,7 @@ function App() {
             />
           }>
             <Route path="/education/staff" element={<BusinessLayout />}>
-              <Route index element={<EducationStaff />} />
+              <Route index element={<Navigate to="/education/dashboard" replace />} />
               <Route path="profile" element={<Navigate to="/business/profile" replace />} />
               <Route path="settings" element={<Navigate to="/business/settings" replace />} />
             </Route>

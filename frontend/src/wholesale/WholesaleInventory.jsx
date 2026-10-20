@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import wholesaleService, { STOCK_STATUS_LABELS } from './wholesaleService';
+import InventoryCount from '../shared/InventoryCount';
+import MarginBoard from '../shared/MarginBoard';
 
 const normalize = (d) => (Array.isArray(d) ? d : d?.results || []);
 
@@ -39,6 +41,8 @@ export default function WholesaleInventory() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Stock</h1>
+      <MarginBoard />
+      <InventoryCount onDone={load} />
       {msg && <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm">{msg}</div>}
       {error && <div className="p-3 bg-red-50 text-red-700 rounded-xl text-sm">{error}</div>}
 

@@ -19,7 +19,9 @@ export default function WholesaleSettings() {
         license_number: profile.license_number,
         status: profile.status,
         order_reference_prefix: profile.order_reference_prefix,
+        submission_email_message: profile.submission_email_message,
         acceptance_email_message: profile.acceptance_email_message,
+        rejection_email_message: profile.rejection_email_message,
         phone: profile.phone,
         email: profile.email,
         address: profile.address,
@@ -75,10 +77,26 @@ export default function WholesaleSettings() {
           </select>
         </label>
       </div>
-      <label className="text-sm space-y-1 block bg-white border rounded-2xl p-5">
-        <span className="font-medium">Modèle email d&apos;acceptation</span>
-        <textarea rows={6} className="w-full border rounded-lg px-3 py-2 mt-1" value={profile.acceptance_email_message || ''} onChange={(e) => setProfile({ ...profile, acceptance_email_message: e.target.value })} />
-      </label>
+      <p className="text-xs text-slate-500">
+        Variables : {'{client_name}'} {'{reference}'} {'{wholesale_name}'} {'{total_amount}'} {'{currency}'} {'{reason}'}.
+        Sans e-mail délivré, accepter ou refuser est impossible.
+      </p>
+      {[
+        ['submission_email_message', 'Commande enregistrée'],
+        ['acceptance_email_message', 'Commande acceptée'],
+        ['rejection_email_message', 'Commande refusée'],
+      ].map(([key, label]) => (
+        <label key={key} className="text-sm space-y-1 block bg-white border rounded-2xl p-5">
+          <span className="font-medium">{label}</span>
+          <textarea
+            rows={5}
+            required
+            className="w-full border rounded-lg px-3 py-2 mt-1"
+            value={profile[key] || ''}
+            onChange={(e) => setProfile({ ...profile, [key]: e.target.value })}
+          />
+        </label>
+      ))}
       <button type="submit" className="px-5 py-2.5 bg-primary hover:bg-secondary text-white rounded-xl font-semibold">Enregistrer</button>
     </form>
   );
