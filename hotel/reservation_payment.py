@@ -12,7 +12,7 @@ from businesses import burundipay
 def hotel_merchant_account(hotel) -> str:
     if not hotel:
         return 'HOTEL_MERCHANT'
-    configured = (getattr(hotel, 'lumicash_merchant_account', None) or '').strip()
+    configured = (getattr(hotel, 'burundipay_merchant_account', None) or '').strip()
     if configured:
         return configured
     return f'HOTEL-{str(hotel.id).replace("-", "")[:10].upper()}'

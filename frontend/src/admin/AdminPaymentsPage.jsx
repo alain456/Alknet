@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Crown, Building2, AlertTriangle, CheckCircle2, Clock, Bell, History, Layers, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
@@ -8,7 +8,10 @@ import { userHasPlatformPerm } from '../auth/platformPermissions';
 /**
  * Super Admin — plans Free/Mensuel/Annuel + abonnements + paiements + notifications.
  */
+const SUB_FILTERS = new Set(['', 'ACTIVE', 'EXPIRING', 'GRACE', 'BLOCKED', 'TRIAL', 'EXPIRED']);
+
 export default function AdminPaymentsPage() {
+  const [searchParams] = useSearchParams();
   const { token, user } = useAuth();
   const canSettings = userHasPlatformPerm(user, 'platform.settings.view');
   const canAlerts = userHasPlatformPerm(user, 'platform.alerts.view');
@@ -27,7 +30,10 @@ export default function AdminPaymentsPage() {
   const [planDrafts, setPlanDrafts] = useState({});
   const [savingPlan, setSavingPlan] = useState(null);
   const [planMsg, setPlanMsg] = useState('');
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState(() => {
+    const next = (searchParams.get('status') || '').toUpperCase();
+    return SUB_FILTERS.has(next) ? next : '';
+  });
   const [payFilter, setPayFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,6 +116,14 @@ export default function AdminPaymentsPage() {
   useEffect(() => {
     if (!canSettings && tab === 'plans') setTab('subscriptions');
   }, [canSettings, tab]);
+
+  useEffect(() => {
+    const next = (searchParams.get('status') || '').toUpperCase();
+    if (SUB_FILTERS.has(next)) {
+      setFilter(next);
+      setTab('subscriptions');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const timer = setTimeout(() => setQuerySent(query.trim()), 300);
@@ -602,6 +616,7 @@ export default function AdminPaymentsPage() {
               ['ACTIVE', 'Actifs', data?.counts?.active],
               ['EXPIRING', 'Échéance proche', data?.counts?.expiring],
               ['GRACE', 'En grâce', data?.counts?.grace],
+              ['EXPIRED', 'Expirés', data?.counts?.expired],
               ['BLOCKED', 'Bloqués', data?.counts?.blocked],
               ['TRIAL', 'Free', data?.counts?.free],
             ].map(([value, label, count]) => (

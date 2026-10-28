@@ -90,11 +90,11 @@ export default function SearchResultsPage() {
   const visibleGroups = GROUPS.filter(({ key }) => counts[key] > 0 && (tab === 'all' || tab === key));
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#F4F7FB]">
-      <div className="bg-white border-b border-[#D5E0F0]">
+    <div className="min-h-[calc(100vh-4rem)] bg-surface">
+      <div className="bg-surface border-b border-border">
         <div className="max-w-5xl mx-auto px-4 py-8">
-          <p className="text-xs font-bold uppercase tracking-wider text-[#32667F] mb-2">Recherche</p>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#132F45] mb-5">
+          <p className="text-xs font-bold uppercase tracking-wider text-primary mb-2">Recherche</p>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-ink mb-5">
             {q ? `Résultats pour « ${q} »` : 'Que cherchez-vous ?'}
           </h1>
           <form onSubmit={submit} className="hero-search bg-white p-2 rounded-full shadow-sm flex flex-col sm:flex-row sm:items-center gap-2 border-2 border-[#EA8B33]">
@@ -129,7 +129,7 @@ export default function SearchResultsPage() {
             type="button"
             onClick={() => setTab('all')}
             className={`px-3.5 py-1.5 rounded-full text-sm font-semibold border ${
-              tab === 'all' ? 'bg-[#32667F] text-white border-[#32667F]' : 'bg-white text-[#32667F] border-[#D5E0F0]'
+              tab === 'all' ? 'bg-accent text-ink border-accent' : 'bg-surface text-ink border-border'
             }`}
           >
             Tout{loading ? '' : ` · ${total}`}
@@ -140,34 +140,34 @@ export default function SearchResultsPage() {
               type="button"
               onClick={() => setTab(key)}
               className={`px-3.5 py-1.5 rounded-full text-sm font-semibold border ${
-                tab === key ? 'bg-[#32667F] text-white border-[#32667F]' : 'bg-white text-[#32667F] border-[#D5E0F0]'
+                tab === key ? 'bg-accent text-ink border-accent' : 'bg-surface text-ink border-border'
               }`}
             >
               {label}{loading ? '' : ` · ${counts[key]}`}
             </button>
           ))}
           {data?.location && (
-            <span className="text-sm text-[#4A6FA3] ml-1">Lieu : {data.location}</span>
+            <span className="text-sm text-ink-muted ml-1">Lieu : {data.location}</span>
           )}
           {!data?.location && data?.near && (
-            <span className="text-sm text-[#4A6FA3] ml-1">Classé selon votre position</span>
+            <span className="text-sm text-ink-muted ml-1">Classé selon votre position</span>
           )}
         </div>
 
         {error && <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>}
-        {loading && <p className="text-[#32667F] font-medium">Recherche en cours…</p>}
+        {loading && <p className="text-primary font-medium">Recherche en cours…</p>}
 
         {!loading && total === 0 && (q || location) && (
-          <div className="bg-white rounded-3xl border border-[#D5E0F0] px-6 py-14 text-center">
-            <p className="text-lg font-bold text-[#132F45]">Aucun résultat</p>
-            <p className="text-[#4A6FA3] mt-2">Essayez un autre mot ou élargissez le lieu.</p>
+          <div className="bg-surface rounded-3xl border border-border px-6 py-14 text-center">
+            <p className="text-lg font-bold text-ink">Aucun résultat</p>
+            <p className="text-ink-muted mt-2">Essayez un autre mot ou élargissez le lieu.</p>
           </div>
         )}
 
         {visibleGroups.map(({ key, label, icon: Icon }) => (
           <section key={key} className="space-y-4">
-            <h2 className="text-xl font-extrabold text-[#132F45] flex items-center gap-2">
-              <span className="w-9 h-9 rounded-xl bg-[#E7EEF8] text-[#32667F] flex items-center justify-center">
+            <h2 className="text-xl font-extrabold text-ink flex items-center gap-2">
+              <span className="w-9 h-9 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
                 <Icon className="w-5 h-5" />
               </span>
               {label}
@@ -177,21 +177,21 @@ export default function SearchResultsPage() {
                 <li key={`${row.kind}-${row.id}`}>
                   <Link
                     to={row.href}
-                    className="group h-full flex items-start gap-4 rounded-2xl border border-[#D5E0F0] bg-white p-5 shadow-sm hover:border-[#32667F] hover:shadow-md transition"
+                    className="group h-full flex items-start gap-4 rounded-2xl border border-border bg-surface p-5 shadow-sm hover:border-primary hover:shadow-md transition"
                   >
-                    <span className="w-11 h-11 rounded-2xl bg-[#E7EEF8] text-[#32667F] flex items-center justify-center shrink-0">
+                    <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
                       <Icon className="w-5 h-5" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block font-bold text-[#132F45] text-base">{row.title}</span>
-                      <span className="block text-sm text-[#32667F] mt-0.5">{row.subtitle}</span>
+                      <span className="block font-bold text-ink text-base">{row.title}</span>
+                      <span className="block text-sm text-primary mt-0.5">{row.subtitle}</span>
                       {row.location && (
-                        <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#4A6FA3]">
+                        <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-ink-muted">
                           <MapPin className="w-3.5 h-3.5" /> {row.location}
                         </span>
                       )}
                     </span>
-                    <ArrowRight className="w-4 h-4 text-[#32667F] mt-1 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                    <ArrowRight className="w-4 h-4 text-primary mt-1 opacity-0 group-hover:opacity-100 transition shrink-0" />
                   </Link>
                 </li>
               ))}

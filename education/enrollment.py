@@ -68,10 +68,7 @@ def education_merchant_account(business):
     """Compte marchand BurundiPay qui encaisse les frais de l'établissement."""
     if not business:
         return 'EDUCATION_MERCHANT'
-    configured = (
-        getattr(business, 'lumicash_merchant_account', None)
-        or getattr(business, 'burundipay_merchant_account', None) or ''
-    ).strip()
+    configured = (getattr(business, 'burundipay_merchant_account', None) or '').strip()
     if configured:
         return configured
     return f'EDU-{str(business.id).replace("-", "")[:10].upper()}'

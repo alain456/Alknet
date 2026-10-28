@@ -15,6 +15,42 @@ import AvatarPicker from './AvatarPicker';
 const fieldClass =
   'w-full px-4 py-3 bg-surface border-2 border-accent rounded-xl focus:border-alert text-ink text-base font-medium outline-none';
 
+function categoryModule(cat, all = []) {
+  if (!cat) return '';
+  if (cat.module) return String(cat.module).toLowerCase();
+  const parent = all.find((row) => String(row.id) === String(cat.parent)) || null;
+  return String(parent?.module || '').toLowerCase();
+}
+
+function isServicesCategory(cat, all = []) {
+  if (!cat) return false;
+  if (categoryModule(cat, all) === 'services') return true;
+  const blob = `${cat.name || ''} ${cat.slug || ''} ${cat.parent_name || ''}`.toLowerCase();
+  return blob.includes('service');
+}
+
+function isServicesRootCategory(cat, all = []) {
+  return isServicesCategory(cat, all) && !cat.parent;
+}
+
+function isHotelTourismRootCategory(cat) {
+  if (!cat || cat.parent) return false;
+  const blob = `${cat.name || ''} ${cat.slug || ''}`.toLowerCase();
+  return /tourisme/.test(blob) && /h[oô]tellerie|hotellerie/.test(blob);
+}
+
+function isHotelTourismChild(cat, all = []) {
+  if (!cat?.parent) return false;
+  const parent = all.find((row) => String(row.id) === String(cat.parent));
+  if (parent) return isHotelTourismRootCategory(parent);
+  const blob = `${cat.parent_name || ''}`.toLowerCase();
+  return /tourisme/.test(blob) && /h[oô]tellerie|hotellerie/.test(blob);
+}
+
+function needsActivityChild(cat, all = []) {
+  return isServicesRootCategory(cat, all) || isHotelTourismRootCategory(cat);
+}
+
 export { readImageAsDataUrl } from '../imageUpload';
 
 export function emptyBusinessRegistrationForm(overrides = {}) {
@@ -38,6 +74,7 @@ export function emptyBusinessRegistrationForm(overrides = {}) {
     website: '',
     description: '',
     primary_category: '',
+    service_category_id: '',
     category_ids: [],
     extra_attributes: {},
     school_tracks: {
@@ -92,6 +129,12 @@ export function validateBusinessRegistrationForm(formData, categories, {
     }
   }
   const selectedSchool = categories.find((c) => String(c.id) === String(formData.primary_category));
+  if (isServicesRootCategory(selectedSchool, categories) && !formData.service_category_id) {
+    return 'Services : choisissez la catégorie de votre activité parmi celles proposées.';
+  }
+  if (isHotelTourismRootCategory(selectedSchool) && !formData.service_category_id) {
+    return 'Hôtellerie et tourisme : précisez Hôtel, restaurant, bar, café ou traiteur.';
+  }
   if ((selectedSchool?.slug || '') === 'ecole') {
     const tracks = formData.school_tracks || {};
     if (!tracks.offers_prescolaire && !tracks.offers_ecofo && !tracks.offers_post_fondamental) {
@@ -128,6 +171,8 @@ export function buildBusinessRegistrationPayload(formData) {
     password: formData.password || '',
     latitude: formData.latitude === '' || formData.latitude == null ? null : Number(formData.latitude),
     longitude: formData.longitude === '' || formData.longitude == null ? null : Number(formData.longitude),
+    primary_category: formData.service_category_id || formData.primary_category,
+    category_ids: formData.service_category_id ? [] : (formData.category_ids || []),
     extra_attributes: {
       ...(formData.extra_attributes || {}),
       school_tracks: {
@@ -168,6 +213,44 @@ export default function BusinessRegistrationForm({
   const [schoolEnums, setSchoolEnums] = useState({ ecofo_cycles: [], post_orientations: [] });
   const selectedCategory = categories.find((cat) => String(cat.id) === String(formData.primary_category));
   const isSchool = (selectedCategory?.slug || '') === 'ecole';
+  const parentCategories = categories.filter((c) => !c.parent);
+  const servicesRoot = parentCategories.find((row) => isServicesRootCategory(row, categories));
+  const selectedServiceChild = (
+    formData.service_category_id
+      ? categories.find((cat) => String(cat.id) === String(formData.service_category_id))
+      : null
+  ) || (
+    isServicesCategory(selectedCategory, categories) && selectedCategory?.parent
+      ? selectedCategory
+      : null
+  );
+  const sectorSelectValue = selectedServiceChild
+    ? String(selectedServiceChild.parent || servicesRoot?.id || '')
+    : formData.primary_category;
+  const sectorCategory = categories.find((cat) => String(cat.id) === String(sectorSelectValue));
+  const isServicesRoot = isServicesRootCategory(sectorCategory, categories);
+  const isHotelTourismRoot = isHotelTourismRootCategory(sectorCategory);
+  const needsChild = needsActivityChild(sectorCategory, categories);
+  const primaryCategoryChoices = categories.filter((cat) => (
+    !(isServicesCategory(cat, categories) && cat.parent)
+    && !isHotelTourismChild(cat, categories)
+  ));
+  const serviceCategoryChoices = categories.filter((cat) => (
+    cat.parent
+    && (
+      !sectorCategory
+      || String(cat.parent) === String(sectorCategory.id)
+      || cat.parent_name === sectorCategory.name
+    )
+    && (
+      isServicesRoot
+        ? isServicesCategory(cat, categories)
+        : isHotelTourismRoot
+          ? isHotelTourismChild(cat, categories)
+          : false
+    )
+  ));
+  const secondaryParents = parentCategories.filter((parent) => !isServicesRootCategory(parent, categories));
   const tracks = formData.school_tracks || {
     offers_prescolaire: false,
     offers_ecofo: false,
@@ -206,8 +289,6 @@ export default function BusinessRegistrationForm({
       alert(err.message);
     }
   };
-
-  const parentCategories = categories.filter((c) => !c.parent);
 
   return (
     <form onSubmit={onSubmit} className="bg-surface rounded-2xl border-2 border-accent overflow-hidden text-ink">
@@ -355,20 +436,54 @@ export default function BusinessRegistrationForm({
           </label>
           <select
             required
-            value={formData.primary_category}
-            onChange={(e) => patchForm({ primary_category: e.target.value })}
+            value={sectorSelectValue}
+            onChange={(e) => {
+              const nextId = e.target.value;
+              const nextCat = categories.find((cat) => String(cat.id) === String(nextId));
+              patchForm({
+                primary_category: nextId,
+                service_category_id: '',
+                category_ids: needsActivityChild(nextCat, categories) ? [] : formData.category_ids,
+              });
+            }}
             className={`${fieldClass} font-semibold`}
           >
             <option value="" disabled>
               -- Choisir votre secteur --
             </option>
-            {categories.map((cat) => (
+            {primaryCategoryChoices.map((cat) => (
               <option key={cat.id} value={cat.id}>
                 {cat.parent_name ? `${cat.parent_name} > ${cat.name}` : cat.name}
               </option>
             ))}
           </select>
         </div>
+
+        {needsChild && (
+          <div className="mb-4 space-y-2 p-4 rounded-xl border-2 border-accent bg-primary/5">
+            <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
+              {isHotelTourismRoot ? 'Type d’établissement *' : 'Catégorie de votre service *'}
+            </label>
+            <select
+              required
+              value={formData.service_category_id || selectedServiceChild?.id || ''}
+              onChange={(e) => patchForm({ service_category_id: e.target.value })}
+              className={`${fieldClass} font-semibold`}
+            >
+              <option value="" disabled>
+                {isHotelTourismRoot ? '-- Hôtel, restaurant, bar, café ou traiteur --' : '-- Choisir votre catégorie --'}
+              </option>
+              {serviceCategoryChoices.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+            <p className="text-sm text-ink-muted">
+              {isHotelTourismRoot
+                ? 'Hôtel : chambres et séjours. Restaurant, bar, café ou traiteur : menu et réservation de table.'
+                : 'Ces catégories sont préparées par Isoko Hub. Vous choisissez la vôtre, puis vous gérez vos offres dans l’espace prestataire.'}
+            </p>
+          </div>
+        )}
 
         {isSchool && (
           <div className="mb-4 space-y-3 p-4 rounded-xl border-2 border-accent bg-primary/5">
@@ -443,14 +558,16 @@ export default function BusinessRegistrationForm({
           </div>
         )}
 
-        <div className="mb-4 bg-primary/5 p-4 rounded-xl border-2 border-accent">
-          <SectorSpecificFields
-            primaryCategory={formData.primary_category}
-            categories={categories}
-            attributes={formData.extra_attributes}
-            onChange={(attrs) => patchForm({ extra_attributes: attrs })}
-          />
-        </div>
+        {(formData.service_category_id || (!needsChild && formData.primary_category)) ? (
+          <div className="mb-4 bg-primary/5 p-4 rounded-xl border-2 border-accent">
+            <SectorSpecificFields
+              primaryCategory={formData.service_category_id || formData.primary_category}
+              categories={categories}
+              attributes={formData.extra_attributes}
+              onChange={(attrs) => patchForm({ extra_attributes: attrs })}
+            />
+          </div>
+        ) : null}
 
         <div className="mb-4">
           <div className="bg-primary/5 p-4 rounded-xl border-2 border-alert/40">
@@ -481,12 +598,13 @@ export default function BusinessRegistrationForm({
           </div>
         )}
 
+        {!isServicesRoot && (
         <div className="mb-4">
           <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">
             Catégories &amp; services secondaires (optionnel)
           </label>
           <div className="bg-surface border-2 border-accent rounded-xl p-4 max-h-48 overflow-y-auto space-y-4 custom-scrollbar">
-            {parentCategories.map((parent) => {
+            {secondaryParents.map((parent) => {
               const children = categories.filter(
                 (c) => c.parent === parent.id || (c.parent_name && c.parent_name === parent.name)
               );
@@ -519,6 +637,7 @@ export default function BusinessRegistrationForm({
             })}
           </div>
         </div>
+        )}
 
         <div>
           <label className="block text-sm sm:text-base font-bold text-ink mb-1.5">Description courte</label>

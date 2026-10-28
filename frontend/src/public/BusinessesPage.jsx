@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import BusinessDetailsModal from '../shared/components/BusinessDetailsModal';
 import api from '../shared/api';
 import { websiteHref } from '../shared/websiteUrl';
-import { getBusinessRecordCategoryKey } from '../auth/roleAccess';
+import { getBusinessRecordCategoryKey, isFoodServiceBusiness, isLodgingBusiness } from '../auth/roleAccess';
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -85,7 +85,11 @@ function isRetailPharmacy(business) {
 }
 
 function isHotelBusiness(business) {
-  return getBusinessRecordCategoryKey(business) === 'hotel';
+  return isLodgingBusiness(business);
+}
+
+function isRestaurantBusiness(business) {
+  return isFoodServiceBusiness(business);
 }
 
 function isHospitalBusiness(business) {
@@ -220,7 +224,7 @@ export default function BusinessesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-surface">
       <div className="bg-primary border-b border-primary">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-3xl font-bold text-white mb-2">Entreprises</h1>
@@ -234,7 +238,7 @@ export default function BusinessesPage() {
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 sticky top-24">
               <div className="flex items-center gap-2 mb-6">
                 <Filter className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-gray-900">Filtres</h3>
+                <h3 className="font-semibold text-ink">Filtres</h3>
               </div>
 
               <div className="mb-6">
@@ -330,7 +334,7 @@ export default function BusinessesPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <h3 className="font-bold text-gray-900 text-lg truncate">{business.name}</h3>
+                          <h3 className="font-bold text-ink text-lg truncate">{business.name}</h3>
                         </div>
                         <span className="text-xs font-semibold bg-gray-100 text-gray-600 px-2 py-1 rounded-full shrink-0">
                           {badgeLabel(business)}
@@ -386,7 +390,9 @@ export default function BusinessesPage() {
                           ? `/hospitals/${business.id}/historique`
                           : isHotelBusiness(business)
                             ? `/hotels/${business.id}/historique`
-                            : `/businesses/${business.id}/historique`
+                            : isRestaurantBusiness(business)
+                              ? `/restaurants/${business.id}/historique`
+                              : `/businesses/${business.id}/historique`
                       )}
                       className="px-3 py-2 border border-gray-200 hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition inline-flex items-center gap-1.5"
                       title="Mon historique"
@@ -424,6 +430,14 @@ export default function BusinessesPage() {
                       <button
                         type="button"
                         onClick={() => navigate(`/hotels/${business.id}`)}
+                        className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg"
+                      >
+                        Voir l&apos;établissement
+                      </button>
+                    ) : isRestaurantBusiness(business) ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/restaurants/${business.id}`)}
                         className="flex-1 bg-primary hover:bg-secondary text-white font-medium py-2 px-4 rounded-lg"
                       >
                         Voir l&apos;établissement

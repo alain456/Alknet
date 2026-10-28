@@ -19,7 +19,7 @@ export default function MerchantAccountCard({ hint }) {
         const data = await response.json();
         const business = Array.isArray(data) ? data[0] : data;
         if (!cancelled && business) {
-          setValue(business.burundipay_merchant_account || business.lumicash_merchant_account || '');
+          setValue(business.burundipay_merchant_account || '');
         }
       })
       .catch((err) => {
@@ -44,7 +44,7 @@ export default function MerchantAccountCard({ hint }) {
       });
       if (!response.ok) throw new Error('Le compte marchand n’a pas été enregistré.');
       const saved = await response.json();
-      setValue(saved.burundipay_merchant_account || saved.lumicash_merchant_account || value.trim());
+      setValue(saved.burundipay_merchant_account || value.trim());
       setMessage('Compte marchand enregistré. Les prochains paiements clients y seront rattachés.');
     } catch (err) {
       setError(err.message || 'Le compte marchand n’a pas été enregistré.');

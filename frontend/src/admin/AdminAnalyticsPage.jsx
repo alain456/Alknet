@@ -24,7 +24,7 @@ export default function AdminAnalyticsPage() {
         const headers = { Authorization: `Bearer ${token}` };
         const [busRes, catRes, dashRes] = await Promise.all([
           fetch('/api/v1/businesses/admin/list/', { headers }),
-          fetch('/api/v1/business-categories/'),
+          fetch('/api/v1/business-categories/?include_hidden=1', { headers, credentials: 'same-origin' }),
           fetch('/api/v1/analytics/dashboard-stats/', { headers }),
         ]);
         const busData = busRes.ok ? await busRes.json() : [];

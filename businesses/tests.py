@@ -290,6 +290,22 @@ class PublicClientSearchTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         names = [row['title'] for row in response.data['groups']['businesses']]
         self.assertIn('Chez Aline', names)
+        href = next(row['href'] for row in response.data['groups']['businesses'] if row['title'] == 'Chez Aline')
+        self.assertNotIn('/hotels/', href)
+
+    def test_search_hotel_opens_hotels_directory(self):
+        owner = User.objects.create_user(email='hotel-search@test.bi', password='Pass123456!', role='BUSINESS_OWNER')
+        cat = BusinessCategory.objects.create(name='Hôtel', slug='hotel-search-href')
+        hotel = Business.objects.create(
+            owner=owner, primary_category=cat, name='Hôtel du Lac',
+            province='Bujumbura Mairie', commune='Mukaza',
+            verification_status='APPROVED', is_active=True,
+        )
+        client = APIClient()
+        response = client.get('/api/v1/businesses/search/', {'q': 'hotel'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        match = next(row for row in response.data['groups']['businesses'] if row['title'] == 'Hôtel du Lac')
+        self.assertEqual(match['href'], f'/hotels/{hotel.id}')
 
     def test_phrase_extracts_location(self):
         client = APIClient()

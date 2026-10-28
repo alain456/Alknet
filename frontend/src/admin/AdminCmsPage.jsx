@@ -1191,17 +1191,21 @@ export default function AdminCmsPage() {
                       type="button"
                       onClick={() => openMessage(msg)}
                       className={`w-full text-left p-4 hover:bg-gray-50 transition ${
-                        selectedMessage?.id === msg.id ? 'bg-emerald-50' : ''
+                        selectedMessage?.id === msg.id ? 'bg-accent text-ink' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         {!msg.is_read && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
-                        <span className={`text-sm truncate ${msg.is_read ? 'font-medium text-gray-800' : 'font-bold text-gray-900'}`}>
+                        <span className={`text-sm truncate ${
+                          selectedMessage?.id === msg.id
+                            ? 'text-ink'
+                            : (msg.is_read ? 'font-medium text-gray-800' : 'font-bold text-gray-900')
+                        } ${msg.is_read ? 'font-medium' : 'font-bold'}`}>
                           {msg.subject}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-500 truncate">{msg.name} · {msg.email}</div>
-                      <div className="text-[11px] text-gray-400 mt-1">
+                      <div className={`text-xs truncate ${selectedMessage?.id === msg.id ? 'text-ink' : 'text-gray-500'}`}>{msg.name} · {msg.email}</div>
+                      <div className={`text-[11px] mt-1 ${selectedMessage?.id === msg.id ? 'text-ink' : 'text-gray-400'}`}>
                         {msg.created_at ? new Date(msg.created_at).toLocaleString('fr-FR') : ''}
                       </div>
                     </button>

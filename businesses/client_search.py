@@ -163,12 +163,16 @@ def _token_q_business(tokens: list[str]) -> Q:
 
 
 def _href_for_business(business) -> str:
+    from hotel.lodging import is_food_service_category, is_lodging_business
+
     cat = fold(business.primary_category.name if business.primary_category_id else '')
     name = fold(business.name)
     blob = f'{cat} {name}'
     bid = str(business.id)
-    if any(k in blob for k in ('hotel', 'hotellerie')):
+    if is_lodging_business(business):
         return f'/hotels/{bid}'
+    if is_food_service_category(business.primary_category):
+        return f'/restaurants/{bid}'
     if any(k in blob for k in ('hopital', 'clinique', 'sante', 'medical')):
         return f'/hospitals/{bid}'
     if 'detail' in blob or 'pharmacie de detail' in blob or ('pharmac' in blob and 'gros' not in blob):

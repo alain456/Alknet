@@ -7,15 +7,15 @@ import {
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../shared/api';
 import { visitorPosition } from './visitorPlace';
-import { getBusinessRecordCategoryKey } from '../auth/roleAccess';
+import { getBusinessRecordCategoryKey, isFoodServiceBusiness, isLodgingBusiness } from '../auth/roleAccess';
 import useSiteContent from '../shared/useSiteContent';
 
 const HEALTH_TERMS = ['santé', 'sante', 'health', 'hôpital', 'hopital', 'clinique', 'clinic', 'médical', 'medical', 'pharmac', 'laboratoire'];
 
-// L'Éducation a son propre annuaire public ; les autres catégories renvoient
-// vers la liste des entreprises. `module` est la source de vérité, le test par
-// nom ne sert que de filet pour une catégorie pas encore revisitée.
 const EDUCATION_TERMS = ['éducation', 'education', 'école', 'ecole', 'universit', 'formation', 'enseignement', 'scolarité', 'scolarite'];
+
+const LANDING_SERVICES = { id: 'landing-services', name: 'Services', module: 'services' };
+const LANDING_RESTAURANTS = { id: 'landing-restaurants', name: 'Restaurants & cafés', module: 'restaurant' };
 
 const categoryModuleKey = (c) => {
   const module = String(c?.module || '').toLowerCase();
@@ -24,6 +24,7 @@ const categoryModuleKey = (c) => {
   const slug = String(c?.slug || '').toLowerCase();
   if (EDUCATION_TERMS.some((t) => name.includes(t) || slug.includes(t))) return 'education';
   if (HEALTH_TERMS.some((t) => name.includes(t) || slug.includes(t))) return 'hospital';
+  if (name.includes('service') || slug.includes('service') || name.includes('aide à domicile') || name.includes('garde')) return 'services';
   return '';
 };
 
@@ -47,10 +48,11 @@ const ICON_MAP = {
   Restaurants: Store, Restauration: Store,
   Hotels: Building2, Hôtellerie: Building2,
   Transport: Car, Logistique: Car,
-  Education: GraduationCap, Enseignement: GraduationCap,
+  Education: GraduationCap, Enseignement: GraduationCap, Éducation: GraduationCap,
   Beauty: Heart, Beauté: Heart,
   Legal: Gavel, Droit: Gavel,
   Shopping: ShoppingBag, Commerce: ShoppingBag,
+  Services: Briefcase,
 };
 
 function categoryIcon(name) {
@@ -63,6 +65,11 @@ function categoryTarget(cat) {
   const moduleKey = categoryModuleKey(cat);
   if (moduleKey === 'education') return '/education';
   if (moduleKey === 'hospital') return '/hospitals';
+  if (moduleKey === 'services') return '/services';
+  if (moduleKey === 'hotel') return '/hotels';
+  if (moduleKey === 'restaurant') return '/restaurants';
+  const label = `${cat?.name || ''} ${cat?.slug || ''}`.toLowerCase();
+  if (/(h[oô]tel|h[oô]tellerie|tourisme)/.test(label)) return '/hotels';
   return `/businesses?category=${encodeURIComponent(cat.name)}`;
 }
 
@@ -71,6 +78,9 @@ function businessTarget(business) {
   if (key === 'wholesale') return `/businesses/${business.id}/catalog`;
   if (key === 'retail_pharmacy') return `/businesses/${business.id}/pharmacy`;
   if (key === 'hospital' || isHealthBusiness(business)) return `/hospitals/${business.id}`;
+  if (key === 'services') return `/services/providers/${business.id}`;
+  if (isLodgingBusiness(business)) return `/hotels/${business.id}`;
+  if (key === 'restaurant' || isFoodServiceBusiness(business)) return `/restaurants/${business.id}`;
   return `/businesses?highlight=${business.id}`;
 }
 
@@ -114,16 +124,19 @@ export default function LandingPage() {
         const [bData, sData, cData, dData] = await Promise.all([
           api.get('businesses/').catch(() => []),
           api.get('services/').catch(() => []),
-          // `modules=education` force l'affichage de la racine Éducation même
-          // sans entreprise rattachée : elle a sa propre vitrine publique, elle
-          // ne doit pas disparaître de l'accueil avant les premières inscriptions.
-          api.get('business-categories/?used=1&parents_only=1&modules=education').catch(() => []),
+          // Éducation et Hôtellerie restent visibles même sans fiche inscrite.
+          // Les racines Services sont remplacées par une puce « Services » → /services.
+          api.get('business-categories/?used=1&parents_only=1&modules=education,hotel').catch(() => []),
           api.get('hospital/doctors/?public=true').catch(() => []),
         ]);
 
         setAllBusinesses(normalizeList(bData));
         setAllServices(normalizeList(sData));
-        setCategories(normalizeList(cData));
+        setCategories([
+          ...normalizeList(cData).filter((cat) => categoryModuleKey(cat) !== 'services'),
+          LANDING_RESTAURANTS,
+          LANDING_SERVICES,
+        ]);
         setProfessionals(normalizeList(dData).slice(0, 4));
       } catch (error) {
         console.error('Error fetching landing data:', error);
@@ -466,20 +479,6 @@ export default function LandingPage() {
               Rechercher
             </button>
           </form>
-          {categories.length > 0 && (
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {categories.slice(0, 6).map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => navigate(categoryTarget(cat))}
-                  className="px-3 py-1.5 rounded-full bg-white ring-1 ring-border text-sm font-semibold text-ink"
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       </section>
 

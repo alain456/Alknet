@@ -2,87 +2,102 @@
 
 PLATFORM_PERM_GROUPS = [
     {
+        'id': 'pilotage',
+        'label': 'Pilotage',
+        'actions': [
+            (
+                'platform.analytics.view',
+                'Tableau de bord',
+                'File « À traiter », analytique et recherche globale',
+            ),
+        ],
+    },
+    {
         'id': 'roles',
         'label': 'Rôles plateforme',
         'actions': [
-            ('platform.roles.view', 'Voir'),
-            ('platform.roles.create', 'Créer'),
-            ('platform.roles.update', 'Modifier'),
-            ('platform.roles.delete', 'Supprimer'),
+            ('platform.roles.view', 'Voir', 'Page Rôles & permissions'),
+            ('platform.roles.create', 'Créer', 'Réservé au modèle interne des rôles'),
+            ('platform.roles.update', 'Modifier', 'Cocher les droits et enregistrer un rôle'),
+            ('platform.roles.delete', 'Supprimer', 'Réservé au modèle interne des rôles'),
         ],
     },
     {
         'id': 'users',
         'label': 'Comptes',
         'actions': [
-            ('platform.users.view', 'Voir'),
-            ('platform.users.create', 'Créer'),
-            ('platform.users.update', 'Modifier'),
-            ('platform.users.delete', 'Supprimer'),
+            ('platform.users.view', 'Voir', 'Acteurs plateforme, utilisateurs entreprises, recherche, messages contact'),
+            ('platform.users.create', 'Créer', 'Créer un acteur depuis Rôles & permissions'),
+            ('platform.users.update', 'Modifier', 'Éditer, activer ou désactiver un compte'),
+            ('platform.users.delete', 'Supprimer', 'Supprimer un acteur plateforme'),
         ],
     },
     {
         'id': 'businesses',
         'label': 'Entreprises',
         'actions': [
-            ('platform.businesses.view', 'Voir'),
-            ('platform.businesses.create', 'Créer'),
-            ('platform.businesses.update', 'Modifier le dossier'),
-            ('platform.businesses.delete', 'Supprimer'),
-            ('platform.businesses.approve', 'Approuver'),
-            ('platform.businesses.reject', 'Refuser'),
-            ('platform.businesses.suspend', 'Suspendre'),
-        ],
-    },
-    {
-        'id': 'settings',
-        'label': 'Réglages globaux',
-        'actions': [
-            ('platform.settings.view', 'Voir'),
-            ('platform.settings.update', 'Modifier'),
-        ],
-    },
-    {
-        'id': 'billing',
-        'label': 'Abonnements SaaS',
-        'actions': [
-            ('platform.billing.view', 'Voir'),
-            ('platform.billing.export', 'Exporter'),
-            ('platform.subscriptions.view', 'Lire un abonnement'),
-            ('platform.alerts.view', 'Alertes d’échéance'),
-        ],
-    },
-    {
-        'id': 'audit',
-        'label': 'Journal',
-        'actions': [
-            ('platform.audit.view', 'Voir'),
-        ],
-    },
-    {
-        'id': 'cms',
-        'label': 'Contenu public',
-        'actions': [
-            ('platform.cms.view', 'Voir'),
-            ('platform.cms.create', 'Créer'),
-            ('platform.cms.update', 'Modifier'),
-            ('platform.cms.delete', 'Supprimer'),
+            ('platform.businesses.view', 'Voir', 'Dossiers, hôtels, file entreprises à valider, recherche'),
+            ('platform.businesses.create', 'Créer', 'Catalogue Entreprises'),
+            ('platform.businesses.update', 'Modifier le dossier', 'Éditer une entreprise ou un hôtel'),
+            ('platform.businesses.delete', 'Supprimer', 'Catalogue Entreprises'),
+            ('platform.businesses.approve', 'Approuver', 'Modération'),
+            ('platform.businesses.reject', 'Refuser', 'Modération'),
+            ('platform.businesses.suspend', 'Suspendre', 'Entreprises, hôtels, abonnements bloqués'),
         ],
     },
     {
         'id': 'catalog',
         'label': 'Référentiels',
         'actions': [
-            ('platform.analytics.view', 'Analytique'),
-            ('platform.catalog.view', 'Voir'),
-            ('platform.catalog.update', 'Modifier'),
-            ('platform.professionals.view', 'Professionnels'),
+            ('platform.catalog.view', 'Voir', 'Catégories, localisations, services'),
+            ('platform.catalog.update', 'Activer un service', 'Passer un brouillon en actif ou le suspendre'),
+            ('platform.professionals.view', 'Professionnels', 'Liste des professionnels'),
+        ],
+    },
+    {
+        'id': 'billing',
+        'label': 'Abonnements SaaS',
+        'actions': [
+            ('platform.billing.view', 'Voir', 'Abonnements, grâce, expirés, recherche'),
+            ('platform.billing.export', 'Exporter', 'Export des paiements SaaS'),
+            ('platform.subscriptions.view', 'Lire un abonnement', 'Même écran Abonnements'),
+            ('platform.alerts.view', 'Alertes d’échéance', 'Notifications de grâce et d’expiration'),
+        ],
+    },
+    {
+        'id': 'cms',
+        'label': 'Contenu & contact',
+        'actions': [
+            ('platform.cms.view', 'Voir', 'CMS site, messages contact, recherche'),
+            ('platform.cms.create', 'Créer', 'Pages publiques'),
+            ('platform.cms.update', 'Modifier', 'Pages et réponses aux messages'),
+            ('platform.cms.delete', 'Supprimer', 'Pages et messages'),
+        ],
+    },
+    {
+        'id': 'audit',
+        'label': 'Journal',
+        'actions': [
+            ('platform.audit.view', 'Voir', 'Audit plateforme et audit entreprises'),
+        ],
+    },
+    {
+        'id': 'settings',
+        'label': 'Réglages globaux',
+        'actions': [
+            ('platform.settings.view', 'Voir', 'Paramètres, plans et période de grâce'),
+            ('platform.settings.update', 'Modifier', 'Plans, grâce, maintenance'),
         ],
     },
 ]
 
+
+def _perm_key(action):
+    return action[0]
+
+
 ALL_PLATFORM_PERMISSIONS = [
-    key for group in PLATFORM_PERM_GROUPS for key, _label in group['actions']
+    _perm_key(action) for group in PLATFORM_PERM_GROUPS for action in group['actions']
 ]
 
 ROLE_TO_CODE = {
@@ -97,16 +112,30 @@ CODE_TO_ROLE = {code: role for role, code in ROLE_TO_CODE.items()}
 
 PLATFORM_USER_ROLES = tuple(ROLE_TO_CODE.keys())
 
+# Anciennes descriptions encore en base — on les remplace, sans écraser un texte personnalisé.
+LEGACY_ROLE_DESCRIPTIONS = {
+    'Tous les droits plateforme : rôles, suspension, grâce et plans.',
+    'Abonnements, paiements SaaS, exports et alertes d’échéance.',
+    'Approuver, refuser ou suspendre une entreprise (dont hôtels).',
+    'Inbox Contact Us, lecture comptes / abonnements / journal (sans éditer le CMS).',
+    'Pages publiques et CMS (création / édition / suppression).',
+}
+
 PLATFORM_ROLE_DEFAULTS = {
     'super_admin': {
         'name': 'Super admin',
-        'description': 'Tous les droits plateforme : rôles, suspension, grâce et plans.',
+        'description': (
+            'Tous les droits : file « À traiter », recherche globale, rôles, '
+            'modération, abonnements, CMS et plans.'
+        ),
         'is_locked': True,
         'permissions': list(ALL_PLATFORM_PERMISSIONS),
     },
     'finance': {
         'name': 'Finance plateforme',
-        'description': 'Abonnements, paiements SaaS, exports et alertes d’échéance.',
+        'description': (
+            'Abonnements SaaS, période de grâce, expirés, exports et alertes d’échéance.'
+        ),
         'is_locked': False,
         'permissions': [
             'platform.billing.view',
@@ -117,7 +146,10 @@ PLATFORM_ROLE_DEFAULTS = {
     },
     'moderation': {
         'name': 'Modération',
-        'description': 'Approuver, refuser ou suspendre une entreprise (dont hôtels).',
+        'description': (
+            'Approuver, refuser ou suspendre une entreprise (dont hôtels). '
+            'Recherche des dossiers entreprises.'
+        ),
         'is_locked': False,
         'permissions': [
             'platform.businesses.view',
@@ -129,7 +161,10 @@ PLATFORM_ROLE_DEFAULTS = {
     },
     'support': {
         'name': 'Support',
-        'description': 'Inbox Contact Us, lecture comptes / abonnements / journal (sans éditer le CMS).',
+        'description': (
+            'Inbox Contact Us, recherche utilisateurs / messages, lecture des comptes, '
+            'abonnements et journal — sans éditer le CMS.'
+        ),
         'is_locked': False,
         'permissions': [
             'platform.users.view',
@@ -140,7 +175,7 @@ PLATFORM_ROLE_DEFAULTS = {
     },
     'content': {
         'name': 'Contenu',
-        'description': 'Pages publiques et CMS (création / édition / suppression).',
+        'description': 'Pages publiques et CMS (création, édition, suppression).',
         'is_locked': False,
         'permissions': [
             'platform.cms.view',
@@ -165,12 +200,11 @@ def ensure_platform_roles():
                 'is_locked': spec['is_locked'],
             },
         )
-        if role.is_locked and set(role.permissions) != set(ALL_PLATFORM_PERMISSIONS):
+        changed = []
+        if role.is_locked and set(role.permissions or []) != set(ALL_PLATFORM_PERMISSIONS):
             role.permissions = list(ALL_PLATFORM_PERMISSIONS)
-            role.save(update_fields=['permissions', 'updated_at'])
-        elif created:
-            continue
-        elif code in ('support', 'moderation'):
+            changed.append('permissions')
+        elif not created and code in ('support', 'moderation'):
             # Aligne les droits minimaux (inbox support / suspend modération)
             needed = set(spec['permissions'])
             current = set(role.permissions or [])
@@ -182,10 +216,18 @@ def ensure_platform_roles():
                 merged = stripped | needed
             else:
                 merged = current | needed
-            if set(merged) != current or role.description != spec['description']:
+            if set(merged) != current:
                 role.permissions = sorted(merged)
-                role.description = spec['description']
-                role.save(update_fields=['permissions', 'description', 'updated_at'])
+                changed.append('permissions')
+        if (
+            not created
+            and role.description != spec['description']
+            and (not (role.description or '').strip() or role.description in LEGACY_ROLE_DESCRIPTIONS)
+        ):
+            role.description = spec['description']
+            changed.append('description')
+        if changed:
+            role.save(update_fields=list(dict.fromkeys(changed + ['updated_at'])))
     return PlatformRole.objects.all()
 
 
@@ -220,14 +262,22 @@ def user_has_any_platform_perm(user, keys):
 
 
 def catalog_payload():
-    return [
-        {
+    groups = []
+    for group in PLATFORM_PERM_GROUPS:
+        actions = []
+        for item in group['actions']:
+            key, label, *rest = item
+            actions.append({
+                'key': key,
+                'label': label,
+                'hint': rest[0] if rest else '',
+            })
+        groups.append({
             'id': group['id'],
             'label': group['label'],
-            'actions': [{'key': key, 'label': label} for key, label in group['actions']],
-        }
-        for group in PLATFORM_PERM_GROUPS
-    ]
+            'actions': actions,
+        })
+    return groups
 
 
 def update_platform_role(code, permissions=None, name=None, description=None):

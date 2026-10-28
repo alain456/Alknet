@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Briefcase, Building2, ChevronRight, CreditCard, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { platformHomePath, userHasPlatformPerm } from '../auth/platformPermissions';
+import { canOpenPlatformPath, platformHomePath, userHasPlatformPerm } from '../auth/platformPermissions';
 import api from '../shared/api';
 
 const STATUS_LABELS = {
@@ -58,6 +58,65 @@ export default function AdminDashboardPage() {
     return () => { cancelled = true; };
   }, [token, canViewDashboard]);
 
+  const metrics = data?.metrics || {};
+  const queue = data?.queue || {};
+  const recentActivity = data?.recent_activity || [];
+  const recentBusinesses = data?.recent_businesses || [];
+  const growth = data?.growth_businesses || [];
+  const growthMax = data?.growth_max || 1;
+  const monthActivity = (metrics.appointments_month || 0)
+    + (metrics.retail_orders_month || 0)
+    + (metrics.wholesale_orders_month || 0);
+
+  const queueRows = useMemo(() => {
+    const pending = Number(queue.pending_businesses ?? metrics.pending_businesses ?? 0);
+    const rows = [
+      {
+        key: 'pending',
+        path: '/admin/moderation',
+        count: pending,
+        label: 'Entreprises à valider',
+        hint: 'Modération',
+        Icon: Building2,
+      },
+      {
+        key: 'messages',
+        path: '/admin/support',
+        count: Number(queue.contact_unread ?? 0),
+        label: 'Messages contact non lus',
+        hint: 'Support',
+        Icon: Mail,
+      },
+      {
+        key: 'grace',
+        path: '/admin/payments?status=GRACE',
+        count: Number(queue.subscriptions_grace ?? 0),
+        label: 'Abonnements en grâce',
+        hint: 'À relancer',
+        Icon: CreditCard,
+      },
+      {
+        key: 'expired',
+        path: '/admin/payments?status=EXPIRED',
+        count: Number(queue.subscriptions_expired ?? 0),
+        label: 'Abonnements expirés',
+        hint: 'Impayés',
+        Icon: CreditCard,
+      },
+      {
+        key: 'services',
+        path: '/admin/services?status=DRAFT',
+        count: Number(queue.services_draft ?? 0),
+        label: 'Services à activer',
+        hint: 'Brouillons',
+        Icon: Briefcase,
+      },
+    ];
+    return rows.filter((row) => (
+      row.count > 0 && canOpenPlatformPath(user, row.path.split('?')[0])
+    ));
+  }, [queue, metrics.pending_businesses, user]);
+
   if (user && !canViewDashboard) {
     return <Navigate to={platformHomePath(user)} replace />;
   }
@@ -78,15 +137,6 @@ export default function AdminDashboardPage() {
       </div>
     );
   }
-
-  const metrics = data?.metrics || {};
-  const recentActivity = data?.recent_activity || [];
-  const recentBusinesses = data?.recent_businesses || [];
-  const growth = data?.growth_businesses || [];
-  const growthMax = data?.growth_max || 1;
-  const monthActivity = (metrics.appointments_month || 0)
-    + (metrics.retail_orders_month || 0)
-    + (metrics.wholesale_orders_month || 0);
 
   return (
     <div className="space-y-4">
@@ -130,19 +180,40 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        <div className="xl:col-span-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-4">
-          <Link to="/admin/moderation" className="rounded-3xl bg-white p-5 block">
-            <p className="text-sm text-ink-muted">En modération</p>
-            <p className="mt-2 text-3xl font-semibold text-ink">{fmt(metrics.pending_businesses)}</p>
-            <p className="mt-2 text-xs text-ink-muted">Entreprises en attente de validation</p>
-          </Link>
-          <Link to="/admin/businesses" className="rounded-3xl bg-white p-5 block">
-            <p className="text-sm text-ink-muted">Espaces actifs</p>
-            <p className="mt-2 text-3xl font-semibold text-ink">{fmt(metrics.active_businesses)}</p>
-            <p className="mt-2 text-xs text-primary">
-              <Trend value={metrics.businesses_trend} /> sur le mois
-            </p>
-          </Link>
+        <div className="xl:col-span-4 rounded-3xl bg-white p-5 flex flex-col min-h-[210px]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-ink">À traiter</h2>
+              <p className="text-xs mt-1 text-ink-muted">File du jour, selon vos droits</p>
+            </div>
+            {queueRows.length > 0 ? (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-accent text-ink">
+                {fmt(queueRows.reduce((sum, row) => sum + row.count, 0))}
+              </span>
+            ) : null}
+          </div>
+          {queueRows.length === 0 ? (
+            <p className="mt-6 text-sm text-ink-muted">Rien à traiter pour le moment.</p>
+          ) : (
+            <ul className="mt-4 space-y-1">
+              {queueRows.map((row) => (
+                <li key={row.key}>
+                  <Link
+                    to={row.path}
+                    className="flex items-center gap-3 rounded-2xl px-2 py-2 hover:bg-surface"
+                  >
+                    <row.Icon className="w-4 h-4 text-ink-faint shrink-0" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-ink truncate">{row.label}</span>
+                      <span className="block text-[11px] text-ink-muted">{row.hint}</span>
+                    </span>
+                    <span className="text-sm font-semibold text-ink">{fmt(row.count)}</span>
+                    <ChevronRight className="w-4 h-4 text-ink-faint shrink-0" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import { amenityIcon } from './hotelAmenityIcon';
 import OrderPaymentSuccess from '../../shared/components/OrderPaymentSuccess';
 import { useAuth } from '../../context/AuthContext';
 import { websiteHref } from '../../shared/websiteUrl';
+import { googleMapsSearchUrl } from '../../shared/mapLink';
 import { ROLES, getBusinessCategoryKey } from '../../auth/roleAccess';
 import { isValidBurundiPayPhone } from '../../shared/components/burundiPayPhone';
 
@@ -24,7 +25,7 @@ const EST_LABELS = {
 
 function Section({ title, icon: Icon, children, id }) {
   return (
-    <section id={id} className="rounded-2xl border-2 border-accent/40 bg-surface p-5 space-y-3 scroll-mt-24">
+    <section id={id} className="rounded-2xl border-2 border-accent/40 bg-surface p-5 space-y-3 scroll-mt-36">
       <h2 className="text-lg font-extrabold text-ink flex items-center gap-2 font-display">
         {Icon && <Icon className="w-5 h-5 text-accent shrink-0" />}
         {title}
@@ -106,6 +107,11 @@ export default function PublicHotelBook() {
   const fromPrice = ratePrices.length
     ? Math.min(...ratePrices)
     : (roomTypes.length ? Math.min(...roomTypes.map((t) => Number(t.base_price) || 0)) : 0);
+  const mapsUrl = googleMapsSearchUrl({
+    lat: hotel.latitude,
+    lng: hotel.longitude,
+    address: [hotel.address, hotel.city, hotel.province].filter(Boolean).join(', '),
+  });
 
   const minRateForType = (typeId) => {
     const matches = rates.filter((r) => String(r.room_type) === String(typeId));
@@ -205,8 +211,25 @@ export default function PublicHotelBook() {
     );
   }
 
+  const hotelNavClass =
+    'px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-surface text-xs sm:text-sm font-bold text-ink border-2 border-accent inline-flex items-center gap-1.5 hover:bg-primary/5';
+
   return (
     <div className="min-h-screen bg-surface text-ink pb-24 sm:pb-8">
+      <nav
+        aria-label="Sections de l'hôtel"
+        className="sticky top-16 z-40 border-b-2 border-accent/30 bg-surface/95 backdrop-blur-md"
+      >
+        <div className="max-w-5xl mx-auto px-4 py-2 flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <a href="#infos" className={hotelNavClass}>Infos</a>
+          <a href="#galerie" className={hotelNavClass}>Galerie</a>
+          <a href="#chambres" className={hotelNavClass}>Chambres</a>
+          <Link to={`/hotels/${id}/historique`} className={hotelNavClass}>
+            <History className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> Historique
+          </Link>
+        </div>
+      </nav>
+
       {/* Hero full-bleed */}
       <header className="relative min-h-[min(78vh,620px)] flex flex-col justify-end overflow-hidden">
         {cover ? (
@@ -226,7 +249,7 @@ export default function PublicHotelBook() {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/15" />
 
-        <div className="relative max-w-5xl mx-auto w-full px-4 pt-10 pb-10 space-y-5">
+        <div className="school-dash-hero relative max-w-5xl mx-auto w-full px-4 pt-10 pb-10 space-y-5">
           <Link to="/hotels" className="text-sm font-bold text-accent inline-flex items-center gap-1 hover:underline">
             ← Hôtels
           </Link>
@@ -245,7 +268,7 @@ export default function PublicHotelBook() {
                   {EST_LABELS[hotel.establishment_type] || hotel.establishment_type}
                 </p>
               )}
-              <h1 className="font-display text-4xl sm:text-5xl font-semibold text-surface leading-tight drop-shadow">
+              <h1 className="font-display text-4xl sm:text-5xl font-semibold leading-tight drop-shadow">
                 {hotel.trade_name || hotel.name}
               </h1>
               {hotel.stars ? (
@@ -255,13 +278,13 @@ export default function PublicHotelBook() {
                       <Star key={i} className="w-4 h-4 fill-accent text-accent" />
                     ))}
                   </span>
-                  <span className="text-xs font-bold text-surface/80 inline-flex items-center gap-1">
+                  <span className="text-xs font-bold text-[#F5F5F5]/80 inline-flex items-center gap-1">
                     {hotel.classification_verified && <BadgeCheck className="w-3.5 h-3.5 text-emerald-300" />}
                     {hotel.classification_verified ? 'Classification vérifiée' : 'Classification déclarée'}
                   </span>
                 </p>
               ) : null}
-              <p className="text-surface/90 font-medium flex items-start gap-2 text-sm sm:text-base">
+              <p className="font-medium flex items-start gap-2 text-sm sm:text-base">
                 <MapPin className="w-4 h-4 text-accent shrink-0 mt-0.5" />
                 <span>
                   {[hotel.address, hotel.city, hotel.province].filter(Boolean).join(' · ')
@@ -271,28 +294,13 @@ export default function PublicHotelBook() {
               {fromPrice > 0 && (
                 <p className="text-lg font-extrabold text-accent">
                   Dès {fromPrice.toLocaleString('fr-FR')} {hotel.currency || 'BIF'}
-                  <span className="text-sm font-bold text-surface/80"> /nuit</span>
+                  <span className="text-sm font-bold text-[#F5F5F5]/80"> /nuit</span>
                 </p>
               )}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
-            <a href="#infos" className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink">
-              Infos
-            </a>
-            <a href="#galerie" className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink">
-              Galerie
-            </a>
-            <a href="#chambres" className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink">
-              Chambres
-            </a>
-            <Link
-              to={`/hotels/${id}/historique`}
-              className="px-4 py-2 rounded-xl bg-surface text-sm font-bold text-ink inline-flex items-center gap-1.5"
-            >
-              <History className="w-4 h-4" /> Historique
-            </Link>
             <button
               type="button"
               onClick={() => openBook()}
@@ -351,7 +359,7 @@ export default function PublicHotelBook() {
           </Section>
         )}
 
-        <div id="infos" className="grid md:grid-cols-2 gap-4">
+        <div id="infos" className="grid md:grid-cols-2 gap-4 scroll-mt-36">
           <Section title="Horaires & accès" icon={Clock}>
             <ul className="space-y-2 text-sm font-medium text-ink">
               <li>Check-in : <strong>{hotel.check_in_time || '—'}</strong></li>
@@ -365,18 +373,18 @@ export default function PublicHotelBook() {
               {info.wifi ? (
                 <li className="flex gap-2"><Wifi className="w-4 h-4 text-accent shrink-0 mt-0.5" /><span>{info.wifi}</span></li>
               ) : null}
-              {hotel.latitude != null && hotel.longitude != null && (
+              {mapsUrl ? (
                 <li>
                   <a
                     className="font-bold text-accent hover:underline"
-                    href={`https://www.openstreetmap.org/?mlat=${hotel.latitude}&mlon=${hotel.longitude}#map=16/${hotel.latitude}/${hotel.longitude}`}
+                    href={mapsUrl}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    Voir sur la carte (GPS)
+                    Voir sur Google Maps
                   </a>
                 </li>
-              )}
+              ) : null}
             </ul>
           </Section>
 
@@ -457,7 +465,7 @@ export default function PublicHotelBook() {
           </Section>
         ) : null}
 
-        <div id="chambres" />
+        <div id="chambres" className="scroll-mt-36" />
         <Section title="Types de chambres" icon={BedDouble}>
           <RoomTypesCarousel
             roomTypes={roomTypes}

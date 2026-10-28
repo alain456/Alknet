@@ -6,7 +6,7 @@ from service_categories.serializers import ServiceCategorySerializer
 class ServiceSerializer(serializers.ModelSerializer):
     """Sérialiseur public enrichi pour l'annuaire Services."""
     category_detail = ServiceCategorySerializer(source='category', read_only=True)
-    category_name = serializers.CharField(source='category.name', read_only=True, default='')
+    category_name = serializers.CharField(source='business.primary_category.name', read_only=True, default='')
     business_name = serializers.CharField(source='business.name', read_only=True, default='')
     business_logo = serializers.SerializerMethodField()
     business_address = serializers.CharField(source='business.address', read_only=True, default='')
@@ -43,7 +43,12 @@ class ServiceSerializer(serializers.ModelSerializer):
 
 class AdminServiceSerializer(serializers.ModelSerializer):
     provider_name = serializers.SerializerMethodField()
-    category_name = serializers.CharField(source='category.name', read_only=True, default='N/A')
+    category_name = serializers.CharField(
+        source='business.primary_category.name', read_only=True, default='',
+    )
+    parent_title = serializers.CharField(source='parent.title', read_only=True, default='')
+    sub_items = serializers.SerializerMethodField()
+    grouped_services = serializers.SerializerMethodField()
 
     class Meta:
         model = Service
@@ -59,3 +64,20 @@ class AdminServiceSerializer(serializers.ModelSerializer):
                 or obj.professional.email
             )
         return 'Unknown'
+
+    def get_sub_items(self, obj):
+        return [
+            {'id': str(item.id), 'title': item.title, 'description': item.description}
+            for item in obj.sub_items.all()
+        ]
+
+    def get_grouped_services(self, obj):
+        return [
+            {
+                'id': str(row.id),
+                'title': row.title,
+                'description': row.description,
+                'status': row.status,
+            }
+            for row in obj.grouped_services.all()
+        ]

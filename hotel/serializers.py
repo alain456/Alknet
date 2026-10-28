@@ -7,6 +7,37 @@ from .models import (
 from .services import compute_total, assert_room_assignable, next_reference
 
 
+HOTEL_IDENTITY_EXTRA_KEYS = (
+    'stars_rating', 'rooms_count', 'has_swimming_pool', 'breakfast_included',
+)
+
+
+def merge_legacy_amenity_extras(amenities, extras):
+    """Anciens extra_attributes (Paramètres) → équipements Mon hôtel."""
+    amenities = list(amenities or [])
+    extras = extras or {}
+    if extras.get('has_swimming_pool') and 'Piscine' not in amenities:
+        amenities.append('Piscine')
+    if extras.get('breakfast_included') and 'Petit-déjeuner' not in amenities:
+        amenities.append('Petit-déjeuner')
+    return amenities
+
+
+def strip_hotel_identity_extras(business):
+    """Retire étoiles / chambres / piscine / pdj du JSON entreprise (source = HotelProfile)."""
+    extras = dict(getattr(business, 'extra_attributes', None) or {})
+    changed = False
+    for key in HOTEL_IDENTITY_EXTRA_KEYS:
+        if key in extras:
+            extras.pop(key)
+            changed = True
+    if not changed:
+        return False
+    business.extra_attributes = extras
+    business.save(update_fields=['extra_attributes'])
+    return True
+
+
 class HotelProfileSerializer(serializers.ModelSerializer):
     business_name = serializers.CharField(source='business.name', read_only=True)
     address = serializers.CharField(source='business.address', read_only=True)
@@ -14,6 +45,7 @@ class HotelProfileSerializer(serializers.ModelSerializer):
     email = serializers.CharField(source='business.email', read_only=True)
     city = serializers.SerializerMethodField()
     display_stars = serializers.IntegerField(read_only=True)
+    rooms_count = serializers.SerializerMethodField()
     latitude = serializers.FloatField(source='business.latitude', read_only=True, allow_null=True)
     longitude = serializers.FloatField(source='business.longitude', read_only=True, allow_null=True)
     website = serializers.CharField(source='business.website', read_only=True)
@@ -23,6 +55,7 @@ class HotelProfileSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'business', 'business_name', 'trade_name', 'establishment_type',
             'stars', 'stars_verified', 'classification_verified', 'display_stars',
+            'rooms_count',
             'license_number', 'status', 'check_in_time', 'check_out_time',
             'customer_service_hours', 'languages', 'currency', 'amenities',
             'cancellation_policy', 'stay_conditions', 'pets_allowed', 'smoking_allowed',
@@ -38,12 +71,34 @@ class HotelProfileSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'id', 'business', 'created_at', 'updated_at',
             'stars_verified', 'classification_verified', 'display_stars',
+            'rooms_count',
             'latitude', 'longitude', 'website',
         )
 
     def get_city(self, obj):
         b = obj.business
         return getattr(b, 'commune', None) or getattr(b, 'province', None) or ''
+
+    def get_rooms_count(self, obj):
+        return Room.objects.filter(hotel_id=obj.business_id, is_active=True).count()
+
+    def update(self, instance, validated_data):
+        if 'stars' in validated_data:
+            new_stars = validated_data.get('stars')
+            if (
+                instance.classification_verified
+                and new_stars != instance.stars
+                and new_stars != instance.stars_verified
+            ):
+                # Nouvelle déclaration : le public suit jusqu’à re-vérification plateforme.
+                instance.classification_verified = False
+        return super().update(instance, validated_data)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        extras = getattr(instance.business, 'extra_attributes', None) or {}
+        data['amenities'] = merge_legacy_amenity_extras(data.get('amenities'), extras)
+        return data
 
 
 class HotelDepartmentSerializer(serializers.ModelSerializer):

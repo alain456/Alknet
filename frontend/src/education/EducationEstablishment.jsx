@@ -9,6 +9,7 @@ import {
 import educationService from './educationService';
 import { EDUCATION_ENUM_FALLBACK, loadEducationEnums, programHeadline, universityLevelLabel } from './educationEnums';
 import SchoolHistoryCarousel from './SchoolHistoryCarousel';
+import { googleMapsSearchUrl } from '../shared/mapLink';
 
 function mapPreview(lat, lon, zoom = 15) {
   const n = 2 ** zoom;
@@ -53,9 +54,9 @@ function Contact({ icon: Icon, children, href }) {
 
 function Section({ icon: Icon, title, children, id }) {
   return (
-    <section id={id} className="p-5 rounded-2xl border border-border dark:border-white/10 bg-white dark:bg-black/20">
-      <h2 className="flex items-center gap-2 font-bold text-ink dark:text-white mb-3">
-        {Icon && <Icon className="w-5 h-5 text-green-700 dark:text-green-300 shrink-0" />}
+    <section id={id} className="p-5 rounded-2xl border border-border bg-surface">
+      <h2 className="flex items-center gap-2 font-bold text-ink mb-3">
+        {Icon && <Icon className="w-5 h-5 text-primary shrink-0" />}
         {title}
       </h2>
       {children}
@@ -297,7 +298,7 @@ export default function EducationEstablishment() {
   if (error) {
     return (
       <div className="space-y-4">
-        <Link to="/education" className="inline-flex items-center gap-1 text-sm text-green-700 dark:text-green-300">
+        <Link to="/education" className="inline-flex items-center gap-1 text-sm text-primary">
           <ArrowLeft className="w-4 h-4" /> Retour à l'annuaire
         </Link>
         <div className="p-6 rounded-2xl bg-red-50 text-red-700 text-sm">{error}</div>
@@ -333,9 +334,11 @@ export default function EducationEstablishment() {
   ].filter(Boolean);
   const enumsCycles = enums.ecofo_cycles || [];
 
-  const mapHref = business.latitude != null && business.longitude != null
-    ? `https://www.openstreetmap.org/?mlat=${business.latitude}&mlon=${business.longitude}#map=16/${business.latitude}/${business.longitude}`
-    : '';
+  const mapHref = googleMapsSearchUrl({
+    lat: business.latitude,
+    lng: business.longitude,
+    address,
+  });
   const tile = !mapBroken && business.latitude != null && business.longitude != null
     ? mapPreview(business.latitude, business.longitude)
     : null;
@@ -416,7 +419,7 @@ export default function EducationEstablishment() {
                 <img
                   src={business.logo}
                   alt={`Logo de ${business.name || 'l’établissement'}`}
-                  className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-contain bg-surface p-1 shrink-0"
+                  className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-contain bg-[#F5F5F5] p-1 shrink-0"
                 />
               ) : null}
               <h1 className="max-w-xl text-4xl sm:text-5xl font-extrabold tracking-tight text-white">
@@ -435,13 +438,13 @@ export default function EducationEstablishment() {
               </p>
             )}
             <div className="mt-6 flex flex-wrap gap-3">
-              <a href="#informations" className="pointer-events-auto inline-flex items-center px-5 py-2.5 rounded-full bg-[#EA8B33] text-white text-sm font-bold">
+              <a href="#informations" className="pointer-events-auto inline-flex items-center px-5 py-2.5 rounded-full bg-accent text-ink text-sm font-bold">
                 Voir les informations
               </a>
               {(business.phone || profile.institutional_email || business.email) && (
                 <a
                   href={business.phone ? `tel:${business.phone}` : `mailto:${profile.institutional_email || business.email}`}
-                  className="pointer-events-auto inline-flex items-center px-5 py-2.5 rounded-full bg-[#1a1a1a] text-white text-sm font-bold"
+                  className="pointer-events-auto inline-flex items-center px-5 py-2.5 rounded-full bg-[#132F45] text-[#F5F5F5] text-sm font-bold"
                 >
                   Nous contacter
                 </a>
@@ -451,7 +454,7 @@ export default function EducationEstablishment() {
         </div>
       </div>
 
-      <section id="informations" className="bg-white scroll-mt-20">
+      <section id="informations" className="bg-surface scroll-mt-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 grid lg:grid-cols-2 gap-8 items-center">
           <div className="relative rounded-2xl overflow-hidden min-h-[220px] bg-primary/10">
             {(business.logo || gallery[0]) ? (
@@ -541,7 +544,7 @@ export default function EducationEstablishment() {
       )}
 
       {business.category_slug === 'universite' && (
-        <section id="inscription" className="p-5 rounded-2xl border border-border bg-white scroll-mt-20">
+        <section id="inscription" className="p-5 rounded-2xl border border-border bg-surface scroll-mt-20">
           <h2 className="flex items-center gap-2 text-lg font-bold text-ink mb-3">
             <GraduationCap className="w-5 h-5 text-primary" />
             Inscription
@@ -674,13 +677,13 @@ export default function EducationEstablishment() {
               return (
                 <div
                   key={`${s.label}-${i}`}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/5"
+                  className="flex items-start gap-3 p-3 rounded-xl bg-paper"
                 >
-                  <Icon className="w-5 h-5 text-green-700 dark:text-green-300 shrink-0 mt-0.5" />
+                  <Icon className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-ink dark:text-white">{s.label}</p>
+                    <p className="text-sm font-semibold text-ink">{s.label}</p>
                     {s.description && (
-                      <p className="text-xs text-ink-muted dark:text-white/70">{s.description}</p>
+                      <p className="text-xs text-ink-muted">{s.description}</p>
                     )}
                   </div>
                 </div>
@@ -694,12 +697,12 @@ export default function EducationEstablishment() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {profile.teaching_languages && (
             <Section icon={GraduationCap} title="Langues d'enseignement">
-              <p className="text-sm text-ink-muted dark:text-white/70">{profile.teaching_languages}</p>
+              <p className="text-sm text-ink-muted">{profile.teaching_languages}</p>
             </Section>
           )}
           {profile.academic_calendar && (
             <Section icon={CalendarDays} title="Année académique">
-              <p className="text-sm text-ink-muted dark:text-white/70 whitespace-pre-line">
+              <p className="text-sm text-ink-muted whitespace-pre-line">
                 {profile.academic_calendar}
               </p>
             </Section>
@@ -717,10 +720,10 @@ export default function EducationEstablishment() {
 
       {(profile.accreditation_number || profile.accreditation_body || profile.accreditation_valid_until) && (
         <div className="p-4 rounded-2xl border border-green-600/30 bg-green-600/5">
-          <h3 className="flex items-center gap-2 text-sm font-bold text-ink dark:text-white mb-1">
-            <ShieldCheck className="w-4 h-4 text-green-700 dark:text-green-300" /> Agrément officiel
+          <h3 className="flex items-center gap-2 text-sm font-bold text-ink mb-1">
+            <ShieldCheck className="w-4 h-4 text-primary" /> Agrément officiel
           </h3>
-          <p className="text-sm text-ink-muted dark:text-white/70">
+          <p className="text-sm text-ink-muted">
             {[profile.accreditation_body, profile.accreditation_number].filter(Boolean).join(' — ')}
             {profile.accreditation_valid_until && `Valide jusqu'au ${profile.accreditation_valid_until}`}
           </p>
@@ -728,8 +731,8 @@ export default function EducationEstablishment() {
       )}
 
       {business.category_slug === 'ecole' && (
-        <section id="inscription" className="p-5 rounded-2xl border border-border bg-white dark:bg-black/20">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-ink dark:text-white mb-3">
+        <section id="inscription" className="p-5 rounded-2xl border border-border bg-surface">
+          <h2 className="flex items-center gap-2 text-lg font-bold text-ink mb-3">
             <GraduationCap className="w-5 h-5 text-primary" />
             Inscription pour une année scolaire
           </h2>
@@ -822,7 +825,7 @@ export default function EducationEstablishment() {
                   <Link
                     to={user ? `/education/inscription?campaign=${year.id}` : '/login'}
                     state={user ? undefined : { from: `/education/inscription?campaign=${year.id}` }}
-                    className="inline-flex mt-2 px-4 py-2 rounded-xl bg-[#EA8B33] text-white text-sm font-bold"
+                    className="inline-flex mt-2 px-4 py-2 rounded-xl bg-accent text-ink text-sm font-bold"
                   >
                     S&apos;inscrire
                   </Link>
@@ -831,7 +834,7 @@ export default function EducationEstablishment() {
                     <button
                       type="button"
                       disabled
-                      className="inline-flex mt-2 px-4 py-2 rounded-xl bg-[#EA8B33]/40 text-white text-sm font-bold cursor-not-allowed"
+                      className="inline-flex mt-2 px-4 py-2 rounded-xl bg-accent/40 text-ink text-sm font-bold cursor-not-allowed"
                     >
                       S&apos;inscrire
                     </button>

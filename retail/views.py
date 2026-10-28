@@ -83,14 +83,10 @@ def _burundipay_payment_from_request(data):
     from businesses.burundipay import is_burundipay_method, normalize_phone
 
     method = (data.get('payment_method') or 'BURUNDIPAY').strip().upper() or 'BURUNDIPAY'
-    if method == 'LUMICASH':
-        method = 'BURUNDIPAY'
     raw_phone = (
         data.get('payer_phone')
         or data.get('burundipay_phone')
         or data.get('payer_burundipay')
-        or data.get('lumicash_phone')
-        or data.get('payer_lumicash')
         or ''
     ).strip()
     if not is_burundipay_method(method):

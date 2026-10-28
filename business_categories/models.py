@@ -14,10 +14,12 @@ class ModuleKey(models.TextChoices):
     BUSINESS = 'business', 'Commerce générique'
     COMMERCE = 'commerce', 'Commerce / boutique en ligne'
     HOTEL = 'hotel', 'Hôtellerie (PMS)'
+    RESTAURANT = 'restaurant', 'Restauration'
     HOSPITAL = 'hospital', 'Santé / hôpital'
     RETAIL_PHARMACY = 'retail_pharmacy', 'Pharmacie de détail'
     WHOLESALE = 'wholesale', 'Pharmacie de gros'
     EDUCATION = 'education', 'Éducation'
+    SERVICES = 'services', 'Services et prestataires'
 
 
 class BusinessCategory(models.Model):
@@ -38,6 +40,10 @@ class BusinessCategory(models.Model):
         default='',
         help_text="Module métier activé pour cette catégorie.",
     )
+    is_visible = models.BooleanField(
+        default=True,
+        help_text="Visible côté client (annuaire, inscription). Désactivé = brouillon admin.",
+    )
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
@@ -55,12 +61,16 @@ class BusinessCategory(models.Model):
         # Un parent générique n'exporte rien, sinon tout s'effondrerait sur
         # le dashboard business. Les catégories existantes gardent ainsi
         # leur valeur issue de la migration, sans réécriture surprise.
-        if self._state.adding and not self.module and self.parent_id:
-            parent_module = (
-                BusinessCategory.objects.filter(pk=self.parent_id)
-                .values_list('module', flat=True)
-                .first()
-            )
-            if parent_module and parent_module != ModuleKey.BUSINESS:
-                self.module = parent_module
+        if self._state.adding and not self.module:
+            from .food_service import is_food_service_category
+            if is_food_service_category(self):
+                self.module = ModuleKey.RESTAURANT
+            elif self.parent_id:
+                parent_module = (
+                    BusinessCategory.objects.filter(pk=self.parent_id)
+                    .values_list('module', flat=True)
+                    .first()
+                )
+                if parent_module and parent_module != ModuleKey.BUSINESS:
+                    self.module = parent_module
         return super().save(*args, **kwargs)

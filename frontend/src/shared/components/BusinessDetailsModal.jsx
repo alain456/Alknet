@@ -7,7 +7,7 @@ import {
   Check, Sparkles, User, Package, History
 } from 'lucide-react';
 import { websiteHref } from '../websiteUrl';
-import { getBusinessRecordCategoryKey } from '../../auth/roleAccess';
+import { getBusinessRecordCategoryKey, isFoodServiceBusiness, isLodgingBusiness } from '../../auth/roleAccess';
 
 export default function BusinessDetailsModal({
   isOpen, onClose, business, categories = [], showModerationStatus = false,
@@ -19,7 +19,8 @@ export default function BusinessDetailsModal({
   const wholesale = categoryKey === 'wholesale';
   const retail = categoryKey === 'retail_pharmacy';
   const commerce = categoryKey === 'commerce';
-  const hotel = categoryKey === 'hotel';
+  const hotel = isLodgingBusiness(business);
+  const restaurant = isFoodServiceBusiness(business);
 
   // Resolve category names
   const primaryCategoryName = business.primary_category_name || 
@@ -228,7 +229,7 @@ export default function BusinessDetailsModal({
                 </div>
               )}
 
-              {attrs.stars_rating && (
+              {attrs.stars_rating && !isLodgingBusiness(business) && (
                 <div className="bg-white dark:bg-gray-900 px-3 py-1.5 rounded-lg border border-gold-400 dark:border-gold-700 font-semibold text-gold-700 dark:text-gold-300 flex items-center gap-1.5">
                   <Hotel className="w-4 h-4 text-gold-600" /> Classement: <span className="font-bold">{attrs.stars_rating} Étoiles</span> ({attrs.rooms_count || '?'} Chambres)
                 </div>
@@ -246,13 +247,13 @@ export default function BusinessDetailsModal({
                 </div>
               )}
 
-              {attrs.has_swimming_pool && (
+              {attrs.has_swimming_pool && !hotel && (
                 <div className="bg-white dark:bg-gray-900 px-3 py-1.5 rounded-lg border border-blue-300 dark:border-blue-800 font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                   <Check className="w-4 h-4 text-blue-600" /> Piscine disponible
                 </div>
               )}
 
-              {!attrs.license_number && !attrs.stars_rating && !attrs.cuisine_type && !attrs.is_24_7 && !attrs.has_swimming_pool && (
+              {!attrs.license_number && !(attrs.stars_rating && !hotel) && !attrs.cuisine_type && !attrs.is_24_7 && !(attrs.has_swimming_pool && !hotel) && (
                 <span className="text-gray-400 italic text-xs">Aucune spécificité particulière enregistrée pour cette catégorie.</span>
               )}
             </div>
@@ -320,6 +321,18 @@ export default function BusinessDetailsModal({
                 className="px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
               >
                 <Hotel className="w-4 h-4" /> Voir l&apos;établissement
+              </button>
+            )}
+            {restaurant && !hotel && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/restaurants/${business.id}`);
+                }}
+                className="px-4 py-2 bg-primary hover:bg-secondary text-white font-semibold rounded-lg transition cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Utensils className="w-4 h-4" /> Voir l&apos;établissement
               </button>
             )}
             {wholesale && (

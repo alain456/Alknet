@@ -65,7 +65,7 @@ export default function SchoolHistoryCarousel({ images = [], name = 'École', he
             type="button"
             aria-label="Photo précédente"
             onClick={() => go(index - 1)}
-            className={`absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white/90 text-ink shadow ${hero ? 'sm:left-6' : ''}`}
+            className={`ih-carousel-nav absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full shadow ${hero ? 'sm:left-6' : ''}`}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -73,7 +73,7 @@ export default function SchoolHistoryCarousel({ images = [], name = 'École', he
             type="button"
             aria-label="Photo suivante"
             onClick={() => go(index + 1)}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-white/90 text-ink shadow ${hero ? 'sm:right-6' : ''}`}
+            className={`ih-carousel-nav absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full shadow ${hero ? 'sm:right-6' : ''}`}
           >
             <ChevronRight className="w-5 h-5" />
           </button>

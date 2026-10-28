@@ -51,7 +51,7 @@ function SocialGlyph({ network }) {
   return <Share2 className="w-4 h-4" />;
 }
 
-function FooterNavLink({ link, className = 'text-sm text-surface/85 hover:text-surface transition' }) {
+function FooterNavLink({ link, className = 'text-sm text-[#F5F5F5] hover:text-accent transition' }) {
   const isExternal = /^https?:\/\//i.test(link.url);
   if (isExternal) {
     return (
@@ -130,7 +130,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
 
   return (
     <footer
-      className="text-surface relative overflow-hidden"
+      className="ih-site-footer relative overflow-hidden"
       style={{
         background:
           'radial-gradient(ellipse at 12% 0%, color-mix(in srgb, #EA8B33 35%, transparent) 0%, transparent 42%), '
@@ -139,14 +139,14 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-14 space-y-12">
-        <h2 className="font-display text-2xl sm:text-3xl lg:text-[2rem] font-semibold text-surface leading-snug max-w-2xl">
+        <h2 className="font-display text-2xl sm:text-3xl lg:text-[2rem] font-semibold text-[#F5F5F5] leading-snug max-w-2xl">
           {headline}
         </h2>
 
         {/* Middle: contact + columns + social */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-10">
           <div className="col-span-2 sm:col-span-1 space-y-4">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-surface/55">
+            <h4 className="ih-footer-muted text-[11px] font-bold uppercase tracking-[0.14em]">
               {contactTitle}
             </h4>
             <ul className="space-y-3">
@@ -154,7 +154,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
                 <li>
                   <a
                     href={`mailto:${contactEmail}`}
-                    className="inline-flex items-center gap-2.5 text-sm text-surface hover:text-accent transition"
+                    className="inline-flex items-center gap-2.5 text-sm text-[#F5F5F5] hover:text-accent transition"
                   >
                     <Mail className="w-4 h-4 text-accent shrink-0" />
                     {contactEmail}
@@ -165,7 +165,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
                 <li>
                   <a
                     href={`tel:${contactPhone.replace(/\s/g, '')}`}
-                    className="inline-flex items-center gap-2.5 text-sm text-surface hover:text-accent transition"
+                    className="inline-flex items-center gap-2.5 text-sm text-[#F5F5F5] hover:text-accent transition"
                   >
                     <Phone className="w-4 h-4 text-accent shrink-0" />
                     {contactPhone}
@@ -173,7 +173,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
                 </li>
               ) : null}
               {!contactEmail && !contactPhone && (
-                <li className="text-sm text-surface/50">Contact non renseigné</li>
+                <li className="ih-footer-muted text-sm">Contact non renseigné</li>
               )}
             </ul>
             {(settings?.platform_logo || brand) && (
@@ -182,17 +182,17 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
                   <img
                     src={settings.platform_logo}
                     alt={brand}
-                    className="w-8 h-8 rounded-full object-cover border border-surface/30 bg-surface"
+                    className="w-8 h-8 rounded-full object-cover border border-[#F5F5F5]/30 bg-[#F5F5F5]"
                   />
                 ) : null}
-                <span className="text-sm font-bold text-surface/80">{brand}</span>
+                <span className="text-sm font-bold text-[#F5F5F5]/80">{brand}</span>
               </div>
             )}
           </div>
 
           {navColumns.map((col) => (
             <div key={col.key} className="space-y-4">
-              <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-surface/55">
+              <h4 className="ih-footer-muted text-[11px] font-bold uppercase tracking-[0.14em]">
                 {col.title}
               </h4>
               <ul className="space-y-2.5">
@@ -206,7 +206,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
           ))}
 
           <div className="space-y-4">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-surface/55">
+            <h4 className="ih-footer-muted text-[11px] font-bold uppercase tracking-[0.14em]">
               {followTitle}
             </h4>
             {socialLinks.length > 0 ? (
@@ -220,7 +220,7 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
                       target="_blank"
                       rel="noreferrer"
                       aria-label={s.network || s.name || 'Social'}
-                      className="w-9 h-9 rounded-full bg-surface text-primary flex items-center justify-center hover:bg-accent hover:text-surface transition"
+                      className="ih-footer-social w-9 h-9 rounded-full flex items-center justify-center transition"
                     >
                       <SocialGlyph network={key} />
                     </a>
@@ -228,24 +228,24 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
                 })}
               </div>
             ) : (
-              <p className="text-sm text-surface/45">Ajoutez vos réseaux dans le CMS</p>
+              <p className="ih-footer-muted text-sm">Ajoutez vos réseaux dans le CMS</p>
             )}
           </div>
         </div>
 
         {showPartners && (
           <div className="pt-2">
-            <h4 className="text-[11px] font-bold uppercase tracking-[0.14em] text-surface/55 mb-4">
+            <h4 className="ih-footer-muted text-[11px] font-bold uppercase tracking-[0.14em] mb-4">
               Partenaires
             </h4>
             <div className="flex flex-wrap items-center gap-4">
               {partners.map((partner) => {
                 const content = (
-                  <div className="flex items-center gap-3 bg-surface/10 hover:bg-surface/15 transition rounded-xl px-4 py-2.5">
+                  <div className="flex items-center gap-3 bg-white/10 hover:bg-white/15 transition rounded-xl px-4 py-2.5">
                     {partner.logo ? (
                       <img src={partner.logo} alt={partner.name} className="h-8 w-8 object-contain rounded" />
                     ) : null}
-                    <span className="text-sm font-medium text-surface/90">{partner.name}</span>
+                    <span className="text-sm font-medium text-[#F5F5F5]/90">{partner.name}</span>
                   </div>
                 );
                 return partner.website_url ? (
@@ -259,14 +259,14 @@ export default function SiteFooter({ settings, footerLinks = [], partners = [] }
         )}
 
         {/* Bottom bar */}
-        <div className="pt-8 border-t border-surface/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <p className="text-xs text-surface/50">{copyright}</p>
+        <div className="pt-8 border-t border-white/15 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="ih-footer-muted text-xs">{copyright}</p>
           <div className="flex flex-wrap gap-x-5 gap-y-1">
             {legalLinks.map((link) => (
               <FooterNavLink
                 key={link.id}
                 link={link}
-                className="text-xs text-surface/50 hover:text-surface transition"
+                className="ih-footer-muted text-xs hover:text-accent transition"
               />
             ))}
           </div>

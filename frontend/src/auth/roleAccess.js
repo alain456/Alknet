@@ -109,6 +109,10 @@ export function isHotelBusinessUser(user) {
   return getBusinessCategoryKey(user) === 'hotel';
 }
 
+export function isRestaurantBusinessUser(user) {
+  return getBusinessCategoryKey(user) === 'restaurant';
+}
+
 export function isEducationBusinessUser(user) {
   return getBusinessCategoryKey(user) === 'education';
 }
@@ -232,10 +236,12 @@ export const MODULE_KEYS = [
   'business',
   'commerce',
   'hotel',
+  'restaurant',
   'hospital',
   'retail_pharmacy',
   'wholesale',
   'education',
+  'services',
 ];
 
 /**
@@ -301,6 +307,9 @@ export function categoryKeyFromLabels(name = '', slug = '', module = '') {
   ) {
     return 'hotel';
   }
+  if (isFoodServiceLabels(name, slug)) {
+    return 'restaurant';
+  }
   if (
     n.includes('éducation')
     || n.includes('education')
@@ -326,6 +335,23 @@ export function categoryKeyFromLabels(name = '', slug = '', module = '') {
     // Testé avant « commerce » : une « école de commerce » est un
     // établissement d'enseignement, pas une boutique.
     return 'education';
+  }
+  if (
+    n.includes('services professionnel')
+    || n.includes('services à la personne')
+    || n.includes('services a la personne')
+    || n.includes('aide à domicile')
+    || n.includes('aide a domicile')
+    || n.includes("garde d'enfant")
+    || n.includes('garde d’enfant')
+    || n.includes('accompagnement des personnes')
+    || n.includes('avocat')
+    || s.includes('services-professionnel')
+    || s.includes('services-a-la-personne')
+    || s.includes('aide-a-domicile')
+    || s.includes('garde-denfants')
+  ) {
+    return 'services';
   }
   const commerceKeywords = [
     'commerce', 'boutique', 'mode', 'quincaillerie',
@@ -368,6 +394,35 @@ export function getBusinessRecordCategoryKey(business) {
   return categoryKeyFromLabels(name, slug, module);
 }
 
+export function isFoodServiceLabels(name = '', slug = '') {
+  const blob = `${name} ${slug}`.toLowerCase();
+  if (/(restaurant|resto|traiteur|caf[eé])/.test(blob)) return true;
+  const exact = `${name}`.toLowerCase().trim();
+  const s = `${slug}`.toLowerCase().trim();
+  return exact === 'bar' || s === 'bar';
+}
+
+/** Hébergement public (/hotels) : Hôtel, lodge… pas un resto sous Hôtellerie. */
+export function isLodgingLabels(name = '', slug = '') {
+  if (isFoodServiceLabels(name, slug)) return false;
+  const blob = `${name} ${slug}`.toLowerCase();
+  // Racine mixte « Hôtellerie et tourisme » : pas un établissement d’hébergement.
+  if (/tourisme/.test(blob) && /h[oô]tellerie|hotellerie/.test(blob)) return false;
+  return /(h[oô]tel|lodge|guest|auberge|hostel|r[eé]sidence|h[eé]bergement)/.test(blob);
+}
+
+export function isLodgingBusiness(business) {
+  const { name, slug, module } = labelsFromBusiness(business);
+  if (module === 'restaurant' || isFoodServiceLabels(name, slug)) return false;
+  return isLodgingLabels(name, slug);
+}
+
+export function isFoodServiceBusiness(business) {
+  const { name, slug, module } = labelsFromBusiness(business);
+  if (module === 'restaurant') return true;
+  return isFoodServiceLabels(name, slug);
+}
+
 /** Chemin d'accueil unique par rôle (aucun chevauchement) */
 export function getBusinessCategoryKey(user) {
   return categoryKeyFromLabels(
@@ -407,14 +462,17 @@ export function getHomePathForUser(user) {
     if (key === 'retail_pharmacy') return '/retail-pharmacy/dashboard';
     if (key === 'hospital') return '/hospital/dashboard';
     if (key === 'hotel') return '/hotel/dashboard';
+    if (key === 'restaurant') return '/restaurant/dashboard';
     if (key === 'commerce') return '/commerce/dashboard';
     if (key === 'education') return '/education/dashboard';
+    if (key === 'services') return '/provider/dashboard';
     return '/business';
   }
 
   if (user.role === ROLES.PROFESSIONAL) {
     // Tout le personnel hôtel → PMS unique (menus selon droits CRUD du rôle)
     if (isHotelBusinessUser(user)) return '/hotel/dashboard';
+    if (isRestaurantBusinessUser(user)) return '/restaurant/dashboard';
     if (isEducationBusinessUser(user)) {
       const perms = user.business_info?.permissions || [];
       const roleName = (user.business_info?.role_name || '').toLowerCase();
@@ -430,6 +488,7 @@ export function getHomePathForUser(user) {
       if (feesOnly) return '/education/accounting';
       return '/education/dashboard';
     }
+    if (getBusinessCategoryKey(user) === 'services') return '/provider/dashboard';
     return getStaffHomePath(user);
   }
 
@@ -468,8 +527,16 @@ export function canAccessCategoryPath(categoryKey, pathname, { role } = {}) {
     return categoryKey === 'hotel';
   }
 
+  if (path.startsWith('/restaurant')) {
+    return categoryKey === 'restaurant';
+  }
+
   if (path.startsWith('/commerce')) {
     return categoryKey === 'commerce';
+  }
+
+  if (path.startsWith('/provider')) {
+    return categoryKey === 'services';
   }
 
   // L'annuaire public Éducation reste ouvert à tous ; seules les pages de

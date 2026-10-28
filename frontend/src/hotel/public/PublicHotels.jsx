@@ -75,12 +75,12 @@ export default function PublicHotels() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
 
         <div className="relative max-w-5xl mx-auto w-full px-4 pt-16 pb-10 space-y-6">
-          <div className="max-w-xl space-y-3 animate-[fadeIn_0.7s_ease-out]">
+          <div className="school-dash-hero max-w-xl space-y-3 animate-[fadeIn_0.7s_ease-out]">
             <p className="text-sm font-bold text-accent uppercase tracking-[0.2em]">Isoko Hub</p>
-            <h1 className="font-display text-4xl sm:text-5xl font-semibold text-surface leading-[1.1] tracking-tight">
+            <h1 className="font-display text-4xl sm:text-5xl font-semibold leading-[1.1] tracking-tight">
               Votre séjour commence ici
             </h1>
-            <p className="text-base sm:text-lg text-surface/85 font-medium max-w-md">
+            <p className="text-base sm:text-lg font-medium max-w-md">
               Hôtels, lodges et guest houses — trouvez l&apos;adresse idéale au Burundi.
             </p>
           </div>
@@ -257,11 +257,11 @@ export default function PublicHotels() {
                             ))}
                           </p>
                         ) : null}
-                        <p className="text-lg font-extrabold text-surface drop-shadow-sm leading-tight">
+                        <p className="text-lg font-extrabold text-[#F5F5F5] drop-shadow-sm leading-tight">
                           {h.trade_name || h.name}
                         </p>
                       </div>
-                      <p className="shrink-0 px-2.5 py-1.5 rounded-xl bg-accent text-surface text-xs font-extrabold shadow">
+                      <p className="shrink-0 px-2.5 py-1.5 rounded-xl bg-accent text-ink text-xs font-extrabold shadow">
                         dès {Number(h.from_price || 0).toLocaleString('fr-FR')} {h.currency || 'BIF'}
                       </p>
                     </div>

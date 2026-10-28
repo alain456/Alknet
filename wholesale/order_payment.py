@@ -13,7 +13,7 @@ from orders.cash_register import record_order_payment
 def pharmacy_merchant_account(business) -> str:
     if not business:
         return 'WHOLESALE_MERCHANT'
-    configured = (getattr(business, 'lumicash_merchant_account', None) or '').strip()
+    configured = (getattr(business, 'burundipay_merchant_account', None) or '').strip()
     if configured:
         return configured
     return f'WHOLE-{str(business.id).replace("-", "")[:10].upper()}'

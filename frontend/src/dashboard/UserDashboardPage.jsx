@@ -264,6 +264,7 @@ export default function UserDashboardPage() {
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Accès rapide</h2>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700 overflow-hidden">
             {[
+              { to: '/dashboard/demandes', label: 'Mes demandes de services', icon: CheckCircle2 },
               { to: '/dashboard/bookings', label: 'Mes réservations', icon: CheckCircle2 },
               { to: '/dashboard/lab-results', label: 'Résultats labo', icon: Stethoscope },
               { to: '/dashboard/orders', label: 'Mes commandes', icon: ShoppingBag },

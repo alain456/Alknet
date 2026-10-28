@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Download, Briefcase, Tag, CheckCircle2, XCircle, Clock, Power } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
@@ -6,14 +7,32 @@ import api from '../shared/api';
 const normalize = (data) => (Array.isArray(data) ? data : data?.results || []);
 
 export default function AdminServicesPage() {
+  const [searchParams] = useSearchParams();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => (searchParams.get('status') || '').toUpperCase());
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
   const [busyId, setBusyId] = useState(null);
   const { token, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const next = (searchParams.get('status') || '').toUpperCase();
+    setStatusFilter(['ACTIVE', 'DRAFT', 'SUSPENDED'].includes(next) ? next : '');
+    setPage(1);
+  }, [searchParams]);
 
   const load = useCallback(async () => {
     if (!isAuthenticated || !token) {
@@ -23,18 +42,25 @@ export default function AdminServicesPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.get('services/admin/list/', {
+      const query = new URLSearchParams({
+        page: String(page),
+        page_size: '20',
+      });
+      if (debouncedSearch) query.set('q', debouncedSearch);
+      if (statusFilter) query.set('status', statusFilter);
+      const data = await api.get(`services/admin/list/?${query.toString()}`, {
         auth: true,
         headers: { Authorization: `Bearer ${token}` },
       });
       setServices(normalize(data));
+      setCount(Array.isArray(data) ? normalize(data).length : Number(data?.count || 0));
     } catch (err) {
       setError(err.message || 'Impossible de charger les services');
       setServices([]);
     } finally {
       setLoading(false);
     }
-  }, [token, isAuthenticated]);
+  }, [token, isAuthenticated, page, debouncedSearch, statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -80,20 +106,35 @@ export default function AdminServicesPage() {
     }
   };
 
-  const filteredServices = services.filter((s) => {
-    const hay = `${s.title || ''} ${s.provider_name || ''} ${s.category_name || ''}`.toLowerCase();
-    if (searchTerm && !hay.includes(searchTerm.toLowerCase())) return false;
-    if (statusFilter && s.status !== statusFilter) return false;
-    return true;
-  });
+  const groups = useMemo(() => {
+    const byProvider = new Map();
+    services.forEach((service) => {
+      const key = service.provider_name || 'Sans prestataire';
+      if (!byProvider.has(key)) {
+        byProvider.set(key, {
+          provider: key,
+          category: service.category_name || '',
+          services: [],
+        });
+      }
+      byProvider.get(key).services.push({
+        ...service,
+        nested: service.grouped_services || [],
+      });
+    });
+    return [...byProvider.values()];
+  }, [services]);
+
+  const flattened = groups.flatMap((group) => group.services);
 
   const exportCsv = () => {
     const rows = [
-      ['Titre', 'Prestataire', 'Catégorie', 'Prix', 'Statut', 'Créé le'],
-      ...filteredServices.map((s) => [
-        s.title,
+      ['Prestataire', 'Catégorie entreprise', 'Service', 'Sous-services', 'Prix', 'Statut', 'Créé le'],
+      ...flattened.map((s) => [
         s.provider_name || '',
         s.category_name || '',
+        s.title,
+        (s.nested || []).map((item) => item.title).join(' · '),
         s.price ?? '',
         s.status,
         s.created_at ? new Date(s.created_at).toISOString() : '',
@@ -115,7 +156,7 @@ export default function AdminServicesPage() {
         <div>
           <h1 className="text-3xl font-display font-semibold text-green-900 dark:text-white tracking-tight">Services</h1>
           <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">
-            Supervisez les prestations proposées sur la plateforme ({services.length}).
+            Chaque prestataire groupe ses services et sous-services. La catégorie est celle de l’entreprise ({count}).
           </p>
         </div>
         <button
@@ -130,75 +171,63 @@ export default function AdminServicesPage() {
       {message && <div className="p-3 rounded-xl bg-emerald-50 text-emerald-700 text-sm">{message}</div>}
       {error && <div className="p-3 rounded-xl bg-red-50 text-error text-sm">{error}</div>}
 
-      <div className="border border-border dark:border-white/10 rounded-[10px] bg-surface dark:bg-primary overflow-hidden shadow-sm flex flex-col">
-        <div className="px-5 py-4 border-b border-border dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center bg-paper dark:bg-black/10">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-            <input
-              type="text"
-              placeholder="Rechercher un service ou un prestataire…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-[13px] bg-surface border border-border rounded-md text-ink placeholder-ink-faint focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-[13px] border border-border rounded-md bg-surface"
-          >
-            <option value="">Tous les statuts</option>
-            <option value="ACTIVE">Actifs</option>
-            <option value="DRAFT">Brouillons</option>
-            <option value="SUSPENDED">Suspendus</option>
-          </select>
+      <div className="search-panel flex flex-col sm:flex-row gap-3 justify-between items-center">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
+          <input
+            type="text"
+            placeholder="Rechercher un service, un sous-service ou un prestataire…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-[13px] bg-surface border border-border rounded-md text-ink placeholder-ink-faint focus:outline-none focus:ring-2 focus:ring-primary"
+          />
         </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          className="px-3 py-2 text-[13px] border border-border rounded-md bg-surface w-full sm:w-auto"
+        >
+          <option value="">Tous les statuts</option>
+          <option value="ACTIVE">Actifs</option>
+          <option value="DRAFT">Brouillons</option>
+          <option value="SUSPENDED">Suspendus</option>
+        </select>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-border text-[11px] text-ink-faint uppercase tracking-[0.05em] bg-paper/50">
-                <th className="px-6 py-4 font-semibold">Service</th>
-                <th className="px-6 py-4 font-semibold">Prestataire</th>
-                <th className="px-6 py-4 font-semibold">Prix</th>
-                <th className="px-6 py-4 font-semibold">Statut</th>
-                <th className="px-6 py-4 font-semibold">Créé le</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center"><div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-green-700" /></td></tr>
-              ) : filteredServices.length === 0 ? (
-                <tr><td colSpan={6} className="px-6 py-12 text-center text-ink-muted text-sm">Aucun service trouvé.</td></tr>
-              ) : (
-                filteredServices.map((service) => (
-                  <tr key={service.id} className="hover:bg-green-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="text-[14px] font-semibold text-ink max-w-[220px] truncate">{service.title}</div>
-                      <div className="text-[12.5px] text-ink-muted flex items-center gap-1 mt-0.5">
-                        <Tag className="w-3 h-3" /> {service.category_name || '—'}
+      {loading ? (
+        <div className="py-12 text-center">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-green-700" />
+        </div>
+      ) : groups.length === 0 ? (
+        <p className="text-sm text-ink-muted py-8 text-center">Aucun service trouvé.</p>
+      ) : (
+        <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.provider} className="bg-white rounded-2xl overflow-hidden">
+              <header className="px-5 py-3 bg-paper flex flex-wrap items-center gap-2">
+                <Briefcase className="w-4 h-4 text-ink-muted" />
+                <span className="font-semibold text-ink">{group.provider}</span>
+                {group.category && (
+                  <span className="inline-flex items-center gap-1 text-[12.5px] text-ink-muted">
+                    <Tag className="w-3 h-3" /> {group.category}
+                  </span>
+                )}
+              </header>
+              <div className="divide-y divide-border">
+                {group.services.map((service) => (
+                  <article key={service.id} className="px-5 py-4 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-semibold text-ink">{service.title}</p>
+                        <p className="text-[12.5px] text-ink-muted mt-0.5">
+                          {service.price != null && service.price !== ''
+                            ? `${Number(service.price).toLocaleString('fr-BI')} BIF`
+                            : 'Sur devis'}
+                          {service.created_at ? ` · ${new Date(service.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}` : ''}
+                        </p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <Briefcase className="w-4 h-4 text-ink-faint" />
-                        <span className="text-[13.5px] font-medium">{service.provider_name || '—'}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 font-mono text-[13.5px]">
-                      {service.price != null && service.price !== ''
-                        ? `${Number(service.price).toLocaleString('fr-BI')} BIF`
-                        : 'Sur devis'}
-                    </td>
-                    <td className="px-6 py-4">{getStatusBadge(service.status)}</td>
-                    <td className="px-6 py-4 font-mono text-[13px] text-ink-muted">
-                      {service.created_at
-                        ? new Date(service.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="inline-flex gap-1">
+                        {getStatusBadge(service.status)}
                         {service.status !== 'ACTIVE' && (
                           <button
                             type="button"
@@ -232,14 +261,52 @@ export default function AdminServicesPage() {
                           </button>
                         )}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                    </div>
+                    {(service.nested || []).length === 0 ? (
+                      <p className="text-sm text-ink-muted pl-3 border-l-2 border-border">Sans sous-service</p>
+                    ) : (
+                      <ul className="pl-3 border-l-2 border-primary space-y-1.5">
+                        {(service.nested || []).map((item) => (
+                          <li key={item.id} className="text-sm text-ink">
+                            <span className="font-medium">{item.title}</span>
+                            {item.status ? (
+                              <span className="text-ink-muted"> · {item.status === 'ACTIVE' ? 'Actif' : item.status === 'SUSPENDED' ? 'Suspendu' : 'Brouillon'}</span>
+                            ) : null}
+                            {item.description ? (
+                              <span className="text-ink-muted"> — {item.description}</span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+          {Math.ceil(count / 20) > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                className="px-3 py-2 border border-border rounded-lg text-sm font-semibold disabled:opacity-40"
+              >
+                Précédent
+              </button>
+              <span className="text-sm text-ink-muted">Page {page} / {Math.max(1, Math.ceil(count / 20))}</span>
+              <button
+                type="button"
+                disabled={page >= Math.ceil(count / 20)}
+                onClick={() => setPage((current) => current + 1)}
+                className="px-3 py-2 border border-border rounded-lg text-sm font-semibold disabled:opacity-40"
+              >
+                Suivant
+              </button>
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
 }

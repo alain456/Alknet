@@ -30,6 +30,7 @@ urlpatterns = [
     path('api/v1/hospital/', include('hospital.urls')),
     path('api/v1/education/', include('education.urls')),
     path('api/v1/hotel/', include('hotel.urls')),
+    path('api/v1/restaurant/', include('restaurant.urls')),
     path('api/v1/bookings/', include('bookings.urls')),
     path('api/v1/orders/', include('orders.urls')),
     path('api/v1/cms/', include('site_content.urls')),

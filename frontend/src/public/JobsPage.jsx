@@ -42,7 +42,7 @@ export default function JobsPage() {
   });
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
       <div className="bg-primary text-white border-b border-teal-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -58,7 +58,7 @@ export default function JobsPage() {
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 sticky top-24">
               <div className="flex items-center gap-2 mb-6">
                 <Filter className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold text-gray-900">Filters</h3>
+                <h3 className="font-semibold text-ink">Filters</h3>
               </div>
 
               {/* Search */}
@@ -170,7 +170,7 @@ export default function JobsPage() {
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="font-bold text-gray-900 text-lg">{job.title}</h3>
+                          <h3 className="font-bold text-ink text-lg">{job.title}</h3>
                           <p className="text-sm text-gray-600">{job.business?.name}</p>
                         </div>
                         {job.featured && (

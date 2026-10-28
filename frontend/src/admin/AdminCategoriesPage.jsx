@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, LayoutGrid, Type, Calendar, Plus, X, Building2, Pill, Stethoscope, Hotel, Store, Laptop, HardHat, Sprout, Car, GraduationCap, Briefcase, ChevronRight, Edit, Trash2, FolderPlus, Grid, List, Layers, Tag } from 'lucide-react';
+import { Search, LayoutGrid, Type, Plus, X, Building2, Pill, Stethoscope, Hotel, Store, Laptop, HardHat, Sprout, Car, GraduationCap, Briefcase, ChevronRight, Edit, Trash2, FolderPlus, List, Layers, Tag, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api, { invalidateApiCache } from '../shared/api';
 
 export default function AdminCategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -13,6 +14,7 @@ export default function AdminCategoriesPage() {
   const [editingCategory, setEditingCategory] = useState(null);
   const [isCreatingSectorOnly, setIsCreatingSectorOnly] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [busyId, setBusyId] = useState('');
   const { token } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -20,15 +22,26 @@ export default function AdminCategoriesPage() {
     slug: '',
     description: '',
     icon: 'Building2',
-    parent: ''
+    parent: '',
+    module: '',
   });
+
+  const MODULE_OPTIONS = [
+    { value: '', label: 'Aucun module spécifique' },
+    { value: 'commerce', label: 'Commerce / boutique' },
+    { value: 'hotel', label: 'Hôtellerie' },
+    { value: 'restaurant', label: 'Restauration' },
+    { value: 'hospital', label: 'Santé / hôpital' },
+    { value: 'retail_pharmacy', label: 'Pharmacie de détail' },
+    { value: 'wholesale', label: 'Pharmacie de gros' },
+    { value: 'education', label: 'Éducation' },
+    { value: 'services', label: 'Services (prestataires)' },
+  ];
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/v1/business-categories/');
-      if (!response.ok) throw new Error('Failed to fetch categories');
-      const data = await response.json();
-      setCategories(data);
+      const data = await api.get('business-categories/?include_hidden=1', { auth: true, noCache: true });
+      setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -58,7 +71,7 @@ export default function AdminCategoriesPage() {
   const openCreateSectorModal = () => {
     setEditingCategory(null);
     setIsCreatingSectorOnly(true);
-    setFormData({ name: '', slug: '', description: '', icon: 'Building2', parent: '' });
+    setFormData({ name: '', slug: '', description: '', icon: 'Building2', parent: '', module: '' });
     setIsModalOpen(true);
   };
 
@@ -66,7 +79,7 @@ export default function AdminCategoriesPage() {
     setEditingCategory(null);
     setIsCreatingSectorOnly(false);
     const parentId = presetParentId || (parentCategories.length > 0 ? parentCategories[0].id : '');
-    setFormData({ name: '', slug: '', description: '', icon: 'Store', parent: parentId });
+    setFormData({ name: '', slug: '', description: '', icon: 'Store', parent: parentId, module: '' });
     setIsModalOpen(true);
   };
 
@@ -78,7 +91,8 @@ export default function AdminCategoriesPage() {
       slug: category.slug || '',
       description: category.description || '',
       icon: category.icon || 'Building2',
-      parent: category.parent || ''
+      parent: category.parent || '',
+      module: category.module || '',
     });
     setIsModalOpen(true);
   };
@@ -99,10 +113,45 @@ export default function AdminCategoriesPage() {
 
       if (!response.ok) throw new Error('Erreur lors de la suppression');
 
+      invalidateApiCache('business-categories');
       fetchCategories();
     } catch (err) {
       alert(`Erreur : ${err.message}`);
     }
+  };
+
+  const toggleVisibility = async (category) => {
+    setBusyId(category.id);
+    setError(null);
+    try {
+      await api.patch(
+        `business-categories/${category.id}/`,
+        { is_visible: !category.is_visible },
+        { auth: true },
+      );
+      invalidateApiCache('business-categories');
+      await fetchCategories();
+    } catch (err) {
+      alert(err.message || 'Impossible de changer la visibilité.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const visibilityButton = (category) => {
+    const visible = category.is_visible !== false;
+    return (
+      <button
+        type="button"
+        disabled={busyId === category.id}
+        onClick={() => toggleVisibility(category)}
+        title={visible ? 'Masquer côté client' : 'Afficher côté client'}
+        aria-label={visible ? 'Masquer côté client' : 'Afficher côté client'}
+        className="icon-btn"
+      >
+        {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+      </button>
+    );
   };
 
   const [formError, setFormError] = useState(null);
@@ -117,7 +166,8 @@ export default function AdminCategoriesPage() {
         slug: formData.slug,
         description: formData.description,
         icon: formData.icon,
-        parent: isCreatingSectorOnly ? null : (formData.parent ? formData.parent : null)
+        parent: isCreatingSectorOnly ? null : (formData.parent ? formData.parent : null),
+        module: formData.module || '',
       };
 
       const url = editingCategory 
@@ -148,7 +198,8 @@ export default function AdminCategoriesPage() {
 
       setIsModalOpen(false);
       setEditingCategory(null);
-      setFormData({ name: '', slug: '', description: '', icon: 'Building2', parent: '' });
+      setFormData({ name: '', slug: '', description: '', icon: 'Building2', parent: '', module: '' });
+      invalidateApiCache('business-categories');
       fetchCategories();
     } catch (err) {
       setFormError(err.message);
@@ -196,7 +247,9 @@ export default function AdminCategoriesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-display font-semibold text-green-900 dark:text-white tracking-tight">Secteurs & Catégories</h1>
-          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">Vue d'ensemble hiérarchique regroupant chaque secteur et l'intégralité de ses sous-catégories.</p>
+          <p className="text-[15px] text-ink-muted dark:text-green-100/70 mt-1">
+            Vue d&apos;ensemble hiérarchique. Un secteur créé est masqué côté client jusqu&apos;à l&apos;icône œil.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button 
@@ -276,7 +329,7 @@ export default function AdminCategoriesPage() {
                 const subCats = categories.filter(c => c.parent === sector.id || (c.parent_name && c.parent_name === sector.name));
 
                 return (
-                  <div key={sector.id} className="border border-border dark:border-white/10 rounded-xl bg-surface dark:bg-primary overflow-hidden shadow-sm">
+                  <div key={sector.id} className={`border border-border dark:border-white/10 rounded-xl bg-surface dark:bg-primary overflow-hidden shadow-sm ${sector.is_visible === false ? 'opacity-80' : ''}`}>
                     {/* Sector Header Banner */}
                     <div className="px-6 py-4 bg-paper/80 dark:bg-black/20 border-b border-border dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
@@ -292,7 +345,15 @@ export default function AdminCategoriesPage() {
                           </div>
                           <p className="text-xs text-ink-muted dark:text-green-100/70 mt-0.5">
                             {sector.description || 'Secteur d\'activité principal'} • <span className="font-semibold text-green-700 dark:text-gold-400">{subCats.length} sous-catégorie(s) incluses</span>
+                            {sector.module ? ` • Module ${sector.module_label || sector.module}` : ''}
+                            {sector.is_visible === false ? ' • Masqué côté client' : ''}
                           </p>
+                          {sector.module === 'services' && (
+                            <p className="text-xs text-ink mt-1">
+                              Préparez ici les catégories. À l’inscription, le prestataire en choisit une,
+                              puis gère ses offres dans l’espace prestataire.
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -304,6 +365,7 @@ export default function AdminCategoriesPage() {
                         >
                           <Plus className="w-3.5 h-3.5" /> Sous-catégorie
                         </button>
+                        {visibilityButton(sector)}
                         <button 
                           onClick={() => openEditModal(sector)}
                           title="Modifier le secteur"
@@ -325,7 +387,9 @@ export default function AdminCategoriesPage() {
                     <div className="p-6">
                       {subCats.length === 0 ? (
                         <div className="p-6 text-center text-xs text-ink-faint dark:text-green-100/50 border border-dashed border-border dark:border-white/10 rounded-lg">
-                          Aucune sous-catégorie rattachée à ce secteur. Cliquez sur "+ Sous-catégorie" pour en ajouter une.
+                          {sector.module === 'services'
+                            ? 'Ajoutez les catégories que les prestataires pourront choisir à l’inscription.'
+                            : 'Aucune sous-catégorie rattachée à ce secteur. Cliquez sur "+ Sous-catégorie" pour en ajouter une.'}
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -344,6 +408,7 @@ export default function AdminCategoriesPage() {
                                   </div>
 
                                   <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                                    {visibilityButton(sub)}
                                     <button 
                                       onClick={() => openEditModal(sub)}
                                       title="Modifier"
@@ -369,7 +434,11 @@ export default function AdminCategoriesPage() {
                               <div className="mt-3 pt-2 border-t border-border/50 dark:border-white/5 flex items-center justify-between text-[11px] text-ink-faint dark:text-green-100/50">
                                 <span className="font-mono">/{sub.slug}</span>
                                 <span className="text-green-800 dark:text-gold-400 font-medium flex items-center gap-1">
-                                  <Tag className="w-3 h-3" /> Attribuable
+                                  {sub.is_visible === false ? (
+                                    <><EyeOff className="w-3 h-3" /> Masqué</>
+                                  ) : (
+                                    <><Tag className="w-3 h-3" /> Visible</>
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -495,6 +564,7 @@ export default function AdminCategoriesPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            {visibilityButton(category)}
                             <button 
                               onClick={() => openEditModal(category)}
                               title={isSector ? "Modifier le Secteur" : "Modifier la Sous-catégorie"}
@@ -567,7 +637,27 @@ export default function AdminCategoriesPage() {
 
               {isCreatingSectorOnly && (
                 <div className="p-3 bg-gold-500/10 border border-gold-500/20 rounded-md text-xs text-gold-700 dark:text-gold-300 font-medium">
-                  ★ Vous créez un **Secteur Parent principal** (ex: Commerce, Santé, Hôtellerie...). Des sous-catégories pourront y être rattachées ultérieurement.
+                  Vous créez un secteur parent (ex. Commerce, Santé, Hôtellerie, Services). Il reste masqué côté client jusqu’à l’icône œil.
+                </div>
+              )}
+
+              {isCreatingSectorOnly && (
+                <div>
+                  <label className="block text-xs font-semibold text-ink-muted dark:text-green-100/70 mb-1">Module métier</label>
+                  <select
+                    value={formData.module}
+                    onChange={(e) => setFormData({ ...formData, module: e.target.value })}
+                    className="w-full px-3 py-2 text-sm bg-paper dark:bg-black/20 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-green-700"
+                  >
+                    {MODULE_OPTIONS.map((option) => (
+                      <option key={option.value || 'none'} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                  {formData.module === 'services' && (
+                    <p className="mt-1 text-xs text-ink-muted">
+                      Préparez les catégories de ce secteur. À l’inscription, le prestataire en choisit une.
+                    </p>
+                  )}
                 </div>
               )}
 

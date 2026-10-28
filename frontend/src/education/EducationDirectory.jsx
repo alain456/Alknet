@@ -112,11 +112,11 @@ export default function EducationDirectory() {
     setParams(next);
   };
 
-  const fieldClass = 'px-3 py-3 rounded-xl text-sm bg-white text-ink border border-border focus:outline-none focus:border-primary';
+  const fieldClass = 'px-3 py-3 rounded-xl text-sm bg-surface text-ink border border-border focus:outline-none focus:border-primary';
 
   return (
     <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 space-y-6">
-      <div className="rounded-3xl bg-white ring-1 ring-border p-5 sm:p-7">
+      <div className="rounded-3xl bg-surface ring-1 ring-border p-5 sm:p-7">
         <p className="text-xs font-bold uppercase tracking-wide text-accent">Annuaire</p>
         <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-ink">Établissements d&apos;enseignement</h1>
         <p className="mt-1 text-sm text-ink-muted">
@@ -201,7 +201,7 @@ export default function EducationDirectory() {
       {error && <div className="p-4 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
 
       <div className="flex items-end justify-between gap-3">
-        <h2 className="text-xl font-bold text-primary">Annuaire</h2>
+        <h2 className="text-xl font-bold text-ink">Annuaire</h2>
         <p className="text-sm text-ink-muted">
           {loading ? 'Recherche…' : `${rows.length} établissement${rows.length !== 1 ? 's' : ''}`}
         </p>
@@ -220,7 +220,7 @@ export default function EducationDirectory() {
             return (
               <article
                 key={row.id}
-                className="flex flex-col rounded-3xl border border-border bg-white overflow-hidden shadow-sm"
+                className="flex flex-col rounded-3xl border border-border bg-surface overflow-hidden shadow-sm"
               >
                 <div className="h-40 bg-surface flex items-center justify-center border-b border-border">
                   {row.business_logo ? (
@@ -230,7 +230,7 @@ export default function EducationDirectory() {
                   )}
                 </div>
                 <div className="flex flex-col flex-1 p-5">
-                  <p className="text-xs font-semibold text-primary">
+                  <p className="text-xs font-semibold text-ink-muted">
                     {row.category_name || row.establishment_type_label}
                   </p>
                   {row.category_slug === 'ecole' && (
@@ -245,7 +245,7 @@ export default function EducationDirectory() {
                       {row.boarding_regime_label ? ` · ${row.boarding_regime_label}` : ''}
                     </p>
                   )}
-                  <h2 className="mt-1 text-xl font-bold text-ink dark:text-white">
+                  <h2 className="mt-1 text-xl font-bold text-ink">
                     {row.business_name}
                   </h2>
                   {(row.business_quartier || row.business_zone || row.business_commune || row.business_province) && (

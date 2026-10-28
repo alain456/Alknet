@@ -80,6 +80,13 @@ const HotelStaffLayout = lazyPage(() => load_hotel().then((m) => ({ default: m.H
 const PublicHotels = lazyPage(() => load_hotel().then((m) => ({ default: m.PublicHotels })));
 const PublicHotelBook = lazyPage(() => load_hotel().then((m) => ({ default: m.PublicHotelBook })));
 const HotelCalendar = lazyPage(() => load_hotel().then((m) => ({ default: m.HotelCalendar })));
+const load_restaurant = () => import('./zones/restaurant.js');
+const RestaurantDashboard = lazyPage(() => load_restaurant().then((m) => ({ default: m.RestaurantDashboard })));
+const RestaurantCompany = lazyPage(() => load_restaurant().then((m) => ({ default: m.RestaurantCompany })));
+const RestaurantMenu = lazyPage(() => load_restaurant().then((m) => ({ default: m.RestaurantMenu })));
+const RestaurantBookings = lazyPage(() => load_restaurant().then((m) => ({ default: m.RestaurantBookings })));
+const PublicRestaurants = lazyPage(() => load_restaurant().then((m) => ({ default: m.PublicRestaurants })));
+const PublicRestaurant = lazyPage(() => load_restaurant().then((m) => ({ default: m.PublicRestaurant })));
 const load_account = () => import('./zones/account.js');
 const UserDashboardPage = lazyPage(() => load_account().then((m) => ({ default: m.UserDashboardPage })));
 const UserBookingsPage = lazyPage(() => load_account().then((m) => ({ default: m.UserBookingsPage })));
@@ -91,7 +98,6 @@ const ManageRoles = lazyPage(() => load_business().then((m) => ({ default: m.Man
 const BusinessDashboardPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessDashboardPage })));
 const BusinessEmployeesPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessEmployeesPage })));
 const BusinessProductsPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessProductsPage })));
-const BusinessServicesPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessServicesPage })));
 const BusinessOffersPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessOffersPage })));
 const BusinessOrdersPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessOrdersPage })));
 const BusinessBookingsPage = lazyPage(() => load_business().then((m) => ({ default: m.BusinessBookingsPage })));
@@ -115,6 +121,17 @@ const PublicSchoolEnrollment = lazyPage(() => load_education().then((m) => ({ de
 const EnrollmentDossier = lazyPage(() => load_education().then((m) => ({ default: m.EnrollmentDossier })));
 const MyEnrollments = lazyPage(() => load_education().then((m) => ({ default: m.MyEnrollments })));
 const SchoolAccounting = lazyPage(() => load_education().then((m) => ({ default: m.SchoolAccounting })));
+const load_services = () => import('./zones/services.js');
+const PublicProvider = lazyPage(() => load_services().then((m) => ({ default: m.PublicProvider })));
+const PublicServiceOffer = lazyPage(() => load_services().then((m) => ({ default: m.PublicServiceOffer })));
+const ServiceRequestFollow = lazyPage(() => load_services().then((m) => ({ default: m.ServiceRequestFollow })));
+const ClientRequests = lazyPage(() => load_services().then((m) => ({ default: m.ClientRequests })));
+const ProviderDashboard = lazyPage(() => load_services().then((m) => ({ default: m.ProviderDashboard })));
+const ProviderProfile = lazyPage(() => load_services().then((m) => ({ default: m.ProviderProfile })));
+const ProviderOffers = lazyPage(() => load_services().then((m) => ({ default: m.ProviderOffers })));
+const ProviderTeam = lazyPage(() => load_services().then((m) => ({ default: m.ProviderTeam })));
+const ProviderDocuments = lazyPage(() => load_services().then((m) => ({ default: m.ProviderDocuments })));
+const ProviderInbox = lazyPage(() => load_services().then((m) => ({ default: m.ProviderInbox })));
 const load_admin = () => import('./zones/admin.js');
 const AdminDashboardPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminDashboardPage })));
 const AdminAnalyticsPage = lazyPage(() => load_admin().then((m) => ({ default: m.AdminAnalyticsPage })));
@@ -166,6 +183,9 @@ function App() {
             <Route index element={<TenantHome />} />
             <Route path="search" element={<SearchResultsPage />} />
             <Route path="services" element={<ServicesPage />} />
+            <Route path="services/providers/:id" element={<PublicProvider />} />
+            <Route path="services/offers/:id" element={<PublicServiceOffer />} />
+            <Route path="services/demandes/:token" element={<ServiceRequestFollow />} />
             <Route path="businesses" element={<BusinessesPage />} />
             <Route path="businesses/:id/catalog" element={<PublicWholesaleCatalog />} />
             <Route path="businesses/:id/pharmacy" element={<PublicRetailCatalog />} />
@@ -182,6 +202,9 @@ function App() {
             <Route path="hotels" element={<PublicHotels />} />
             <Route path="hotels/:id/historique" element={<BusinessClientHistoryPage />} />
             <Route path="hotels/:id" element={<PublicHotelBook />} />
+            <Route path="restaurants" element={<PublicRestaurants />} />
+            <Route path="restaurants/:id/historique" element={<BusinessClientHistoryPage />} />
+            <Route path="restaurants/:id" element={<PublicRestaurant />} />
             <Route path="education" element={<EducationDirectory />} />
             {/* `:source` = id EducationProfile (annuaire) ou id Business (liste générale) */}
             <Route path="education/establishment/:id" element={<EducationEstablishment />} />
@@ -211,6 +234,8 @@ function App() {
               <Route index element={<UserDashboardPage />} />
               <Route path="bookings" element={<UserBookingsPage />} />
               <Route path="inscriptions" element={<MyEnrollments />} />
+              <Route path="demandes" element={<ClientRequests />} />
+              <Route path="demandes/:id" element={<ServiceRequestFollow authMode />} />
               <Route path="lab-results" element={<PatientLabResults />} />
               <Route path="profile" element={<UserProfilePage />} />
               <Route path="notifications" element={<Notifications />} />
@@ -229,7 +254,7 @@ function App() {
               <Route path="roles" element={<ManageRoles />} />
               <Route path="employees" element={<BusinessEmployeesPage />} />
               <Route path="products" element={<BusinessProductsPage />} />
-              <Route path="services" element={<BusinessServicesPage />} />
+              <Route path="services" element={<Navigate to="/provider/offers" replace />} />
               <Route path="offers" element={<BusinessOffersPage />} />
               <Route path="orders" element={<BusinessOrdersPage />} />
               <Route path="bookings" element={<BusinessBookingsPage />} />
@@ -249,6 +274,19 @@ function App() {
               <Route path="profile" element={<Navigate to="/business/profile" replace />} />
               <Route path="settings" element={<Navigate to="/business/settings" replace />} />
               <Route path="employees" element={<Navigate to="/commerce/dashboard" replace />} />
+              <Route path="subscription" element={<BusinessSubscriptionPage />} />
+              <Route path="audit" element={<BusinessAuditLogsPage />} />
+            </Route>
+
+            <Route path="/provider" element={<BusinessLayout />}>
+              <Route index element={<Navigate to="/provider/dashboard" replace />} />
+              <Route path="dashboard" element={<ProviderDashboard />} />
+              <Route path="profile" element={<ProviderProfile />} />
+              <Route path="offers" element={<ProviderOffers />} />
+              <Route path="team" element={<ProviderTeam />} />
+              <Route path="documents" element={<ProviderDocuments />} />
+              <Route path="inbox" element={<ProviderInbox />} />
+              <Route path="settings" element={<Navigate to="/business/settings" replace />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
               <Route path="audit" element={<BusinessAuditLogsPage />} />
             </Route>
@@ -350,6 +388,17 @@ function App() {
               <Route path="calendar" element={<HotelCalendar />} />
               <Route path="users" element={<ManageRoles />} />
               <Route path="staff" element={<BusinessEmployeesPage />} />
+              <Route path="settings" element={<Navigate to="/business/settings" replace />} />
+              <Route path="subscription" element={<BusinessSubscriptionPage />} />
+            </Route>
+
+            <Route path="/restaurant" element={<BusinessLayout />}>
+              <Route index element={<Navigate to="/restaurant/dashboard" replace />} />
+              <Route path="dashboard" element={<RestaurantDashboard />} />
+              <Route path="company" element={<RestaurantCompany />} />
+              <Route path="menu" element={<RestaurantMenu />} />
+              <Route path="bookings" element={<RestaurantBookings />} />
+              <Route path="employees" element={<Navigate to="/restaurant/dashboard" replace />} />
               <Route path="settings" element={<Navigate to="/business/settings" replace />} />
               <Route path="subscription" element={<BusinessSubscriptionPage />} />
             </Route>

@@ -33,7 +33,7 @@ class Business(models.Model):
     phone = models.CharField(max_length=50, blank=True)
     email = models.EmailField(blank=True)
     website = models.URLField(blank=True)
-    lumicash_merchant_account = models.CharField(
+    burundipay_merchant_account = models.CharField(
         max_length=80,
         blank=True,
         help_text="Compte marchand BurundiPay de l'établissement (encaissement consultations / commandes)",
@@ -57,14 +57,6 @@ class Business(models.Model):
 
     class Meta:
         verbose_name_plural = "Businesses"
-
-    @property
-    def burundipay_merchant_account(self):
-        return self.lumicash_merchant_account
-
-    @burundipay_merchant_account.setter
-    def burundipay_merchant_account(self, value):
-        self.lumicash_merchant_account = value or ''
 
     @property
     def full_address(self):

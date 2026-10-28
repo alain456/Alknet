@@ -25,7 +25,7 @@ def fee_from_doctor(doctor) -> tuple[int, str]:
 def hospital_merchant_account(hospital) -> str:
     if not hospital:
         return 'HOSPITAL_MERCHANT'
-    configured = (getattr(hospital, 'lumicash_merchant_account', None) or '').strip()
+    configured = (getattr(hospital, 'burundipay_merchant_account', None) or '').strip()
     if configured:
         return configured
     # Stub / fallback lisible

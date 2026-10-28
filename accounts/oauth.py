@@ -311,6 +311,11 @@ def login_or_register_social(*, provider: str, profile: dict, request=None) -> d
     if not user.is_active:
         raise ValueError('Ce compte est désactivé.')
 
+    from businesses.login_gate import business_login_block_message
+    blocked = business_login_block_message(user)
+    if blocked:
+        raise ValueError(blocked)
+
     refresh = RefreshToken.for_user(user)
     tokens = {
         'refresh': str(refresh),

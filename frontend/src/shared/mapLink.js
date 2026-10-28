@@ -30,3 +30,17 @@ function valid(lat, lng) {
 export function looksLikeMapsLink(text) {
   return /^https:\/\/(?:www\.google\.[^/]+\/maps|maps\.google\.[^/]+|maps\.app\.goo\.gl\/|goo\.gl\/maps)/i.test(String(text || '').trim());
 }
+
+/** Lien d’ouverture Google Maps (coordonnées GPS, sinon adresse). */
+export function googleMapsSearchUrl({ lat, lng, address } = {}) {
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+  }
+  const query = String(address || '').trim();
+  if (query) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  }
+  return '';
+}

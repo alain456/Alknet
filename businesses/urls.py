@@ -35,8 +35,6 @@ urlpatterns = [
     path('me/subscription/pay/', MySubscriptionBurundiPayPayView.as_view(), name='my-business-subscription-pay'),
     path('me/subscription/confirm/', MySubscriptionBurundiPayConfirmView.as_view(), name='my-business-subscription-confirm'),
     path('payments/burundipay/webhook/', BurundiPaySubscriptionWebhookView.as_view(), name='burundipay-subscription-webhook'),
-    # Alias legacy Lumicash
-    path('payments/lumicash/webhook/', BurundiPaySubscriptionWebhookView.as_view(), name='lumicash-subscription-webhook'),
     path('my-business/roles/', BusinessRoleListCreateView.as_view(), name='my-business-roles'),
     path('my-business/roles/seed-receptionist/', SeedReceptionistRoleView.as_view(), name='my-business-roles-seed-receptionist'),
     path('my-business/roles/<uuid:pk>/', BusinessRoleDetailView.as_view(), name='my-business-roles-detail'),

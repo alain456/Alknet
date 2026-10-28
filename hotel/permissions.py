@@ -22,7 +22,13 @@ def _role_blob(user, business):
 def user_hotel_business(user):
     if not user or not user.is_authenticated or getattr(user, 'role', None) == 'SUPER_ADMIN':
         return None
-    return get_user_tenant_business(user)
+    business = get_user_tenant_business(user)
+    if not business:
+        return None
+    from .lodging import is_lodging_business
+    if not is_lodging_business(business):
+        return None
+    return business
 
 
 def effective_hotel_permissions(user, hotel=None):

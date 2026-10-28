@@ -1,8 +1,16 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Stethoscope, Hotel, Utensils, Store, ShieldCheck, Star, Bed, Coffee, Wifi, Car, FileText, Truck, Smartphone } from 'lucide-react';
 import { readDocumentAsDataUrl } from '../imageUpload';
+import { isFoodServiceLabels, isLodgingLabels } from '../../auth/roleAccess';
 
-export default function SectorSpecificFields({ primaryCategory, categories = [], attributes = {}, onChange }) {
+export default function SectorSpecificFields({
+  primaryCategory,
+  categories = [],
+  attributes = {},
+  onChange,
+  manageHref = '',
+}) {
   if (!primaryCategory) return null;
 
   // Find primary category object if ID passed
@@ -25,12 +33,11 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
   const isHealth = HEALTH_MODULES.includes(module)
     || categoryName.includes('santé') || categoryName.includes('pharmacie') || categoryName.includes('hopital') || categoryName.includes('hôpital') || categoryName.includes('clinique') || categorySlug.includes('sante') || categorySlug.includes('pharmacie') || parentName.includes('santé');
 
-  const isHotel = module === 'hotel'
-    || categoryName.includes('hôtel') || categoryName.includes('hotel') || categoryName.includes('hôtellerie') || categorySlug.includes('hotel') || parentName.includes('hôtellerie');
-
-  // Pas de clé de module pour la restauration : « Restaurant » et « Traiteur »
-  // restent en `business`, ce qui est un choix produit, pas un oubli.
-  const isRestaurant = categoryName.includes('restaurant') || categoryName.includes('restauration') || categoryName.includes('bar') || categoryName.includes('café') || categoryName.includes('traiteur') || categorySlug.includes('restaurant') || parentName.includes('restauration');
+  const isRestaurant = module === 'restaurant'
+    || isFoodServiceLabels(catObj.name, catObj.slug)
+    || categoryName.includes('restauration');
+  const isLodging = !isRestaurant && isLodgingLabels(catObj.name, catObj.slug);
+  const isHotel = isLodging;
 
   const isCommerce = module === 'commerce'
     || categoryName.includes('commerce')
@@ -110,65 +117,43 @@ export default function SectorSpecificFields({ primaryCategory, categories = [],
         </div>
       )}
 
-      {/* HOTEL & HOSPITALITY FIELDS */}
-      {isHotel && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div>
-            <label className="block font-semibold text-ink-muted dark:text-green-100/80 mb-1">
-              Classement en Étoiles
-            </label>
-            <select 
-              value={attributes.stars_rating || '3'}
-              onChange={(e) => handleFieldChange('stars_rating', e.target.value)}
-              className="w-full px-3 py-2 bg-paper dark:bg-black/30 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-gold-600"
-            >
-              <option value="1">1 Étoile ★</option>
-              <option value="2">2 Étoiles ★★</option>
-              <option value="3">3 Étoiles ★★★</option>
-              <option value="4">4 Étoiles ★★★★</option>
-              <option value="5">5 Étoiles Luxury ★★★★★</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-semibold text-ink-muted dark:text-green-100/80 mb-1">
-              Nombre de Chambres
-            </label>
-            <input 
-              type="number"
-              min="1"
-              placeholder="Ex: 45"
-              value={attributes.rooms_count || ''}
-              onChange={(e) => handleFieldChange('rooms_count', e.target.value)}
-              className="w-full px-3 py-2 bg-paper dark:bg-black/30 border border-border dark:border-white/10 rounded-md text-ink dark:text-white focus:outline-none focus:border-gold-600"
-            />
-          </div>
-
-          <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">
-            <input 
-              type="checkbox"
-              checked={!!attributes.has_swimming_pool}
-              onChange={(e) => handleFieldChange('has_swimming_pool', e.target.checked)}
-              className="rounded border-border text-gold-600 focus:ring-gold-600"
-            />
-            <span>Piscine disponible</span>
-          </label>
-
-          <label className="flex items-center gap-2 font-medium text-ink dark:text-white cursor-pointer select-none">
-            <input 
-              type="checkbox"
-              checked={!!attributes.breakfast_included}
-              onChange={(e) => handleFieldChange('breakfast_included', e.target.checked)}
-              className="rounded border-border text-gold-600 focus:ring-gold-600"
-            />
-            <span>Petit-déjeuner inclus</span>
-          </label>
+      {/* Hébergement : identité PMS (étoiles, chambres, équipements) = Mon hôtel */}
+      {isLodging && (
+        <div className="text-xs text-ink-muted dark:text-green-100/80 space-y-1.5">
+          <p className="font-semibold text-ink dark:text-white">
+            Étoiles, chambres et équipements se gèrent dans Mon hôtel.
+          </p>
+          <p>
+            Le classement public est celui vérifié par la plateforme
+            (sinon les étoiles déclarées). Le nombre de chambres est
+            l’inventaire réel du menu Chambres — plus de saisie manuelle ici.
+          </p>
+          {manageHref ? (
+            <Link to={manageHref} className="inline-flex font-bold text-accent hover:underline">
+              Ouvrir Mon hôtel
+            </Link>
+          ) : (
+            <p>Après inscription, ouvrez Mon hôtel pour renseigner la fiche.</p>
+          )}
         </div>
       )}
 
       {/* RESTAURANT & CUISINE FIELDS */}
       {isRestaurant && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          {manageHref ? (
+            <p className="sm:col-span-2 text-ink-muted">
+              Menu et réservations de table se gèrent dans{' '}
+              <Link to={manageHref} className="inline-flex font-bold text-accent hover:underline">
+                Mon établissement
+              </Link>
+              .
+            </p>
+          ) : (
+            <p className="sm:col-span-2 text-ink-muted">
+              Après inscription, ouvrez Mon établissement pour le menu et les tables.
+            </p>
+          )}
           <div>
             <label className="block font-semibold text-ink-muted dark:text-green-100/80 mb-1">
               Type de Cuisine / Spécialité

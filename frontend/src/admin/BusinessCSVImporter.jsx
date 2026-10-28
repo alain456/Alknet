@@ -13,7 +13,7 @@ export default function BusinessCSVImporter({ isOpen, onClose, onSuccess }) {
 
   const sampleCSV = `Nom,Email,Téléphone,Province,Commune,Quartier,Adresse,Secteur_Parent,Sous_Categories
 Pharmacie de la Paix,contact@paix.bi,+25779001122,Bujumbura Mairie,Mukaza,Rohero I,Blvd Uprona N° 45,Santé,Pharmacie
-Hôtel Club du Lac,info@clubdulac.bi,+25779334455,Bujumbura Mairie,Ntahangwa,Ngagara,Chaussée d'Uvira,Hôtellerie & Restauration,Hôtel,Restaurant
+Hôtel Club du Lac,info@clubdulac.bi,+25779334455,Bujumbura Mairie,Ntahangwa,Ngagara,Chaussée d'Uvira,Hôtellerie et tourisme,Hôtel,Restaurant
 Quincaillerie Moderne,qmoderne@gmail.com,+25771889900,Gitega,Gitega,Centre-Ville,Marché Central,Commerce,Quincaillerie`;
 
   const handleDownloadSample = () => {

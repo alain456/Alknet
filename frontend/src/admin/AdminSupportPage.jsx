@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCheck, Mail, Trash2 } from 'lucide-react';
 import api, { invalidateApiCache } from '../shared/api';
 import { notifyContactUnread } from './contactInbox';
 
 export default function AdminSupportPage() {
+  const [searchParams] = useSearchParams();
   const [messages, setMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [selected, setSelected] = useState(null);
@@ -78,7 +79,18 @@ export default function AdminSupportPage() {
         ]);
         if (cancelled) return;
         if (msgList.length) {
-          const first = msgList.find((m) => !m.is_read) || msgList[0];
+          const wantedId = searchParams.get('id');
+          const wantedQ = (searchParams.get('q') || '').trim().toLowerCase();
+          let first = msgList.find((m) => !m.is_read) || msgList[0];
+          if (wantedId) {
+            first = msgList.find((m) => String(m.id) === wantedId) || first;
+          } else if (wantedQ) {
+            first = msgList.find((m) =>
+              [m.subject, m.name, m.email, m.message].some((value) =>
+                (value || '').toLowerCase().includes(wantedQ),
+              ),
+            ) || first;
+          }
           if (!cancelled) await openMessage(first, msgList);
         } else if (!cancelled) {
           applyUnread([]);
@@ -91,7 +103,7 @@ export default function AdminSupportPage() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authOpts, loadInbox]);
+  }, [authOpts, loadInbox, searchParams]);
 
   const markAllRead = async () => {
     try {
@@ -211,17 +223,21 @@ export default function AdminSupportPage() {
                       type="button"
                       onClick={() => openMessage(msg)}
                       className={`w-full text-left p-4 hover:bg-gray-50 transition ${
-                        selected?.id === msg.id ? 'bg-emerald-50' : ''
+                        selected?.id === msg.id ? 'bg-accent text-ink' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         {!msg.is_read && <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />}
-                        <span className={`text-sm truncate ${msg.is_read ? 'font-medium text-gray-800' : 'font-bold text-gray-900'}`}>
+                        <span className={`text-sm truncate ${
+                          selected?.id === msg.id
+                            ? 'text-ink'
+                            : (msg.is_read ? 'font-medium text-gray-800' : 'font-bold text-gray-900')
+                        } ${msg.is_read ? 'font-medium' : 'font-bold'}`}>
                           {msg.subject}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-500 truncate">{msg.name} · {msg.email}</div>
-                      <div className="text-[11px] text-gray-400 mt-1">
+                      <div className={`text-xs truncate ${selected?.id === msg.id ? 'text-ink' : 'text-gray-500'}`}>{msg.name} · {msg.email}</div>
+                      <div className={`text-[11px] mt-1 ${selected?.id === msg.id ? 'text-ink' : 'text-gray-400'}`}>
                         {(msg.priority === 'URGENT' ? 'Urgent · ' : '')}
                         {msg.ticket_status === 'RESOLVED' ? 'Résolu · ' : msg.ticket_status === 'IN_PROGRESS' ? 'En cours · ' : ''}
                         {msg.created_at ? new Date(msg.created_at).toLocaleString('fr-FR') : ''}

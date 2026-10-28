@@ -50,7 +50,7 @@ function SocialGlyph({ network }) {
 }
 
 const fieldClass =
-  'w-full px-4 py-3 rounded-lg bg-[#f3f4f6] border border-transparent text-sm text-ink font-medium outline-none focus:border-primary focus:bg-surface focus:ring-2 focus:ring-primary/20 transition placeholder:text-ink-muted/50';
+  'w-full px-4 py-3 rounded-lg bg-paper border border-transparent text-sm text-ink font-medium outline-none focus:border-primary focus:bg-surface focus:ring-2 focus:ring-primary/20 transition placeholder:text-ink-muted/50';
 
 const CONTACT_HERO_FALLBACK = '/contact-hero-default.jpg';
 
@@ -173,7 +173,7 @@ function ContactPage({ page, paragraphs }) {
   };
 
   return (
-    <div className="bg-[#f8f9fb] text-ink -mt-px">
+    <div className="bg-surface text-ink -mt-px">
       {/* Hero — image CMS dynamique */}
       <section className="relative min-h-[320px] sm:min-h-[400px] flex items-center justify-center overflow-hidden bg-primary">
         {heroImage ? (

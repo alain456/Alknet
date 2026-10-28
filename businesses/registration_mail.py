@@ -21,7 +21,8 @@ DEFAULT_MESSAGES = {
         'Entreprise : {business_name}\n'
         'Catégorie : {category}\n'
         'Statut : En attente de validation\n\n'
-        'Vous recevrez un autre message lorsque le dossier sera approuvé ou refusé.\n\n'
+        'Vous recevrez un autre message lorsque le dossier sera approuvé ou refusé. '
+        'La connexion à votre espace professionnel sera possible uniquement après l’approbation.\n\n'
         '— L’équipe Isoko Hub\n'
     ),
     'approved': (

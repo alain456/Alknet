@@ -60,6 +60,27 @@ export function readImageAsDataUrl(file, {
  * PDF ou image pour justificatifs (NIF, RCCM, patente).
  * Images compressées ; PDF en data URL (max 4 Mo).
  */
+export function readVideoAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error('Aucun fichier sélectionné.'));
+      return;
+    }
+    if (!['video/mp4', 'video/webm'].includes(file.type)) {
+      reject(new Error('Formats vidéo acceptés : MP4 ou WebM.'));
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) {
+      reject(new Error('Vidéo trop lourde (maximum 1,5 Mo). Préférez un lien YouTube.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Lecture de la vidéo impossible.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export async function readDocumentAsDataUrl(file) {
   if (!file) throw new Error('Aucun fichier sélectionné.');
   const okTypes = [

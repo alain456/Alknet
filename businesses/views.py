@@ -39,20 +39,8 @@ from permissions.custom_permissions import IsSuperAdmin, IsBusinessOwner, IsBusi
 def _business_is_hotel(business):
     if not business:
         return False
-    try:
-        from hotel.models import HotelProfile
-        if HotelProfile.objects.filter(business_id=business.id).exists():
-            return True
-    except Exception:
-        pass
-    cat = getattr(business, 'primary_category', None)
-    name = (getattr(cat, 'name', '') or '').lower()
-    slug = (getattr(cat, 'slug', '') or '').lower()
-    parent = (getattr(getattr(cat, 'parent', None), 'name', '') or '').lower()
-    return any(
-        k in name or k in slug or k in parent
-        for k in ('hôtel', 'hotel', 'hôtellerie', 'hotellerie')
-    )
+    from hotel.lodging import is_lodging_business
+    return is_lodging_business(business)
 
 
 class CanManageBusinessRoles(BasePermission):
@@ -1153,6 +1141,11 @@ class PublicBusinessRegistrationView(APIView):
                 except BusinessCategory.DoesNotExist:
                     pass
 
+            from business_categories.services_sector import resolve_registration_category
+            primary_cat, services_error = resolve_registration_category(primary_cat)
+            if services_error:
+                return Response({'error': services_error}, status=status.HTTP_400_BAD_REQUEST)
+
             from .commerce import (
                 is_commerce_category,
                 validate_commerce_registration_documents,
@@ -1193,6 +1186,7 @@ class PublicBusinessRegistrationView(APIView):
                 website=data.get('website', ''),
                 description=data.get('description', ''),
                 primary_category=primary_cat,
+                category=primary_cat,
                 extra_attributes=data.get('extra_attributes', {}),
                 verification_status='PENDING',
                 is_verified=False,
@@ -2032,6 +2026,7 @@ class AdminSubscriptionListView(APIView):
             'expiring': sum(1 for row in rows if row['expiry_warning']),
             'blocked': sum(1 for row in rows if row['is_blocked']),
             'free': sum(1 for row in rows if row['is_free_period']),
+            'expired': sum(1 for row in rows if row['status'] == 'EXPIRED'),
         }
         results = sorted((row for row in rows if matches(row)), key=urgency)
         return Response({

@@ -322,6 +322,7 @@ class StrictLoginEmailTests(TestCase):
             'password': 'OtherPass123!',
         }, format='json')
         self.assertEqual(bad.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(bad.data.get('detail'), 'E-mail ou mot de passe incorrect.')
 
         ok = self.client.post('/api/v1/accounts/login/', {
             'email': 'm@gmail.com',
@@ -338,3 +339,66 @@ class StrictLoginEmailTests(TestCase):
         self.assertEqual(ok_ma.status_code, status.HTTP_200_OK)
         self.assertEqual(ok_ma.data['user']['email'], 'ma@gmail.com')
         self.assertEqual(ok_ma.data['user']['role'], 'PROFESSIONAL')
+
+
+class PendingBusinessLoginTests(TestCase):
+    def setUp(self):
+        from business_categories.models import BusinessCategory
+        from businesses.models import Business
+
+        self.client = APIClient()
+        self.login_url = '/api/v1/accounts/login/'
+        self.category = BusinessCategory.objects.create(name='Restaurant', slug='resto-pending-login')
+        self.owner = User.objects.create_user(
+            email='pending-owner@test.bi',
+            password='SecurePass123!',
+            role='BUSINESS_OWNER',
+        )
+        self.business = Business.objects.create(
+            owner=self.owner,
+            primary_category=self.category,
+            name='Tama Pending',
+            email='pending-owner@test.bi',
+            verification_status='PENDING',
+            is_verified=False,
+            is_active=False,
+        )
+
+    def test_pending_owner_cannot_login(self):
+        response = self.client.post(self.login_url, {
+            'email': 'pending-owner@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('approuv', response.data['detail'])
+        self.assertNotIn('isoko_access', response.cookies)
+
+    def test_pending_owner_wrong_password_stays_401(self):
+        response = self.client.post(self.login_url, {
+            'email': 'pending-owner@test.bi',
+            'password': 'WrongPass123!',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_approved_owner_can_login(self):
+        self.business.verification_status = 'APPROVED'
+        self.business.is_verified = True
+        self.business.is_active = True
+        self.business.save(update_fields=['verification_status', 'is_verified', 'is_active'])
+        response = self.client.post(self.login_url, {
+            'email': 'pending-owner@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['user']['email'], 'pending-owner@test.bi')
+
+    def test_rejected_owner_cannot_login(self):
+        self.business.verification_status = 'REJECTED'
+        self.business.is_active = False
+        self.business.save(update_fields=['verification_status', 'is_active'])
+        response = self.client.post(self.login_url, {
+            'email': 'pending-owner@test.bi',
+            'password': 'SecurePass123!',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('refus', response.data['detail'])

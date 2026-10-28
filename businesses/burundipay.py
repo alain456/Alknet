@@ -8,8 +8,6 @@ Endpoints (surchargeables) :
   POST {API_URL}{COLLECT_PATH}   → initiation débit
   GET  {API_URL}{STATUS_PATH}    → statut ( {id} = provider_reference )
   POST {API_URL}{REFUND_PATH}    → remboursement
-
-Compat : variables LUMICASH_* lues en fallback.
 """
 from __future__ import annotations
 
@@ -45,11 +43,7 @@ def verify_webhook(request) -> tuple[bool, str, int]:
     expected = (getattr(settings, 'BURUNDIPAY_WEBHOOK_SECRET', '') or '').strip()
     if not expected:
         return False, 'Webhook non configuré.', 503
-    provided = (
-        request.headers.get('X-BurundiPay-Webhook-Secret')
-        or request.headers.get('X-Lumicash-Webhook-Secret')
-        or ''
-    ).strip()
+    provided = (request.headers.get('X-BurundiPay-Webhook-Secret') or '').strip()
     if len(provided) != len(expected) or not hmac.compare_digest(provided, expected):
         return False, 'Unauthorized', 401
     timestamp = (request.headers.get('X-BurundiPay-Timestamp') or '').strip()
@@ -66,7 +60,8 @@ def verify_webhook(request) -> tuple[bool, str, int]:
     return True, '', 200
 
 PAYMENT_METHOD = 'BURUNDIPAY'
-LEGACY_PAYMENT_METHODS = frozenset({'LUMICASH', 'BURUNDIPAY'})
+# Anciennes lignes en base peuvent encore porter LUMICASH.
+LEGACY_PAYMENT_METHODS = frozenset({'BURUNDIPAY', 'LUMICASH'})
 
 _SUCCESS_STATUSES = frozenset({
     'SUCCESS', 'SUCCESSFUL', 'PAID', 'COMPLETED', 'COMPLETE', 'OK',
@@ -107,7 +102,7 @@ def _stub_blocked_outside_dev() -> bool:
     """Le stub est permis en DEBUG et pendant la suite Django (DEBUG y est forcé à False)."""
     if settings.DEBUG or getattr(settings, 'IS_TESTING', False):
         return False
-    return _env('BURUNDIPAY_ALLOW_STUB_IN_PROD', 'LUMICASH_ALLOW_STUB_IN_PROD', default='0') not in (
+    return _env('BURUNDIPAY_ALLOW_STUB_IN_PROD', default='0') not in (
         '1', 'true', 'True', 'yes',
     )
 

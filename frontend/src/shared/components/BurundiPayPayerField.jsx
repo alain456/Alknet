@@ -18,7 +18,7 @@ export default function BurundiPayPayerField({
     <div className="rounded-xl border-2 border-accent overflow-hidden bg-surface">
       <div className="bg-primary/5 px-4 py-3 flex flex-col items-center justify-center gap-1 border-b-2 border-accent/40">
         <img
-          src="/burundipay.png"
+          src="/burundipay.png?v=2"
           alt="BurundiPay"
           className="h-16 w-auto object-contain"
         />

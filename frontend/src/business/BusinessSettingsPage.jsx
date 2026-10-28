@@ -313,6 +313,13 @@ export default function BusinessSettingsPage() {
                 primaryCategory={sectorKey === 'education' ? '' : formData.primary_category}
                 categories={sectorKey === 'education' ? [] : categories}
                 attributes={formData.extra_attributes}
+                manageHref={
+                  sectorKey === 'hotel'
+                    ? '/hotel/company'
+                    : sectorKey === 'restaurant'
+                      ? '/restaurant/company'
+                      : ''
+                }
                 onChange={(extra_attributes) => setFormData((prev) => ({ ...prev, extra_attributes }))}
               />
             </div>

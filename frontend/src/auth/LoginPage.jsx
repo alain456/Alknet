@@ -19,11 +19,15 @@ export default function LoginPage() {
   const infoMessage = location.state?.message;
   const form = useForm({ defaultValues: { email: '', password: '' } });
 
-  const onLogin = form.handleSubmit(async ({ email, password }) => {
+  const onLogin = form.handleSubmit(async (values, event) => {
     setError('');
     setIsLoading(true);
     try {
-      const result = await login(email.trim(), password);
+      const formEl = event?.nativeEvent?.target || event?.target;
+      const fd = formEl instanceof HTMLFormElement ? new FormData(formEl) : null;
+      const email = String(fd?.get('email') || values.email || '').trim();
+      const password = String(fd?.get('password') || values.password || '');
+      const result = await login(email, password);
       setIsLoading(false);
       if (result?.two_factor_required) {
         setChallenge(result.challenge);

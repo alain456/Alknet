@@ -25,7 +25,7 @@ export default function WholesalePharmacyDirectory() {
   }, [pharmacies, q]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-surface">
       <div className="bg-blue-800 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <h1 className="text-3xl sm:text-4xl font-bold mb-2">Pharmacies de gros</h1>

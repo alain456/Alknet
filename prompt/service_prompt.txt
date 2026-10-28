@@ -1,0 +1,92 @@
+Prompt — Ajouter un module « Services » à l’application
+Je veux ajouter à mon application existante un module Services pour présenter les prestataires et leurs offres, et faciliter la communication entre les prestataires et les clients.
+
+Avant de modifier l’application, examine sa structure, son système de connexion, ses composants et son identité visuelle. Intègre le module à l’existant sans reconstruire l’application ni casser les fonctionnalités déjà en place. Réutilise les conventions et outils déjà utilisés dans le projet.
+
+1. Objectif du module
+Le module doit permettre :
+
+aux prestataires de créer et gérer leur fiche, leurs services et les informations qui les décrivent ;
+aux clients de trouver un service, de consulter les informations utiles et de contacter le prestataire concerné.
+Un prestataire peut être une entreprise, un cabinet ou un indépendant. Il peut proposer plusieurs services, et chaque service peut contenir plusieurs sous-services.
+
+2. Tâches du prestataire
+Le prestataire doit pouvoir :
+
+créer et modifier sa fiche de présentation ;
+renseigner son nom, sa catégorie d’activité, sa description et ses coordonnées ;
+indiquer les adresses ou zones géographiques où il propose ses services ;
+ajouter, modifier, publier, masquer ou retirer ses services ;
+organiser ses offres par catégories et sous-services ;
+préciser, pour chaque service, sa description, ses modalités, ses disponibilités et sa zone d’intervention ;
+fournir des informations sur les qualifications, compétences et expériences de ses équipes ;
+ajouter des attestations de services rendus, certificats et autres documents justificatifs ;
+choisir quelles informations et quels documents sont visibles publiquement ;
+recevoir les demandes de contact des clients, les consulter et suivre leur état : nouvelle, en cours, répondue ou clôturée.
+Un prestataire ne doit pouvoir modifier que sa propre fiche, ses propres services et les demandes qui lui sont adressées.
+
+3. Tâches du client
+Le client doit pouvoir :
+
+consulter les fiches prestataires et les services publiés ;
+parcourir les services par catégorie et sous-catégorie ;
+rechercher un service par mot-clé ;
+filtrer les résultats par catégorie et, si possible avec les données disponibles, par localisation ou disponibilité ;
+consulter la fiche du prestataire et les détails du service : description, zone d’intervention, disponibilités, qualifications et documents publics ;
+envoyer une demande de contact au prestataire au sujet d’un service précis ;
+indiquer dans sa demande son besoin et le moyen de contact souhaité ;
+voir une confirmation après l’envoi de sa demande.
+La consultation des services doit être possible sans compte, sauf si l’application existante impose déjà une authentification. Réutilise le système de connexion existant plutôt que d’en créer un nouveau.
+
+4. Organisation des données
+Prévois une structure claire pour relier :
+
+un prestataire à ses services ;
+un service à sa catégorie, ses sous-services, ses disponibilités et ses zones d’intervention ;
+un prestataire à ses qualifications, expériences et documents ;
+une demande de contact au client, au prestataire et au service concerné.
+Les coordonnées et les informations personnelles ne doivent pas être affichées publiquement sans que le prestataire ait choisi de les rendre visibles. Les documents justificatifs doivent pouvoir être marqués comme publics ou privés.
+
+5. Exemple à intégrer : SCVS
+Utilise SCVS — aide et accompagnement à domicile comme exemple de prestataire, en t’appuyant sur la brochure fournie. Présente ses offres sans limiter le module à ce seul prestataire.
+
+Service : Garde d’enfants
+
+Personnel qualifié, vérifié et formé.
+Disponibilité en journée, en soirée, le week-end et en cas d’urgence.
+Suivi adapté à l’âge de l’enfant.
+Aide aux devoirs et activités d’éveil.
+Accompagnement adapté aux familles ayant un ou plusieurs enfants.
+Service : Accompagnement des personnes âgées, malades ou fragiles
+
+Aide à la toilette, aux repas et aux déplacements.
+Personnel formé à l’accompagnement des personnes fragiles.
+Présence rassurante pour aider à lutter contre l’isolement.
+Coordination avec la famille et le personnel médical, lorsque cela est nécessaire.
+Accompagnement adapté aux personnes âgées, malades, convalescentes ou en situation de handicap.
+6. Communication client-prestataire
+Quand un client envoie une demande de contact, celle-ci doit être reliée au service qui l’intéresse et au prestataire correspondant.
+
+Si l’application dispose déjà d’une messagerie, utilise-la. Sinon, crée un formulaire de demande de contact avec les champs nécessaires, par exemple : nom du client, coordonnées, service concerné et message. Le prestataire doit pouvoir consulter la demande et mettre à jour son état.
+
+Ne crée pas de système de paiement ni de réservation en ligne sans demande supplémentaire.
+
+7. Interface attendue
+Crée une interface en français, claire et facile à utiliser sur téléphone et ordinateur. Prévois notamment :
+
+une page de recherche ou de découverte des services ;
+une fiche publique pour chaque prestataire ;
+une page détaillée pour chaque service ;
+un espace prestataire pour gérer sa fiche, ses services, ses documents et ses demandes ;
+un formulaire client pour envoyer une demande de contact.
+Utilise des formulaires avec validation et des messages clairs en cas d’erreur ou de réussite. Les résultats et fiches doivent distinguer clairement les prestataires des services qu’ils proposent.
+
+8. Critères de réussite
+Le module est terminé lorsque :
+
+un prestataire peut gérer uniquement ses propres informations et services ;
+un client peut trouver un service, comprendre ce qui est proposé et envoyer une demande au bon prestataire ;
+les demandes sont visibles par le prestataire concerné et peuvent être suivies jusqu’à leur clôture ;
+les informations publiques et privées sont différenciées ;
+le module fonctionne sur mobile et ordinateur et respecte l’apparence de l’application existante ;
+les principales actions peuvent être testées avec des données d’exemple réalistes.

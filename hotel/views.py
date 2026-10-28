@@ -19,6 +19,7 @@ from .models import (
 )
 from .serializers import (
     HotelProfileSerializer, HotelDepartmentSerializer, RoomTypeSerializer,
+    strip_hotel_identity_extras, merge_legacy_amenity_extras,
     RoomSerializer, RatePlanSerializer, GuestSerializer, ReservationSerializer,
     StaySerializer, HotelServiceSerializer, FolioSerializer, PaymentSerializer,
     HotelInvoiceSerializer, HousekeepingTaskSerializer, MaintenanceTicketSerializer,
@@ -38,6 +39,7 @@ from .services import (
     record_payment, audit, assert_room_assignable,
 )
 from .rate_resolution import resolve_rate_plan, synthetic_rates_for_public
+from .lodging import is_lodging_business
 
 
 def _hotel(request):
@@ -114,6 +116,8 @@ class HotelProfileViewSet(viewsets.ModelViewSet):
             ser = self.get_serializer(profile, data=data, partial=True)
             ser.is_valid(raise_exception=True)
             ser.save()
+            if is_hotel_admin(request.user, hotel):
+                strip_hotel_identity_extras(hotel)
             audit(hotel, request.user, 'UPDATE_PROFILE', 'HotelProfile', profile.id, new=ser.data)
             return Response(ser.data)
         return Response(self.get_serializer(profile).data)
@@ -1506,7 +1510,7 @@ def _public_hotel_visible(business):
     """Hôtel listable / consultable côté client (annuaire public)."""
     if not business or not business.is_active or not business.is_verified:
         return False
-    if not _is_hotel_business(business):
+    if not is_lodging_business(business):
         return False
     profile = getattr(business, 'hotel_profile', None)
     if profile is None:
@@ -1520,14 +1524,9 @@ def _public_hotel_visible(business):
 
 
 def _public_amenities(profile, extras=None):
-    """Équipements publics = profil + attributs métier réels (pas de texte inventé)."""
+    """Équipements publics = Mon hôtel (+ ancien JSON Paramètres le temps de la bascule)."""
     amenities = list(getattr(profile, 'amenities', None) or []) if profile else []
-    extras = extras or {}
-    if extras.get('has_swimming_pool') and 'Piscine' not in amenities:
-        amenities.append('Piscine')
-    if extras.get('breakfast_included') and 'Petit-déjeuner' not in amenities:
-        amenities.append('Petit-déjeuner')
-    return amenities
+    return merge_legacy_amenity_extras(amenities, extras)
 
 
 def _hotel_cover_and_gallery(business, profile=None, room_types=None):
@@ -2041,6 +2040,7 @@ def public_hotels(request):
             'currency': getattr(profile, 'currency', 'BIF') if profile else 'BIF',
             'languages': list(getattr(profile, 'languages', None) or []) if profile else [],
             'amenities': amenities,
+            'rooms_count': Room.objects.filter(hotel=b, is_active=True).count(),
             'latitude': getattr(b, 'latitude', None),
             'longitude': getattr(b, 'longitude', None),
             'room_types_count': len(types),
@@ -2065,7 +2065,8 @@ def public_hotel_detail(request, hotel_id):
     guest_info = (getattr(profile, 'guest_info', None) or {}) if profile else {}
     extras = getattr(b, 'extra_attributes', None) or {}
     amenities = _public_amenities(profile, extras)
-    display_stars = profile.display_stars if profile else extras.get('stars_rating')
+    display_stars = profile.display_stars if profile else None
+    rooms_count = Room.objects.filter(hotel=b, is_active=True).count()
     cover, gallery = _hotel_cover_and_gallery(b, profile, list(types))
     from profiles.images import display_business_logo
     return Response({
@@ -2086,7 +2087,7 @@ def public_hotel_detail(request, hotel_id):
         'latitude': getattr(b, 'latitude', None),
         'longitude': getattr(b, 'longitude', None),
         'stars': display_stars,
-        'stars_declared': getattr(profile, 'stars', None) if profile else extras.get('stars_rating'),
+        'stars_declared': getattr(profile, 'stars', None) if profile else None,
         'stars_verified': getattr(profile, 'stars_verified', None) if profile else None,
         'classification_verified': bool(getattr(profile, 'classification_verified', False)) if profile else False,
         'check_in_time': str(getattr(profile, 'check_in_time', '14:00') or '14:00')[:5] if profile else '14:00',
@@ -2101,7 +2102,8 @@ def public_hotel_detail(request, hotel_id):
         'deposit_policy': getattr(profile, 'deposit_policy', '') if profile else '',
         'amenities': amenities,
         'guest_info': guest_info,
-        'rooms_count_declared': extras.get('rooms_count') or None,
+        'rooms_count': rooms_count,
+        'rooms_count_declared': rooms_count,
         'room_types': RoomTypeSerializer(types, many=True).data,
         'rates': synthetic_rates_for_public(b, types, list(rates)),
         'services': HotelServiceSerializer(services, many=True).data,

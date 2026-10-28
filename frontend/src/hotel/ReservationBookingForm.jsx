@@ -441,7 +441,7 @@ export default function ReservationBookingForm({
             </p>
             <div className="mt-2 flex items-center gap-3 rounded-xl border-2 border-accent/50 bg-primary/5 px-3 py-2.5">
               <img
-                src="/burundipay.png"
+                src="/burundipay.png?v=2"
                 alt=""
                 className="h-9 w-auto object-contain shrink-0"
               />

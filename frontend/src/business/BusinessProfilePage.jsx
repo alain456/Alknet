@@ -97,7 +97,6 @@ export default function BusinessProfilePage() {
     longitude: '',
     proof_document: '',
     logo: '',
-    lumicash_merchant_account: '',
     burundipay_merchant_account: '',
   });
 
@@ -139,8 +138,7 @@ export default function BusinessProfilePage() {
           longitude: b.longitude || '',
           proof_document: b.proof_document || '',
           logo: b.logo || '',
-          lumicash_merchant_account: b.lumicash_merchant_account || b.burundipay_merchant_account || '',
-          burundipay_merchant_account: b.burundipay_merchant_account || b.lumicash_merchant_account || '',
+          burundipay_merchant_account: b.burundipay_merchant_account || '',
         });
         setHasExistingLogo(Boolean(b.has_logo || b.logo));
 
@@ -478,11 +476,10 @@ export default function BusinessProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Compte marchand BurundiPay</label>
                 <input
                   type="text"
-                  value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+                  value={formData.burundipay_merchant_account}
                   onChange={(e) => setFormData({
                     ...formData,
                     burundipay_merchant_account: e.target.value,
-                    lumicash_merchant_account: e.target.value,
                   })}
                   className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Compte pour encaisser les commandes"
@@ -769,11 +766,10 @@ export default function BusinessProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Compte marchand BurundiPay (consultations)</label>
                 <input
                   type="text"
-                  value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+                  value={formData.burundipay_merchant_account}
                   onChange={(e) => setFormData({
                     ...formData,
                     burundipay_merchant_account: e.target.value,
-                    lumicash_merchant_account: e.target.value,
                   })}
                   className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
                   placeholder="Ex. HOSP-BAHO-LC"
@@ -907,11 +903,10 @@ export default function BusinessProfilePage() {
             <p className="text-sm text-gray-500">Ce compte reçoit les paiements des clients. Il est distinct de l’abonnement Isoko Hub.</p>
             <input
               type="text"
-              value={formData.burundipay_merchant_account || formData.lumicash_merchant_account}
+              value={formData.burundipay_merchant_account}
               onChange={(e) => setFormData({
                 ...formData,
                 burundipay_merchant_account: e.target.value,
-                lumicash_merchant_account: e.target.value,
               })}
               className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary outline-none"
               placeholder="Compte fourni par BurundiPay"

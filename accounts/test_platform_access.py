@@ -207,3 +207,39 @@ class PlatformRoleAccessTests(TestCase):
 
         # restore
         update_platform_role('moderation', name='Modération')
+
+
+class PlatformCatalogRefreshTests(TestCase):
+    def test_catalog_groups_match_current_admin(self):
+        from accounts.platform_access import ALL_PLATFORM_PERMISSIONS, catalog_payload
+
+        groups = catalog_payload()
+        ids = [row['id'] for row in groups]
+        self.assertEqual(ids[0], 'pilotage')
+        self.assertIn('catalog', ids)
+        self.assertIn('cms', ids)
+        actions = [action for row in groups for action in row['actions']]
+        keys = [action['key'] for action in actions]
+        self.assertIn('platform.analytics.view', keys)
+        self.assertTrue(all(action.get('hint') for action in actions))
+        catalog = next(row for row in groups if row['id'] == 'catalog')
+        self.assertNotIn('platform.analytics.view', [action['key'] for action in catalog['actions']])
+        self.assertIn('platform.analytics.view', ALL_PLATFORM_PERMISSIONS)
+
+    def test_legacy_role_descriptions_are_refreshed(self):
+        from accounts.models import PlatformRole
+        from accounts.platform_access import ensure_platform_roles
+
+        ensure_platform_roles()
+        finance = PlatformRole.objects.get(code='finance')
+        finance.description = 'Abonnements, paiements SaaS, exports et alertes d’échéance.'
+        finance.save(update_fields=['description'])
+        custom = PlatformRole.objects.get(code='content')
+        custom.description = 'Texte personnalisé du super admin'
+        custom.save(update_fields=['description'])
+
+        ensure_platform_roles()
+        finance.refresh_from_db()
+        custom.refresh_from_db()
+        self.assertIn('grâce', finance.description)
+        self.assertEqual(custom.description, 'Texte personnalisé du super admin')

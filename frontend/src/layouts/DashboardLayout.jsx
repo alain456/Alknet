@@ -3,7 +3,7 @@ import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-d
 import { 
   LayoutDashboard, Compass, MessageSquare, Heart, 
   Calendar, ShoppingBag, CreditCard, Bell, User, 
-  Crown, Settings, Menu, X, Search, LogOut, FlaskConical, GraduationCap,
+  Crown, Settings, Menu, X, Search, LogOut, FlaskConical, GraduationCap, ClipboardList,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canAccessZone, ZONE_ACCESS } from '../auth/roleAccess';
@@ -54,6 +54,7 @@ export default function DashboardLayout() {
     { name: 'Favoris', icon: Heart, path: '/dashboard/favorites' },
     { name: 'Rendez-vous', icon: Calendar, path: '/dashboard/bookings' },
     { name: 'Inscriptions', icon: GraduationCap, path: '/dashboard/inscriptions' },
+    { name: 'Demandes', icon: ClipboardList, path: '/dashboard/demandes' },
     { name: 'Résultats de labo', icon: FlaskConical, path: '/dashboard/lab-results' },
     { name: 'Commandes', icon: ShoppingBag, path: '/dashboard/orders' },
     { name: 'Paiements', icon: CreditCard, path: '/dashboard/payments' },
@@ -104,7 +105,9 @@ export default function DashboardLayout() {
 
         <div className="flex-1 overflow-y-auto py-6 px-4 flex flex-col gap-1">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = item.path === '/dashboard'
+              ? location.pathname === '/dashboard'
+              : (location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
             const showNotifBadge = item.path === '/dashboard/notifications' && unreadCount > 0;
             return (
               <Link 

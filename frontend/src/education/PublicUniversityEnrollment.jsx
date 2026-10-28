@@ -9,7 +9,7 @@ import { isValidBurundiPayPhone, normalizeBurundiPayPhone } from '../shared/comp
 
 const STEPS = ['Niveau', 'Identité', 'Études antérieures', 'Contact', 'Documents'];
 const COUNTRIES = ['Burundi', 'République démocratique du Congo', 'Rwanda', 'Tanzanie', 'Kenya', 'Ouganda', 'France', 'Belgique', 'Autre'];
-const fieldClass = 'w-full mt-1.5 px-3 py-2.5 rounded-xl border border-border bg-white text-sm text-ink outline-none focus:border-accent';
+const fieldClass = 'w-full mt-1.5 px-3 py-2.5 rounded-xl border border-border bg-surface text-sm text-ink outline-none focus:border-accent';
 
 function Field({ label, children, className = '' }) {
   return (
@@ -23,7 +23,7 @@ function Field({ label, children, className = '' }) {
 function Choice({ name, value, current, onPick, children }) {
   const selected = current === value;
   return (
-    <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold cursor-pointer ${selected ? 'bg-accent text-ink border-accent' : 'bg-white text-ink border-border'}`}>
+    <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold cursor-pointer ${selected ? 'bg-accent text-ink border-accent' : 'bg-surface text-ink border-border'}`}>
       <input type="radio" className="h-4 w-4 shrink-0" name={name} checked={selected} onChange={() => onPick(value)} />
       {children}
     </label>
@@ -259,7 +259,7 @@ export default function PublicUniversityEnrollment({ campaign, campaignId }) {
     );
   }
 
-  const card = 'rounded-2xl bg-white ring-1 ring-border p-5 sm:p-6 space-y-4';
+  const card = 'rounded-2xl bg-surface ring-1 ring-border p-5 sm:p-6 space-y-4';
 
   return (
     <div className="min-h-screen bg-surface text-ink pb-16">
@@ -268,7 +268,7 @@ export default function PublicUniversityEnrollment({ campaign, campaignId }) {
           <div className="text-left">
             <Link
               to={campaign?.establishment_id ? `/education/establishment/${campaign.establishment_id}#inscription` : '/education'}
-              className="inline-flex items-center gap-1 text-sm font-bold text-surface"
+              className="inline-flex items-center gap-1 text-sm font-bold text-[#F5F5F5]"
             >
               <ChevronLeft className="w-4 h-4" /> Retour
             </Link>
@@ -289,7 +289,7 @@ export default function PublicUniversityEnrollment({ campaign, campaignId }) {
                 type="button"
                 onClick={() => index < step && setStep(index)}
                 className={`w-full rounded-xl px-1 py-2 text-center text-[11px] sm:text-xs font-bold ${
-                  index === step ? 'bg-accent text-ink' : 'bg-white text-ink ring-1 ring-border'
+                  index === step ? 'bg-accent text-ink' : 'bg-surface text-ink ring-1 ring-border'
                 }`}
               >
                 <span className="block tabular-nums">{index + 1}</span>
@@ -300,7 +300,7 @@ export default function PublicUniversityEnrollment({ campaign, campaignId }) {
         </ol>
         {error && <p className="rounded-xl border border-alert bg-alert/10 px-4 py-3 text-sm font-medium">{error}</p>}
         {!campaign.open_today && (
-          <p className="rounded-xl bg-white ring-1 ring-border px-4 py-3 text-sm text-ink">
+          <p className="rounded-xl bg-surface ring-1 ring-border px-4 py-3 text-sm text-ink">
             Les inscriptions ouvrent le {campaign.opens_on}. Vous pouvez préparer le dossier ; l’envoi sera possible à partir de cette date.
           </p>
         )}
@@ -442,7 +442,7 @@ export default function PublicUniversityEnrollment({ campaign, campaignId }) {
                 amountLabel={feeLabel}
               />
             ) : (
-              <p className="rounded-xl bg-white ring-1 ring-border px-4 py-3 text-sm">Inscription gratuite. Aucun paiement n’est demandé.</p>
+              <p className="rounded-xl bg-surface ring-1 ring-border px-4 py-3 text-sm">Inscription gratuite. Aucun paiement n’est demandé.</p>
             )}
           </section>
         )}

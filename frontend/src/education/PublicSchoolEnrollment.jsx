@@ -17,7 +17,7 @@ const TRACK_META = {
 };
 
 const STEPS = ['Parcours', 'Identité', 'Pièces & paiement', 'Confirmation'];
-const fieldClass = 'w-full mt-1.5 px-3 py-2.5 rounded-xl border border-border bg-white text-sm text-ink outline-none focus:border-accent';
+const fieldClass = 'w-full mt-1.5 px-3 py-2.5 rounded-xl border border-border bg-surface text-sm text-ink outline-none focus:border-accent';
 
 import PublicUniversityEnrollment from './PublicUniversityEnrollment';
 

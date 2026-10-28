@@ -1,10 +1,15 @@
+from django.db.models import Q
 from rest_framework import generics, permissions, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from accounts.services import log_audit_event
 from permissions.custom_permissions import PlatformMethodPermission
 from .models import Service, ServiceReview, refresh_service_rating
+from .pagination import ServicesPageNumberPagination
+from .permissions import services_tenant_business
 from .serializers import ServiceSerializer, AdminServiceSerializer
+from .throttling import ServicesPublicThrottle
 
 
 class CanCreateService(permissions.BasePermission):
@@ -18,44 +23,69 @@ class CanCreateService(permissions.BasePermission):
 class ServiceListView(generics.ListAPIView):
     """Liste de tous les services actifs (Public)"""
     queryset = Service.objects.filter(status='ACTIVE').select_related(
-        'category', 'business', 'professional'
+        'category', 'business', 'business__primary_category', 'professional', 'parent',
     ).order_by('-created_at')
     serializer_class = ServiceSerializer
     permission_classes = [permissions.AllowAny]
+    pagination_class = ServicesPageNumberPagination
 
 
 class MyServiceListView(generics.ListCreateAPIView):
     serializer_class = ServiceSerializer
     permission_classes = [CanCreateService]
+    pagination_class = ServicesPageNumberPagination
 
     def get_queryset(self):
-        return Service.objects.filter(professional=self.request.user) | Service.objects.filter(
-            business__owner=self.request.user
+        business = services_tenant_business(self.request.user)
+        if business:
+            return Service.objects.filter(business=business).select_related(
+                'category', 'business', 'parent',
+            )
+        return Service.objects.filter(professional=self.request.user).select_related(
+            'category', 'business', 'parent',
         )
 
     def perform_create(self, serializer):
+        tenant = services_tenant_business(self.request.user)
+        if tenant:
+            serializer.save(business=tenant, professional=self.request.user)
+            return
         business = serializer.validated_data.get('business')
-        if not business:
-            serializer.save(professional=self.request.user)
-        else:
-            if business.owner == self.request.user:
-                serializer.save()
-            else:
-                raise PermissionDenied("Vous n'êtes pas le propriétaire de cette entreprise.")
+        if business and business.owner != self.request.user:
+            raise PermissionDenied("Vous n'êtes pas le propriétaire de cette entreprise.")
+        serializer.save(professional=self.request.user)
 
 
 class AdminServiceListView(generics.ListAPIView):
-    queryset = Service.objects.all().select_related(
-        'category', 'business', 'professional'
-    ).order_by('-created_at')
     serializer_class = AdminServiceSerializer
     permission_classes = [PlatformMethodPermission]
     platform_method_permissions = {'GET': 'platform.catalog.view'}
+    pagination_class = ServicesPageNumberPagination
+
+    def get_queryset(self):
+        qs = Service.objects.filter(parent__isnull=True).select_related(
+            'category', 'business', 'business__primary_category', 'professional', 'parent',
+        ).prefetch_related('sub_items', 'grouped_services').order_by('-created_at')
+        search = (self.request.query_params.get('q') or '').strip()
+        status_filter = (self.request.query_params.get('status') or '').strip().upper()
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search)
+                | Q(business__name__icontains=search)
+                | Q(sub_items__title__icontains=search)
+                | Q(grouped_services__title__icontains=search)
+            ).distinct()
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        from .grouping import drop_obsolete_parent_items
+        for offer in qs:
+            drop_obsolete_parent_items(offer)
+        return qs
 
 
 class AdminServiceDetailView(generics.RetrieveUpdateAPIView):
     queryset = Service.objects.all().select_related(
-        'category', 'business', 'professional'
+        'category', 'business', 'business__primary_category', 'professional', 'parent',
     )
     serializer_class = AdminServiceSerializer
     permission_classes = [PlatformMethodPermission]
@@ -78,14 +108,24 @@ class AdminServiceStatusView(APIView):
         new_status = (request.data.get('status') or '').strip().upper()
         if new_status not in dict(Service.STATUS_CHOICES):
             return Response({'error': 'Statut invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        old_status = service.status
         service.status = new_status
         service.save(update_fields=['status', 'updated_at'])
+        log_audit_event(
+            user=request.user,
+            action='SERVICE_STATUS',
+            resource=f'Service #{service.id}',
+            request=request,
+            old_value=old_status,
+            new_value=new_status,
+        )
         return Response(AdminServiceSerializer(service).data)
 
 
 class ServiceReviewView(APIView):
     """Note 1 à 5. Une seule par client ; une nouvelle note remplace la précédente."""
     permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [ServicesPublicThrottle]
 
     def post(self, request, pk):
         service = Service.objects.filter(pk=pk, status='ACTIVE').select_related('business').first()

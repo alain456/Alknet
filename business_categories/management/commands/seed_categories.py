@@ -1,6 +1,13 @@
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
-from business_categories.models import BusinessCategory
+from business_categories.models import BusinessCategory, ModuleKey
+from business_categories.hotel_sector import (
+    KEEP_DESCRIPTION,
+    KEEP_NAME,
+    KEEP_SLUG,
+    merge_hotel_tourism_root,
+)
+from business_categories.services_sector import SERVICES_ROOT_NAME, SERVICES_ROOT_SLUG
 
 class Command(BaseCommand):
     help = "Seed complete hierarchical business categories tree"
@@ -34,15 +41,17 @@ class Command(BaseCommand):
                 ]
             },
             {
-                "name": "Hôtellerie & Restauration",
+                "name": KEEP_NAME,
+                "slug": KEEP_SLUG,
                 "icon": "Hotel",
-                "description": "Hôtels, restaurants, bars, cafés et services traiteurs.",
+                "description": KEEP_DESCRIPTION,
+                "module": ModuleKey.HOTEL,
                 "children": [
-                    {"name": "Hôtel", "icon": "Hotel", "description": "Hébergement touristique et hôtelier."},
-                    {"name": "Restaurant", "icon": "Store", "description": "Restauration sur place et à emporter."},
-                    {"name": "Bar", "icon": "Store", "description": "Débit de boissons et animation."},
-                    {"name": "Café", "icon": "Store", "description": "Salon de thé, café et rafraîchissements."},
-                    {"name": "Traiteur", "icon": "ShoppingBag", "description": "Organisation de réceptions et repas d'événements."}
+                    {"name": "Hôtel", "icon": "Hotel", "module": ModuleKey.HOTEL, "description": "Hébergement touristique et hôtelier."},
+                    {"name": "Restaurant", "icon": "Store", "module": ModuleKey.RESTAURANT, "description": "Restauration sur place et à emporter."},
+                    {"name": "Bar", "icon": "Store", "module": ModuleKey.RESTAURANT, "description": "Débit de boissons et animation."},
+                    {"name": "Café", "icon": "Store", "module": ModuleKey.RESTAURANT, "description": "Salon de thé, café et rafraîchissements."},
+                    {"name": "Traiteur", "icon": "ShoppingBag", "module": ModuleKey.RESTAURANT, "description": "Organisation de réceptions et repas d'événements."}
                 ]
             },
             {
@@ -101,55 +110,78 @@ class Command(BaseCommand):
                 ]
             },
             {
-                "name": "Services professionnels",
+                "name": SERVICES_ROOT_NAME,
+                "slug": SERVICES_ROOT_SLUG,
                 "icon": "Briefcase",
-                "description": "Conseils, droit, comptabilité et agences spécialisées.",
+                "description": (
+                    "Prestataires de services. Isoko Hub prépare les catégories ; "
+                    "à l’inscription le prestataire en choisit une, puis gère ses offres "
+                    "dans l’espace prestataire."
+                ),
+                "module": ModuleKey.SERVICES,
                 "children": [
                     {"name": "Avocat", "icon": "Briefcase", "description": "Conseil juridique et représentation en justice."},
                     {"name": "Comptable", "icon": "Briefcase", "description": "Gestion comptable, fiscale et audits."},
                     {"name": "Consultant", "icon": "Briefcase", "description": "Conseil en stratégie et management."},
                     {"name": "Architecte", "icon": "Building2", "description": "Maîtrise d'œuvre et aménagement d'espaces."},
-                    {"name": "Agence", "icon": "Briefcase", "description": "Agences de services et courtage."}
-                ]
+                    {"name": "Agence", "icon": "Briefcase", "description": "Agences de services et courtage."},
+                    {"name": "Garde d'enfants", "slug": "garde-denfants", "icon": "Heart", "description": "Garde, aide aux devoirs et activités d’éveil."},
+                    {"name": "Aide à domicile", "slug": "aide-a-domicile", "icon": "Heart", "description": "Aide et accompagnement à domicile."},
+                    {"name": "Accompagnement des personnes âgées", "slug": "accompagnement-personnes-agees", "icon": "Heart", "description": "Accompagnement des personnes âgées, malades ou en situation de handicap."},
+                ],
             }
         ]
+
+        merge_hotel_tourism_root()
 
         total_parents = 0
         total_children = 0
 
         for parent_data in tree_data:
-            parent_slug = slugify(parent_data["name"])
+            parent_slug = parent_data.get("slug") or slugify(parent_data["name"])
+            parent_defaults = {
+                "name": parent_data["name"],
+                "description": parent_data["description"],
+                "icon": parent_data["icon"],
+                "parent": None,
+            }
+            if parent_data.get("module"):
+                parent_defaults["module"] = parent_data["module"]
             parent_cat, _ = BusinessCategory.objects.get_or_create(
                 slug=parent_slug,
-                defaults={
-                    "name": parent_data["name"],
-                    "description": parent_data["description"],
-                    "icon": parent_data["icon"],
-                    "parent": None
-                }
+                defaults=parent_defaults,
             )
             parent_cat.name = parent_data["name"]
             parent_cat.description = parent_data["description"]
             parent_cat.icon = parent_data["icon"]
             parent_cat.parent = None
+            if parent_data.get("module"):
+                parent_cat.module = parent_data["module"]
             parent_cat.save()
             total_parents += 1
 
             for child_data in parent_data.get("children", []):
-                child_slug = slugify(child_data["name"])
-                child_cat, _ = BusinessCategory.objects.get_or_create(
-                    slug=child_slug,
-                    defaults={
-                        "name": child_data["name"],
-                        "description": child_data["description"],
-                        "icon": child_data["icon"],
-                        "parent": parent_cat
-                    }
+                child_slug = child_data.get("slug") or slugify(child_data["name"])
+                child_cat = (
+                    BusinessCategory.objects.filter(slug=child_slug).first()
+                    or BusinessCategory.objects.filter(name__iexact=child_data["name"]).first()
                 )
+                if child_cat is None:
+                    child_cat = BusinessCategory(
+                        name=child_data["name"],
+                        slug=child_slug,
+                        description=child_data["description"],
+                        icon=child_data["icon"],
+                        parent=parent_cat,
+                    )
                 child_cat.name = child_data["name"]
                 child_cat.description = child_data["description"]
                 child_cat.icon = child_data["icon"]
                 child_cat.parent = parent_cat
+                if child_data.get("module"):
+                    child_cat.module = child_data["module"]
+                elif parent_data.get("module"):
+                    child_cat.module = parent_data["module"]
                 child_cat.save()
                 total_children += 1
 

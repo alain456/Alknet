@@ -1816,8 +1816,8 @@ class FeeMerchantRoutingTests(EducationBaseTests):
         self.assertEqual(response.data['payment']['merchant_account'], expected)
 
     def test_configured_merchant_account_wins(self):
-        self.school_b.lumicash_merchant_account = 'EDU-BURUNDI-42'
-        self.school_b.save(update_fields=['lumicash_merchant_account'])
+        self.school_b.burundipay_merchant_account = 'EDU-BURUNDI-42'
+        self.school_b.save(update_fields=['burundipay_merchant_account'])
         self.assertEqual(self._pay().status_code, 200)
         payment = EducationFeePayment.objects.get(fee=self.fee, applicant=self.student)
         self.assertEqual(payment.merchant_account, 'EDU-BURUNDI-42')
@@ -1827,8 +1827,8 @@ class FeeMerchantRoutingTests(EducationBaseTests):
         self._pay()
         payment = EducationFeePayment.objects.get(fee=self.fee, applicant=self.student)
         frozen = payment.merchant_account
-        self.school_b.lumicash_merchant_account = 'EDU-BURUNDI-99'
-        self.school_b.save(update_fields=['lumicash_merchant_account'])
+        self.school_b.burundipay_merchant_account = 'EDU-BURUNDI-99'
+        self.school_b.save(update_fields=['burundipay_merchant_account'])
         payment.refresh_from_db()
         self.assertEqual(payment.merchant_account, frozen)
 

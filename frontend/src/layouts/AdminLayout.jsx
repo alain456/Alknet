@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, UserCircle, LayoutGrid, Briefcase,
-  CreditCard, Settings, Menu, X, Search, Bell, LogOut, ChevronRight, MapPin,
+  CreditCard, Settings, Menu, X, Bell, LogOut, ChevronRight, MapPin,
   Activity, PanelsTopLeft, BarChart3, Shield, Mail,
 } from 'lucide-react';
 import Logo from '../shared/components/Logo';
@@ -20,6 +20,7 @@ import {
   userHasAnyPlatformPerm,
 } from '../auth/platformPermissions';
 import { CONTACT_UNREAD_EVENT } from '../admin/contactInbox';
+import AdminHeaderSearch from '../admin/AdminHeaderSearch';
 
 /** Compat HMR / anciens imports : `import { CONTACT_UNREAD_EVENT } from '../layouts/AdminLayout'` */
 export { CONTACT_UNREAD_EVENT };
@@ -358,14 +359,7 @@ export default function AdminLayout() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center bg-paper border border-border rounded-full px-4 py-2 transition-colors focus-within:border-primary w-72">
-              <Search className="w-4 h-4 text-ink-faint mr-2 shrink-0" strokeWidth={1.8} />
-              <input
-                type="text"
-                placeholder="Rechercher…"
-                className="bg-transparent border-none outline-none w-full text-[13px] text-ink placeholder-ink-faint"
-              />
-            </div>
+            <AdminHeaderSearch />
             <ThemeToggle variant="ghost" size="sm" />
             <button
               type="button"

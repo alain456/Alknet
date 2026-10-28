@@ -1,7 +1,8 @@
 from datetime import timedelta
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework.response import Response
@@ -12,6 +13,31 @@ from permissions.custom_permissions import PlatformMethodPermission
 from services.models import Service
 
 User = get_user_model()
+
+SEARCH_MIN_LEN = 2
+SEARCH_LIMIT = 5
+
+VERIFICATION_LABELS = {
+    'APPROVED': 'Approuvée',
+    'PENDING': 'En attente',
+    'REJECTED': 'Rejetée',
+}
+
+USER_ROLE_LABELS = {
+    'SUPER_ADMIN': 'Super admin',
+    'PLATFORM_FINANCE': 'Finance',
+    'PLATFORM_MODERATION': 'Modération',
+    'PLATFORM_SUPPORT': 'Support',
+    'PLATFORM_CONTENT': 'Contenu',
+    'BUSINESS_OWNER': 'Admin entreprise',
+    'PROFESSIONAL': 'Professionnel',
+    'CUSTOMER': 'Client',
+}
+
+
+def _admin_href(path, **params):
+    qs = urlencode({key: value for key, value in params.items() if value not in (None, '')})
+    return f'{path}?{qs}' if qs else path
 
 
 def _relative_time(dt):
@@ -79,6 +105,7 @@ class AdminDashboardStatsView(APIView):
 
         services_active = Service.objects.filter(status='ACTIVE').count()
         services_total = Service.objects.count()
+        services_draft = Service.objects.filter(status='DRAFT', parent__isnull=True).count()
 
         appointments_pending = 0
         appointments_month = 0
@@ -102,10 +129,21 @@ class AdminDashboardStatsView(APIView):
             pass
 
         active_subscriptions = 0
+        subscriptions_grace = 0
+        subscriptions_expired = 0
         try:
             from businesses.subscription import subscription_access_q
             from businesses.models import BusinessSubscription
             active_subscriptions = BusinessSubscription.objects.filter(subscription_access_q('')).count()
+            subscriptions_grace = BusinessSubscription.objects.filter(status='GRACE').count()
+            subscriptions_expired = BusinessSubscription.objects.filter(status='EXPIRED').count()
+        except Exception:
+            pass
+
+        contact_unread = 0
+        try:
+            from site_content.models import ContactMessage
+            contact_unread = ContactMessage.objects.filter(is_read=False).count()
         except Exception:
             pass
 
@@ -223,6 +261,13 @@ class AdminDashboardStatsView(APIView):
                 'activity_week': 0,
                 'active_subscriptions': active_subscriptions,
             },
+            'queue': {
+                'pending_businesses': pending_businesses,
+                'contact_unread': contact_unread,
+                'subscriptions_grace': subscriptions_grace,
+                'subscriptions_expired': subscriptions_expired,
+                'services_draft': services_draft,
+            },
             'growth_businesses': growth,
             'growth_max': max_growth,
             'acquisition': acquisition,
@@ -230,6 +275,142 @@ class AdminDashboardStatsView(APIView):
             'recent_businesses': recent_businesses,
             'generated_at': now.isoformat(),
         })
+
+
+class AdminSearchView(APIView):
+    """Recherche globale header admin : entreprises, utilisateurs, messages contact."""
+
+    permission_classes = [PlatformMethodPermission]
+    platform_method_permissions = {
+        'GET': (
+            'platform.analytics.view',
+            'platform.businesses.view',
+            'platform.users.view',
+            'platform.cms.view',
+            'platform.billing.view',
+            'platform.subscriptions.view',
+            'platform.catalog.view',
+        ),
+    }
+
+    def get(self, request):
+        from accounts.platform_access import user_has_any_platform_perm
+
+        q = (request.query_params.get('q') or '').strip()
+        groups = []
+        if len(q) < SEARCH_MIN_LEN:
+            return Response({'q': q, 'groups': groups})
+
+        user = request.user
+        can_businesses = user_has_any_platform_perm(user, [
+            'platform.businesses.view',
+            'platform.businesses.create',
+            'platform.businesses.delete',
+            'platform.businesses.suspend',
+            'platform.businesses.approve',
+        ])
+        can_manage_catalog = user_has_any_platform_perm(user, [
+            'platform.businesses.create',
+            'platform.businesses.delete',
+            'platform.businesses.suspend',
+        ])
+        can_users = user_has_any_platform_perm(user, ['platform.users.view'])
+        can_messages = user_has_any_platform_perm(user, ['platform.cms.view', 'platform.users.view'])
+
+        if can_businesses:
+            biz_qs = (
+                Business.objects.select_related('owner', 'primary_category')
+                .filter(
+                    Q(name__icontains=q)
+                    | Q(email__icontains=q)
+                    | Q(phone__icontains=q)
+                    | Q(owner__email__icontains=q)
+                    | Q(owner__first_name__icontains=q)
+                    | Q(owner__last_name__icontains=q)
+                )
+                .order_by('-created_at')[:SEARCH_LIMIT]
+            )
+            biz_href = '/admin/businesses' if can_manage_catalog else '/admin/moderation'
+            items = []
+            for biz in biz_qs:
+                owner_email = getattr(biz.owner, 'email', '') or ''
+                category = biz.primary_category.name if biz.primary_category_id else ''
+                status_label = VERIFICATION_LABELS.get(biz.verification_status, biz.verification_status)
+                items.append({
+                    'id': str(biz.id),
+                    'title': biz.name,
+                    'subtitle': ' · '.join(part for part in (status_label, category or owner_email) if part),
+                    'href': _admin_href(biz_href, q=biz.name),
+                })
+            if items:
+                groups.append({
+                    'key': 'businesses',
+                    'label': 'Entreprises',
+                    'see_all': _admin_href(biz_href, q=q),
+                    'items': items,
+                })
+
+        if can_users:
+            from accounts.platform_access import PLATFORM_USER_ROLES as platform_roles
+            user_qs = User.objects.filter(
+                Q(email__icontains=q)
+                | Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(phone_number__icontains=q)
+            ).order_by('-created_at')[:SEARCH_LIMIT]
+            items = []
+            for row in user_qs:
+                full_name = f'{row.first_name or ""} {row.last_name or ""}'.strip() or row.email
+                scope = 'platform' if row.role in platform_roles else 'business'
+                items.append({
+                    'id': str(row.id),
+                    'title': full_name,
+                    'subtitle': ' · '.join(part for part in (
+                        row.email if full_name != row.email else '',
+                        USER_ROLE_LABELS.get(row.role, row.role or ''),
+                    ) if part),
+                    'href': _admin_href('/admin/users', scope=scope, q=row.email or full_name),
+                })
+            if items:
+                groups.append({
+                    'key': 'users',
+                    'label': 'Utilisateurs',
+                    'see_all': _admin_href('/admin/users', scope='business', q=q),
+                    'items': items,
+                })
+
+        if can_messages:
+            try:
+                from site_content.models import ContactMessage
+                msg_qs = ContactMessage.objects.filter(
+                    Q(name__icontains=q)
+                    | Q(email__icontains=q)
+                    | Q(subject__icontains=q)
+                    | Q(message__icontains=q)
+                ).order_by('-created_at')[:SEARCH_LIMIT]
+                items = []
+                for msg in msg_qs:
+                    items.append({
+                        'id': str(msg.id),
+                        'title': msg.subject,
+                        'subtitle': ' · '.join(part for part in (
+                            'Non lu' if not msg.is_read else '',
+                            msg.name,
+                            msg.email,
+                        ) if part),
+                        'href': _admin_href('/admin/support', id=str(msg.id)),
+                    })
+                if items:
+                    groups.append({
+                        'key': 'messages',
+                        'label': 'Messages contact',
+                        'see_all': _admin_href('/admin/support', q=q),
+                        'items': items,
+                    })
+            except Exception:
+                pass
+
+        return Response({'q': q, 'groups': groups})
 
 
 class DataGovernanceView(APIView):

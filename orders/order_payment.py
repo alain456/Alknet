@@ -9,7 +9,7 @@ from businesses import burundipay
 def shop_merchant_account(business) -> str:
     if not business:
         return 'COMMERCE_MERCHANT'
-    configured = (getattr(business, 'lumicash_merchant_account', None) or '').strip()
+    configured = (getattr(business, 'burundipay_merchant_account', None) or '').strip()
     if configured:
         return configured
     return f'COM-{str(business.id).replace("-", "")[:10].upper()}'

@@ -55,6 +55,20 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         try:
             serializer.is_valid(raise_exception=True)
             user = serializer.user
+            from businesses.login_gate import business_login_block_message
+            blocked = business_login_block_message(user)
+            if blocked:
+                log_audit_event(
+                    user=user,
+                    user_email=user.email,
+                    user_role=user.role,
+                    action='LOGIN_FAILED',
+                    resource='Auth Service (/api/v1/accounts/login/)',
+                    request=request,
+                    status='FAILED',
+                    details={'reason': 'business_not_approved'},
+                )
+                return Response({'detail': blocked}, status=status.HTTP_403_FORBIDDEN)
             record_success(user.email)
             from site_content.models import SiteSettings
             site = SiteSettings.get_solo()
@@ -98,6 +112,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             )
             return res
         except Exception as exc:
+            from rest_framework.exceptions import AuthenticationFailed as DRFAuthFailed
+            from rest_framework_simplejwt.exceptions import AuthenticationFailed as JWTAuthFailed
+
             user_obj = get_user_by_login_email(email) if email else None
             if user_obj:
                 record_failure(email)
@@ -111,6 +128,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 status='FAILED',
                 details={'reason': str(exc)}
             )
+            if isinstance(exc, (DRFAuthFailed, JWTAuthFailed)):
+                return Response(
+                    {'detail': 'E-mail ou mot de passe incorrect.'},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             raise exc
 
 
@@ -570,6 +592,10 @@ class OAuthExchangeView(APIView):
         user = User.objects.filter(id=payload.get('user_id')).first()
         if not user or not user.is_active:
             return Response({'error': 'Compte introuvable.'}, status=400)
+        from businesses.login_gate import business_login_block_message
+        blocked = business_login_block_message(user)
+        if blocked:
+            return Response({'detail': blocked}, status=status.HTTP_403_FORBIDDEN)
         response = Response({'user': UserSerializer(user).data})
         set_auth_cookies(response, payload['access'], payload['refresh'])
         return response
@@ -907,6 +933,10 @@ class LoginOtpVerifyView(APIView):
             if email:
                 record_failure(email)
             return Response({'error': 'Code invalide ou expiré.'}, status=400)
+        from businesses.login_gate import business_login_block_message
+        blocked = business_login_block_message(user)
+        if blocked:
+            return Response({'detail': blocked}, status=status.HTTP_403_FORBIDDEN)
         record_success(user.email)
         refresh = RefreshToken.for_user(user)
         response = Response({
@@ -968,6 +998,19 @@ class CookieTokenRefreshView(APIView):
                     details={'reason': 'Jeton de rafraîchissement déjà révoqué.'},
                 )
             return invalid_response
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from businesses.login_gate import business_login_block_message
+        rotated = serializer.validated_data.get('refresh', payload['refresh'])
+        try:
+            refresh_user_id = RefreshToken(rotated).payload.get('user_id')
+        except Exception:
+            refresh_user_id = None
+        refresh_user = User.objects.filter(pk=refresh_user_id).first() if refresh_user_id else None
+        blocked = business_login_block_message(refresh_user)
+        if blocked:
+            denied = Response({'detail': blocked}, status=status.HTTP_403_FORBIDDEN)
+            clear_auth_cookies(denied)
+            return denied
         response = Response({'authenticated': True})
         set_auth_cookies(response, serializer.validated_data.get('access', ''), serializer.validated_data.get('refresh', payload['refresh']))
         return response

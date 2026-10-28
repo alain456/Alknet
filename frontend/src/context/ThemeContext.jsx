@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'isoko_hub_theme';
 
@@ -40,9 +40,11 @@ const ThemeContext = createContext({
 
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => resolveInitialTheme());
+  const explicitChoice = useRef(readStoredTheme() !== null);
 
   useEffect(() => {
     applyThemeClass(theme);
+    if (!explicitChoice.current) return;
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch {
@@ -55,7 +57,7 @@ export function ThemeProvider({ children }) {
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
     if (!mq) return undefined;
     const onChange = (e) => {
-      if (readStoredTheme()) return;
+      if (explicitChoice.current) return;
       setThemeState(e.matches ? 'dark' : 'light');
     };
     mq.addEventListener?.('change', onChange);
@@ -64,10 +66,12 @@ export function ThemeProvider({ children }) {
 
   const setTheme = useCallback((next) => {
     if (next !== 'light' && next !== 'dark') return;
+    explicitChoice.current = true;
     setThemeState(next);
   }, []);
 
   const toggleTheme = useCallback(() => {
+    explicitChoice.current = true;
     setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 

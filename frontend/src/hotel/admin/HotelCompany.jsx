@@ -1,10 +1,34 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ImagePlus } from 'lucide-react';
 import hotelService from '../hotelService';
 import { HotelPage, Panel, fieldClass, btnPrimary, Empty } from '../ui';
 import { useHotelPerm } from '../useHotelPerm';
 import { readImageAsDataUrl } from '../../shared/components/BusinessRegistrationForm';
 import MerchantAccountCard from '../../business/MerchantAccountCard';
+
+const AMENITY_PISCINE = 'Piscine';
+const AMENITY_PDJ = 'Petit-déjeuner';
+
+function amenitiesList(text) {
+  return String(text || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function hasAmenity(text, name) {
+  return amenitiesList(text).some((a) => a.toLowerCase() === name.toLowerCase());
+}
+
+function toggleAmenityText(text, name, checked) {
+  const current = amenitiesList(text);
+  if (checked) {
+    if (current.some((a) => a.toLowerCase() === name.toLowerCase())) return current.join(', ');
+    return [...current, name].join(', ');
+  }
+  return current.filter((a) => a.toLowerCase() !== name.toLowerCase()).join(', ');
+}
 
 const emptyGuestInfo = () => ({
   wifi: '',
@@ -104,7 +128,14 @@ export default function HotelCompany() {
         amenities_text: Array.isArray(updated.amenities) ? updated.amenities.join(', ') : '',
         guest_info: gi,
       });
-      setMsg('Profil enregistré.');
+      const shown = updated.display_stars ?? updated.stars;
+      if (updated.classification_verified && updated.stars_verified != null) {
+        setMsg(`Profil enregistré. Le public affiche ${updated.stars_verified}★ (vérifiées par la plateforme).`);
+      } else if (shown != null) {
+        setMsg(`Profil enregistré. Le public affiche maintenant ${shown}★ (étoiles déclarées, en attente de vérification).`);
+      } else {
+        setMsg('Profil enregistré.');
+      }
     } catch (ex) {
       setErr(ex.message || 'Erreur');
     }
@@ -150,11 +181,20 @@ export default function HotelCompany() {
               <label className="text-sm font-bold text-ink">Étoiles déclarées</label>
               <input type="number" min="1" max="5" className={fieldClass} value={form.stars || ''} onChange={(e) => setForm({ ...form, stars: e.target.value })} />
               <p className="text-[11px] text-ink-muted mt-1">
-                Les étoiles vérifiées sont validées par l&apos;admin plateforme
                 {form.classification_verified && form.stars_verified != null
-                  ? ` (actuellement ${form.stars_verified}★ vérifiées)`
-                  : ' (pas encore vérifiées)'}
-                .
+                  ? `Le public affiche ${form.stars_verified}★ (vérifiées). Si vous changez ce nombre, le public passera à votre nouvelle déclaration jusqu’à re-vérification.`
+                  : 'Le public affiche ces étoiles déclarées jusqu’à vérification par la plateforme.'}
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-bold text-ink">Chambres (inventaire)</label>
+              <p className="mt-2 text-sm font-extrabold text-ink">
+                {Number(form.rooms_count || 0)} chambre(s) active(s)
+              </p>
+              <p className="text-[11px] text-ink-muted mt-1">
+                Compte réel du menu{' '}
+                <Link to="/hotel/rooms" className="font-bold text-accent hover:underline">Chambres</Link>
+                {' '}— plus de saisie « 200 chambres » dans Paramètres.
               </p>
             </div>
             <div>
@@ -230,6 +270,30 @@ export default function HotelCompany() {
 
           <div>
             <label className="text-sm font-bold text-ink">Équipements (séparés par des virgules)</label>
+            <div className="flex flex-wrap gap-4 my-2">
+              <label className="flex items-center gap-2 text-sm font-bold text-ink cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasAmenity(form.amenities_text, AMENITY_PISCINE)}
+                  onChange={(e) => setForm({
+                    ...form,
+                    amenities_text: toggleAmenityText(form.amenities_text, AMENITY_PISCINE, e.target.checked),
+                  })}
+                />
+                Piscine
+              </label>
+              <label className="flex items-center gap-2 text-sm font-bold text-ink cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasAmenity(form.amenities_text, AMENITY_PDJ)}
+                  onChange={(e) => setForm({
+                    ...form,
+                    amenities_text: toggleAmenityText(form.amenities_text, AMENITY_PDJ, e.target.checked),
+                  })}
+                />
+                Petit-déjeuner
+              </label>
+            </div>
             <input
               className={fieldClass}
               placeholder="Wi‑Fi, Piscine, Spa, Salle de sport…"

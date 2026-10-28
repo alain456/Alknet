@@ -260,44 +260,46 @@ export default function AdminPlatformRolesPage() {
     }
   };
 
-  const fieldClass = 'mt-1 w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-950';
-  const actionBtn = 'inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-40';
+  const fieldClass = 'mt-1 w-full px-3 py-2.5 text-sm bg-surface border-2 border-accent rounded-xl text-ink font-medium outline-none focus:border-alert';
+  const actionBtn = 'inline-flex items-center justify-center w-8 h-8 rounded-lg border border-border text-ink-muted hover:bg-surface disabled:opacity-40';
+  const primaryBtn = 'px-4 py-2 rounded-xl bg-[#132F45] text-[#F5F5F5] text-sm font-semibold disabled:opacity-50';
 
   if (loading) {
-    return <div className="py-16 text-center text-sm text-gray-500">Chargement des rôles plateforme…</div>;
+    return <div className="py-16 text-center text-sm text-ink-muted">Chargement des rôles plateforme…</div>;
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-4 max-w-6xl mx-auto">
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Rôles & permissions plateforme</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 max-w-2xl">
-            Créez un acteur, attribuez-lui un rôle, puis gérez-le avec Voir, Modifier, Activer et Supprimer.
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Rôles & permissions plateforme</h1>
+          <p className="text-sm text-ink-muted max-w-2xl">
+            Droits alignés sur le menu admin actuel : file « À traiter », recherche globale,
+            modération, abonnements, services et messages contact.
           </p>
         </div>
         <button
           type="button"
           onClick={() => load({ soft: true })}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 shrink-0"
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-semibold text-ink hover:bg-surface shrink-0"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           Actualiser
         </button>
       </header>
-      {error && <div className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{error}</div>}
-      {message && <div className="p-3 rounded-xl bg-teal-50 text-teal-800 text-sm">{message}</div>}
+      {error && <div className="p-3 rounded-xl bg-alert/10 text-alert text-sm">{error}</div>}
+      {message && <div className="p-3 rounded-xl bg-primary/10 text-primary text-sm">{message}</div>}
 
       {canCreate && (
-        <section className="rounded-2xl border border-teal-200 bg-teal-50/40 dark:bg-teal-950/20 dark:border-teal-900 p-5 space-y-4">
+        <section className="rounded-3xl bg-white p-5 space-y-4">
           <div>
-            <h2 className="font-bold text-gray-900 dark:text-white">Créer un acteur</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <h2 className="font-semibold text-ink">Créer un acteur</h2>
+            <p className="text-sm text-ink-muted">
               Le compte se connecte immédiatement avec le rôle choisi.
             </p>
           </div>
           <form onSubmit={createActor} className="grid md:grid-cols-2 gap-3">
-            <label className="text-xs font-semibold text-gray-600">
+            <label className="text-xs font-semibold text-ink-muted">
               Prénom
               <input
                 className={fieldClass}
@@ -305,7 +307,7 @@ export default function AdminPlatformRolesPage() {
                 onChange={(e) => setForm({ ...form, first_name: e.target.value })}
               />
             </label>
-            <label className="text-xs font-semibold text-gray-600">
+            <label className="text-xs font-semibold text-ink-muted">
               Nom
               <input
                 className={fieldClass}
@@ -313,7 +315,7 @@ export default function AdminPlatformRolesPage() {
                 onChange={(e) => setForm({ ...form, last_name: e.target.value })}
               />
             </label>
-            <label className="text-xs font-semibold text-gray-600 md:col-span-2">
+            <label className="text-xs font-semibold text-ink-muted md:col-span-2">
               Email *
               <input
                 type="email"
@@ -323,7 +325,7 @@ export default function AdminPlatformRolesPage() {
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
               />
             </label>
-            <label className="text-xs font-semibold text-gray-600">
+            <label className="text-xs font-semibold text-ink-muted">
               Mot de passe *
               <PasswordInput
                 required
@@ -334,7 +336,7 @@ export default function AdminPlatformRolesPage() {
                 placeholder="Minimum 8 caractères"
               />
             </label>
-            <label className="text-xs font-semibold text-gray-600">
+            <label className="text-xs font-semibold text-ink-muted">
               Téléphone
               <input
                 className={fieldClass}
@@ -342,7 +344,7 @@ export default function AdminPlatformRolesPage() {
                 onChange={(e) => setForm({ ...form, phone_number: e.target.value })}
               />
             </label>
-            <label className="text-xs font-semibold text-gray-600 md:col-span-2">
+            <label className="text-xs font-semibold text-ink-muted md:col-span-2">
               Rôle à attribuer *
               <select
                 required
@@ -361,7 +363,7 @@ export default function AdminPlatformRolesPage() {
               <button
                 type="submit"
                 disabled={creating}
-                className="px-4 py-2 rounded-lg bg-teal-700 text-white text-sm font-semibold disabled:opacity-50"
+                className={primaryBtn}
               >
                 {creating ? 'Création…' : 'Créer et attribuer le rôle'}
               </button>
@@ -370,16 +372,16 @@ export default function AdminPlatformRolesPage() {
         </section>
       )}
 
-      <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-          <h2 className="font-bold text-gray-900 dark:text-white">Acteurs plateforme</h2>
-          <p className="text-sm text-gray-500">
+      <section className="rounded-3xl bg-white overflow-hidden">
+        <div className="px-5 py-4">
+          <h2 className="font-semibold text-ink">Acteurs plateforme</h2>
+          <p className="text-sm text-ink-muted">
             {actors.length} compte(s) · Actions : Voir · Modifier · Activer · Supprimer
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 dark:bg-gray-950 text-left text-xs uppercase text-gray-500">
+            <thead className="text-left text-xs uppercase text-ink-muted">
               <tr>
                 <th className="px-4 py-3">Acteur</th>
                 <th className="px-4 py-3">Rôle</th>
@@ -387,10 +389,10 @@ export default function AdminPlatformRolesPage() {
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            <tbody>
               {actors.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={4} className="px-4 py-8 text-center text-ink-muted">
                     Aucun acteur plateforme pour le moment.
                   </td>
                 </tr>
@@ -400,12 +402,12 @@ export default function AdminPlatformRolesPage() {
                 return (
                   <tr key={actor.id}>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-gray-900 dark:text-white">
+                      <div className="font-semibold text-ink">
                         {actor.first_name || actor.last_name
                           ? `${actor.first_name} ${actor.last_name}`.trim()
                           : actor.email}
                       </div>
-                      <div className="text-xs text-gray-500">{actor.email}</div>
+                      <div className="text-xs text-ink-muted">{actor.email}</div>
                     </td>
                     <td className="px-4 py-3">{actor.role_name || actor.role}</td>
                     <td className="px-4 py-3">
@@ -474,11 +476,21 @@ export default function AdminPlatformRolesPage() {
       {roles.map((role) => {
         const selected = drafts[role.code] || new Set();
         const meta = metaDrafts[role.code] || { name: role.name, description: role.description };
+        const selectedCount = selected.size;
         return (
-          <section key={role.code} className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5 space-y-4">
+          <section key={role.code} className="rounded-3xl bg-white p-5 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex-1 min-w-[220px] space-y-2">
-                <label className="block text-xs font-semibold text-gray-600">
+                <div className="flex flex-wrap items-center gap-2">
+                  {role.is_locked ? (
+                    <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-accent text-ink">Tous les droits</span>
+                  ) : (
+                    <span className="text-[11px] font-semibold px-2 py-1 rounded-full bg-surface text-ink-muted">
+                      {selectedCount} droit{selectedCount === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                <label className="block text-xs font-semibold text-ink-muted">
                   Nom du rôle
                   <input
                     className={fieldClass}
@@ -490,7 +502,7 @@ export default function AdminPlatformRolesPage() {
                     }))}
                   />
                 </label>
-                <label className="block text-xs font-semibold text-gray-600">
+                <label className="block text-xs font-semibold text-ink-muted">
                   Description
                   <textarea
                     rows={2}
@@ -509,7 +521,7 @@ export default function AdminPlatformRolesPage() {
                   type="button"
                   disabled={saving === role.code}
                   onClick={() => save(role.code)}
-                  className="px-4 py-2 rounded-lg bg-teal-700 text-white text-sm font-semibold disabled:opacity-50"
+                  className={primaryBtn}
                 >
                   {saving === role.code ? 'Enregistrement…' : 'Enregistrer'}
                 </button>
@@ -519,15 +531,19 @@ export default function AdminPlatformRolesPage() {
               {groups.map((group) => {
                 const keys = (group.actions || []).map((action) => action.key);
                 const allOn = keys.every((key) => selected.has(key));
+                const groupOn = keys.filter((key) => selected.has(key)).length;
                 return (
                   <div key={group.id}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{group.label}</h3>
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                      <h3 className="text-sm font-semibold text-ink">
+                        {group.label}
+                        <span className="ml-2 text-[11px] font-medium text-ink-muted">{groupOn}/{keys.length}</span>
+                      </h3>
                       {!role.is_locked && canEdit && (
                         <button
                           type="button"
                           onClick={() => toggleGroup(role.code, keys, role.is_locked)}
-                          className="text-xs font-semibold text-teal-700"
+                          className="text-xs font-semibold text-primary"
                         >
                           {allOn ? 'Tout retirer' : 'Tout cocher'}
                         </button>
@@ -539,19 +555,27 @@ export default function AdminPlatformRolesPage() {
                         return (
                           <label
                             key={action.key}
-                            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold ${
+                            title={action.hint || action.key}
+                            className={`inline-flex flex-col items-start gap-0.5 px-3 py-1.5 rounded-2xl border text-xs font-semibold ${
                               on
                                 ? 'bg-accent text-ink border-accent'
-                                : 'bg-gray-50 border-gray-200 text-gray-600'
+                                : 'bg-surface border-border text-ink-muted'
                             } ${role.is_locked ? 'opacity-80' : 'cursor-pointer'}`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={on}
-                              disabled={role.is_locked || !canEdit}
-                              onChange={() => toggle(role.code, action.key, role.is_locked)}
-                            />
-                            {action.label}
+                            <span className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                disabled={role.is_locked || !canEdit}
+                                onChange={() => toggle(role.code, action.key, role.is_locked)}
+                              />
+                              {action.label}
+                            </span>
+                            {action.hint ? (
+                              <span className={`pl-6 text-[10px] font-medium ${on ? 'text-ink' : 'text-ink-muted'}`}>
+                                {action.hint}
+                              </span>
+                            ) : null}
                           </label>
                         );
                       })}
@@ -566,12 +590,12 @@ export default function AdminPlatformRolesPage() {
 
       {modalMode && selectedActor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800">
-              <h3 className="font-bold text-gray-900 dark:text-white">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4">
+              <h3 className="font-semibold text-ink">
                 {modalMode === 'view' ? 'Détail de l’acteur' : 'Modifier l’acteur'}
               </h3>
-              <button type="button" onClick={closeModal} className="text-gray-500 hover:text-gray-800">
+              <button type="button" onClick={closeModal} className="text-ink-muted hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -579,19 +603,19 @@ export default function AdminPlatformRolesPage() {
             {modalMode === 'view' ? (
               <div className="p-5 space-y-3 text-sm">
                 <div className="grid grid-cols-[110px_1fr] gap-2">
-                  <span className="text-gray-500">Nom</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">
+                  <span className="text-ink-muted">Nom</span>
+                  <span className="font-semibold text-ink">
                     {`${selectedActor.first_name || ''} ${selectedActor.last_name || ''}`.trim() || '—'}
                   </span>
-                  <span className="text-gray-500">Email</span>
+                  <span className="text-ink-muted">Email</span>
                   <span>{selectedActor.email}</span>
-                  <span className="text-gray-500">Téléphone</span>
+                  <span className="text-ink-muted">Téléphone</span>
                   <span>{selectedActor.phone_number || '—'}</span>
-                  <span className="text-gray-500">Rôle</span>
+                  <span className="text-ink-muted">Rôle</span>
                   <span>{selectedActor.role_name || selectedActor.role}</span>
-                  <span className="text-gray-500">Statut</span>
+                  <span className="text-ink-muted">Statut</span>
                   <span>{selectedActor.is_active ? 'Actif' : 'Désactivé'}</span>
-                  <span className="text-gray-500">Créé le</span>
+                  <span className="text-ink-muted">Créé le</span>
                   <span>
                     {selectedActor.created_at
                       ? new Date(selectedActor.created_at).toLocaleString('fr-FR')
@@ -603,7 +627,7 @@ export default function AdminPlatformRolesPage() {
                     <button
                       type="button"
                       onClick={() => openEdit(selectedActor)}
-                      className="px-3 py-2 rounded-lg bg-teal-700 text-white text-sm font-semibold"
+                      className={primaryBtn}
                     >
                       Modifier
                     </button>
@@ -611,7 +635,7 @@ export default function AdminPlatformRolesPage() {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold"
+                    className="px-3 py-2 rounded-xl border border-border text-sm font-semibold"
                   >
                     Fermer
                   </button>
@@ -619,7 +643,7 @@ export default function AdminPlatformRolesPage() {
               </div>
             ) : (
               <form onSubmit={saveActor} className="p-5 grid gap-3">
-                <label className="text-xs font-semibold text-gray-600">
+                <label className="text-xs font-semibold text-ink-muted">
                   Prénom
                   <input
                     className={fieldClass}
@@ -627,7 +651,7 @@ export default function AdminPlatformRolesPage() {
                     onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
                   />
                 </label>
-                <label className="text-xs font-semibold text-gray-600">
+                <label className="text-xs font-semibold text-ink-muted">
                   Nom
                   <input
                     className={fieldClass}
@@ -635,7 +659,7 @@ export default function AdminPlatformRolesPage() {
                     onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
                   />
                 </label>
-                <label className="text-xs font-semibold text-gray-600">
+                <label className="text-xs font-semibold text-ink-muted">
                   Email *
                   <input
                     type="email"
@@ -645,7 +669,7 @@ export default function AdminPlatformRolesPage() {
                     onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                   />
                 </label>
-                <label className="text-xs font-semibold text-gray-600">
+                <label className="text-xs font-semibold text-ink-muted">
                   Téléphone
                   <input
                     className={fieldClass}
@@ -653,7 +677,7 @@ export default function AdminPlatformRolesPage() {
                     onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value })}
                   />
                 </label>
-                <label className="text-xs font-semibold text-gray-600">
+                <label className="text-xs font-semibold text-ink-muted">
                   Rôle *
                   <select
                     required
@@ -669,7 +693,7 @@ export default function AdminPlatformRolesPage() {
                     ))}
                   </select>
                 </label>
-                <label className="text-xs font-semibold text-gray-600">
+                <label className="text-xs font-semibold text-ink-muted">
                   Nouveau mot de passe
                   <PasswordInput
                     autoComplete="new-password"
@@ -680,7 +704,7 @@ export default function AdminPlatformRolesPage() {
                   />
                 </label>
                 {selectedActor.id !== user?.id && (
-                  <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <label className="inline-flex items-center gap-2 text-sm text-ink">
                     <input
                       type="checkbox"
                       checked={editForm.is_active}
@@ -693,14 +717,14 @@ export default function AdminPlatformRolesPage() {
                   <button
                     type="button"
                     onClick={closeModal}
-                    className="px-3 py-2 rounded-lg border border-gray-200 text-sm font-semibold"
+                    className="px-3 py-2 rounded-xl border border-border text-sm font-semibold"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
                     disabled={modalBusy}
-                    className="px-3 py-2 rounded-lg bg-teal-700 text-white text-sm font-semibold disabled:opacity-50"
+                    className={primaryBtn}
                   >
                     {modalBusy ? 'Enregistrement…' : 'Enregistrer'}
                   </button>

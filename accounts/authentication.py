@@ -13,9 +13,12 @@ class CookieJWTAuthentication(JWTAuthentication):
             if raw:
                 try:
                     validated = self.get_validated_token(raw)
-                    return self.get_user(validated), validated
-                except (InvalidToken, AuthenticationFailed, TokenError):
-                    pass
+                except (InvalidToken, TokenError):
+                    validated = None
+                else:
+                    user = self.get_user(validated)
+                    self._reject_unapproved_business(user)
+                    return user, validated
         cookie = request.COOKIES.get(ACCESS_COOKIE)
         if not cookie:
             return None
@@ -23,7 +26,16 @@ class CookieJWTAuthentication(JWTAuthentication):
             validated = self.get_validated_token(cookie)
         except (InvalidToken, TokenError):
             return None
-        return self.get_user(validated), validated
+        user = self.get_user(validated)
+        self._reject_unapproved_business(user)
+        return user, validated
+
+    @staticmethod
+    def _reject_unapproved_business(user):
+        from businesses.login_gate import business_login_block_message
+        blocked = business_login_block_message(user)
+        if blocked:
+            raise AuthenticationFailed(blocked)
 
 
 def user_from_request(request):

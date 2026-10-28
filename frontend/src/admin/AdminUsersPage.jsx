@@ -81,7 +81,7 @@ export default function AdminUsersPage() {
   const [businesses, setBusinesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '');
   const [selectedBusinessFilter, setSelectedBusinessFilter] = useState('ALL'); // 'ALL', 'INDEPENDENT', or business_id
   const [viewMode, setViewMode] = useState('LIST'); // 'LIST' or 'GROUPED'
   const [passwordMinLength, setPasswordMinLength] = useState(8);
@@ -159,9 +159,17 @@ export default function AdminUsersPage() {
 
   useEffect(() => {
     if (scopeRaw !== 'platform' && scopeRaw !== 'business') {
-      setSearchParams({ scope: 'business' }, { replace: true });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('scope', 'business');
+        return next;
+      }, { replace: true });
     }
   }, [scopeRaw, setSearchParams]);
+
+  useEffect(() => {
+    setSearchTerm(searchParams.get('q') || '');
+  }, [searchParams]);
 
   useEffect(() => {
     if (!token) return;

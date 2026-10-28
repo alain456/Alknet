@@ -357,17 +357,17 @@
   --radius-lg: 18px;
 }
 
-/* ——— Mode sombre (même palette logo, surfaces inversées) ——— */
+/* ——— Mode sombre (pétrole assombri, pas le bleu nuit #132F45 en fond de page) ——— */
 html.dark {
   color-scheme: dark;
 
-  --color-surface: #0E2233;
-  --color-paper: #0B1C2A;
+  --color-surface: color-mix(in srgb, #32667F 52%, #0A1218);
+  --color-paper: color-mix(in srgb, #32667F 34%, #0A1218);
   --color-ink: #F5F5F5;
   --color-ink-muted: color-mix(in srgb, #F5F5F5 72%, #32667F);
   --color-ink-faint: color-mix(in srgb, #F5F5F5 82%, #32667F);
-  --color-border: color-mix(in srgb, #F5F5F5 16%, #32667F);
-  --color-border-strong: color-mix(in srgb, #F5F5F5 28%, #32667F);
+  --color-border: color-mix(in srgb, #F5F5F5 18%, #32667F);
+  --color-border-strong: color-mix(in srgb, #F5F5F5 30%, #32667F);
   --color-secondary: #32667F;
   --color-on-primary: #FFFFFF;
   --color-on-accent: #132F45;
@@ -406,44 +406,44 @@ html.dark {
   --color-alert-500: #E1302A;
   --color-alert-600: #E1302A;
 
-  /* Neutrals → navy brand */
-  --color-gray-50: #163044;
-  --color-gray-100: #1C3C54;
-  --color-gray-200: color-mix(in srgb, #F5F5F5 14%, #0E2233);
-  --color-gray-300: color-mix(in srgb, #F5F5F5 22%, #0E2233);
-  --color-gray-400: color-mix(in srgb, #F5F5F5 42%, #0E2233);
-  --color-gray-500: color-mix(in srgb, #F5F5F5 55%, #0E2233);
-  --color-gray-600: color-mix(in srgb, #F5F5F5 68%, #0E2233);
+  /* Neutrals → pétrole assombri (distinct du bleu nuit du menu) */
+  --color-gray-50: color-mix(in srgb, #32667F 58%, #0A1218);
+  --color-gray-100: color-mix(in srgb, #32667F 64%, #0A1218);
+  --color-gray-200: color-mix(in srgb, #F5F5F5 16%, #1A3344);
+  --color-gray-300: color-mix(in srgb, #F5F5F5 24%, #1A3344);
+  --color-gray-400: color-mix(in srgb, #F5F5F5 44%, #1A3344);
+  --color-gray-500: color-mix(in srgb, #F5F5F5 58%, #1A3344);
+  --color-gray-600: color-mix(in srgb, #F5F5F5 70%, #1A3344);
   --color-gray-700: #F5F5F5;
-  --color-gray-800: #163044;
-  --color-gray-900: #0E2233;
-  --color-gray-950: #0B1C2A;
+  --color-gray-800: color-mix(in srgb, #32667F 46%, #0A1218);
+  --color-gray-900: color-mix(in srgb, #32667F 34%, #0A1218);
+  --color-gray-950: color-mix(in srgb, #32667F 26%, #0A1218);
 
-  --color-slate-50: #163044;
-  --color-slate-100: #1C3C54;
-  --color-slate-200: color-mix(in srgb, #F5F5F5 14%, #0E2233);
+  --color-slate-50: color-mix(in srgb, #32667F 58%, #0A1218);
+  --color-slate-100: color-mix(in srgb, #32667F 64%, #0A1218);
+  --color-slate-200: color-mix(in srgb, #F5F5F5 16%, #1A3344);
   --color-slate-700: #F5F5F5;
-  --color-slate-800: #163044;
-  --color-slate-900: #0E2233;
-  --color-slate-950: #0B1C2A;
+  --color-slate-800: color-mix(in srgb, #32667F 46%, #0A1218);
+  --color-slate-900: color-mix(in srgb, #32667F 34%, #0A1218);
+  --color-slate-950: color-mix(in srgb, #32667F 26%, #0A1218);
 
-  --color-zinc-50: #163044;
-  --color-zinc-100: #1C3C54;
-  --color-zinc-800: #163044;
-  --color-zinc-900: #0E2233;
-  --color-zinc-950: #0B1C2A;
+  --color-zinc-50: color-mix(in srgb, #32667F 58%, #0A1218);
+  --color-zinc-100: color-mix(in srgb, #32667F 64%, #0A1218);
+  --color-zinc-800: color-mix(in srgb, #32667F 46%, #0A1218);
+  --color-zinc-900: color-mix(in srgb, #32667F 34%, #0A1218);
+  --color-zinc-950: color-mix(in srgb, #32667F 26%, #0A1218);
 
-  --color-neutral-50: #163044;
-  --color-neutral-100: #1C3C54;
-  --color-neutral-800: #163044;
-  --color-neutral-900: #0E2233;
-  --color-neutral-950: #0B1C2A;
+  --color-neutral-50: color-mix(in srgb, #32667F 58%, #0A1218);
+  --color-neutral-100: color-mix(in srgb, #32667F 64%, #0A1218);
+  --color-neutral-800: color-mix(in srgb, #32667F 46%, #0A1218);
+  --color-neutral-900: color-mix(in srgb, #32667F 34%, #0A1218);
+  --color-neutral-950: color-mix(in srgb, #32667F 26%, #0A1218);
 
-  --color-stone-50: #163044;
-  --color-stone-100: #1C3C54;
-  --color-stone-800: #163044;
-  --color-stone-900: #0E2233;
-  --color-stone-950: #0B1C2A;
+  --color-stone-50: color-mix(in srgb, #32667F 58%, #0A1218);
+  --color-stone-100: color-mix(in srgb, #32667F 64%, #0A1218);
+  --color-stone-800: color-mix(in srgb, #32667F 46%, #0A1218);
+  --color-stone-900: color-mix(in srgb, #32667F 34%, #0A1218);
+  --color-stone-950: color-mix(in srgb, #32667F 26%, #0A1218);
 
   --color-teal-50: color-mix(in srgb, #32667F 14%, #0B1C2A);
   --color-teal-100: color-mix(in srgb, #32667F 22%, #0B1C2A);
@@ -723,8 +723,8 @@ html.dark {
     [class*='bg-surface'],
     [class*='bg-paper']
   ):not([class*='rounded-full']):not([class*='bg-ink']):not([class*='school-dash-hero']):not([class*='bg-accent']):not([class*='bg-primary']):not([class*='bg-alert']) {
-    border-color: color-mix(in srgb, #F5F5F5 55%, #32667F) !important;
-    background-color: color-mix(in srgb, #F5F5F5 10%, #132F45) !important;
+    border-color: color-mix(in srgb, #F5F5F5 32%, #32667F) !important;
+    background-color: color-mix(in srgb, #32667F 40%, #0A1218) !important;
   }
 
   /* Boutons secondaires (texte) */
@@ -1024,8 +1024,8 @@ html.dark {
   .bg-primary [class*='text-green-1'],
   .bg-teal-600 [class*='text-teal-'],
   [class*='from-primary'] [class*='text-teal-'],
-  [class*='from-primary'] button:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']),
-  .bg-primary button:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']):not(.hero-search-suggest-btn),
+  [class*='from-primary'] button:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']):not([class*='bg-ink']):not(.theme-toggle),
+  .bg-primary button:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']):not([class*='bg-ink']):not(.theme-toggle):not(.hero-search-suggest-btn):not(.ih-carousel-nav),
   .bg-primary a:not([class*='bg-accent']):not([class*='bg-surface']):not([class*='bg-white']) {
     color: #F5F5F5 !important;
   }
@@ -1045,13 +1045,28 @@ html.dark {
     -webkit-text-fill-color: #F5F5F5 !important;
   }
 
-  main .school-dash-hero .school-dash-kicker {
+  /* bg-ink = bandeau bleu nuit, pas le token encre inversé en sombre */
+  html.dark .bg-ink {
+    background-color: #132F45;
+  }
+  html.dark main .school-dash-hero.bg-ink {
+    background-color: #132F45 !important;
+  }
+
+  main .school-dash-hero .school-dash-kicker,
+  main .school-dash-hero [class*='text-accent'] {
     color: #EA8B33 !important;
     -webkit-text-fill-color: #EA8B33 !important;
   }
 
   main .school-dash-hero :is(a, button).bg-accent,
   main .school-dash-hero :is(a, button).bg-accent :is(span, svg) {
+    color: #132F45 !important;
+    -webkit-text-fill-color: #132F45 !important;
+  }
+
+  main .school-dash-hero :is(a, button).bg-surface,
+  main .school-dash-hero :is(a, button).bg-surface :is(span, svg) {
     color: #132F45 !important;
     -webkit-text-fill-color: #132F45 !important;
   }
@@ -1173,6 +1188,64 @@ html.dark {
 html.dark .bg-white {
   background-color: var(--color-surface);
   color: var(--color-ink);
+}
+
+/* Footer public : bandeau pétrole, texte blanc cassé — inchangé en mode sombre. */
+.ih-site-footer {
+  color: #F5F5F5;
+}
+.ih-site-footer :is(h1, h2, h3, h4, h5, p, a, span, li, label) {
+  color: #F5F5F5;
+}
+.ih-site-footer .ih-footer-muted {
+  color: color-mix(in srgb, #F5F5F5 58%, transparent);
+}
+.ih-site-footer a:hover {
+  color: #EA8B33;
+}
+.ih-site-footer .ih-footer-social {
+  background-color: #F5F5F5 !important;
+  color: #32667F !important;
+}
+.ih-site-footer .ih-footer-social:hover,
+.ih-site-footer .ih-footer-social:hover :is(svg, path) {
+  background-color: #EA8B33 !important;
+  color: #132F45 !important;
+  fill: #132F45;
+}
+
+.ih-carousel-nav {
+  background-color: #F5F5F5 !important;
+  color: #132F45 !important;
+  -webkit-text-fill-color: #132F45 !important;
+}
+.ih-carousel-nav svg {
+  color: #132F45 !important;
+  stroke: #132F45 !important;
+}
+
+/* Titres gray-900 / encre figée : lisibles sur surface pétrole */
+html.dark .text-gray-900,
+html.dark .text-slate-900,
+html.dark .text-zinc-900 {
+  color: var(--color-ink);
+}
+html.dark main .text-\[\#132F45\]:not([class*='bg-[#F5F5F5]']):not([class*='bg-white']):not([class*='bg-accent']) {
+  color: var(--color-ink);
+}
+html.dark .bg-\[\#F4F7FB\],
+html.dark .bg-\[\#f8f9fb\],
+html.dark .bg-\[\#F8F9FB\] {
+  background-color: var(--color-paper);
+}
+html.dark .bg-\[\#f3f4f6\],
+html.dark .bg-\[\#F3F4F6\],
+html.dark .bg-\[\#E7F0F4\],
+html.dark .bg-\[\#E7EEF8\] {
+  background-color: color-mix(in srgb, #32667F 28%, #0A1218);
+}
+html.dark .border-\[\#D5E0F0\] {
+  border-color: var(--color-border);
 }
 
 /* Expérience visuelle : fichier externe uniquement (pas de style=""). */

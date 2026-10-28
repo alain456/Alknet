@@ -695,6 +695,97 @@ class HotelPublicBookAndTenantTests(TestCase):
         self.assertIn('ADR', body)
         self.assertIn('RevPAR', body)
 
+    def test_public_directory_lists_lodging_not_restaurants(self):
+        from business_categories.models import ModuleKey
+        from hotel.models import HotelProfile
+
+        root = BusinessCategory.objects.create(
+            name='Hôtellerie et tourisme',
+            slug='hotellerie-et-tourisme-public',
+            module=ModuleKey.HOTEL,
+        )
+        resto_cat = BusinessCategory.objects.create(
+            name='Restaurant',
+            slug='restaurant-sous-hotellerie',
+            parent=root,
+            module=ModuleKey.HOTEL,
+        )
+        resto_owner = User.objects.create_user(
+            email='resto-pub@hotel.test', password='pass', role='BUSINESS_OWNER',
+        )
+        resto = Business.objects.create(
+            owner=resto_owner,
+            primary_category=resto_cat,
+            category=resto_cat,
+            name='Chez Aline Grill',
+            email='aline-grill@hotel.test',
+            is_active=True,
+            is_verified=True,
+        )
+        HotelProfile.objects.create(
+            business=resto, trade_name='Chez Aline Grill', status='ACTIVE',
+        )
+
+        listing = self.client.get('/api/v1/hotel/public/hotels/')
+        self.assertEqual(listing.status_code, 200, listing.content)
+        names = [row['name'] for row in listing.data]
+        self.assertIn('Hôtel Public', names)
+        self.assertNotIn('Chez Aline Grill', names)
+
+        hidden = self.client.get(f'/api/v1/hotel/public/hotels/{resto.id}/')
+        self.assertEqual(hidden.status_code, 404)
+        visible = self.client.get(f'/api/v1/hotel/public/hotels/{self.hotel.id}/')
+        self.assertEqual(visible.status_code, 200, visible.content)
+
+    def test_public_identity_uses_profile_not_extra_attributes(self):
+        """Étoiles / capacité publiques = HotelProfile + inventaire, pas le JSON Paramètres."""
+        self.hotel.extra_attributes = {
+            'stars_rating': '3',
+            'rooms_count': '200',
+            'has_swimming_pool': True,
+            'breakfast_included': True,
+        }
+        self.hotel.save(update_fields=['extra_attributes'])
+        profile = self.hotel.hotel_profile
+        profile.stars = 1
+        profile.stars_verified = 5
+        profile.classification_verified = True
+        profile.amenities = []
+        profile.save()
+
+        detail = self.client.get(f'/api/v1/hotel/public/hotels/{self.hotel.id}/')
+        self.assertEqual(detail.status_code, 200, detail.content)
+        self.assertEqual(detail.data['stars'], 5)
+        self.assertEqual(detail.data['stars_declared'], 1)
+        self.assertEqual(detail.data['rooms_count'], 1)
+        self.assertEqual(detail.data['rooms_count_declared'], 1)
+        self.assertIn('Piscine', detail.data['amenities'])
+        self.assertIn('Petit-déjeuner', detail.data['amenities'])
+
+        listing = self.client.get('/api/v1/hotel/public/hotels/')
+        row = next(x for x in listing.data if x['id'] == str(self.hotel.id))
+        self.assertEqual(row['stars'], 5)
+        self.assertEqual(row['rooms_count'], 1)
+
+        self.client.force_authenticate(self.owner)
+        me = self.client.get('/api/v1/hotel/profile/me/')
+        self.assertEqual(me.status_code, 200, me.content)
+        self.assertEqual(me.data['rooms_count'], 1)
+        self.assertIn('Piscine', me.data['amenities'])
+
+        saved = self.client.patch(
+            '/api/v1/hotel/profile/me/',
+            {'amenities': ['Piscine', 'Wi-Fi'], 'stars': 1},
+            format='json',
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.hotel.refresh_from_db()
+        extras = self.hotel.extra_attributes or {}
+        self.assertNotIn('stars_rating', extras)
+        self.assertNotIn('rooms_count', extras)
+        self.assertNotIn('has_swimming_pool', extras)
+        self.assertNotIn('breakfast_included', extras)
+
     def test_platform_hotels_super_admin(self):
         admin = User.objects.create_user(
             email='sa@hotel.test', password='pass', role='SUPER_ADMIN', is_superuser=True,
@@ -722,6 +813,39 @@ class HotelPublicBookAndTenantTests(TestCase):
                 hotel=self.hotel, action='CLASSIFICATION_VERIFY',
             ).exists()
         )
+        self.client.force_authenticate(None)
+        public = self.client.get(f'/api/v1/hotel/public/hotels/{self.hotel.id}/')
+        self.assertEqual(public.status_code, 200, public.content)
+        self.assertEqual(public.data['stars'], 4)
+        self.assertTrue(public.data.get('classification_verified'))
+
+    def test_hotel_admin_star_change_unlocks_public_display(self):
+        profile = self.hotel.hotel_profile
+        profile.stars = 1
+        profile.stars_verified = 5
+        profile.classification_verified = True
+        profile.save()
+
+        locked = self.client.get(f'/api/v1/hotel/public/hotels/{self.hotel.id}/')
+        self.assertEqual(locked.status_code, 200, locked.content)
+        self.assertEqual(locked.data['stars'], 5)
+
+        self.client.force_authenticate(self.owner)
+        saved = self.client.patch(
+            '/api/v1/hotel/profile/me/',
+            {'stars': 3},
+            format='json',
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.assertEqual(saved.data['stars'], 3)
+        self.assertFalse(saved.data['classification_verified'])
+        self.assertEqual(saved.data['display_stars'], 3)
+
+        self.client.force_authenticate(None)
+        public = self.client.get(f'/api/v1/hotel/public/hotels/{self.hotel.id}/')
+        self.assertEqual(public.status_code, 200, public.content)
+        self.assertEqual(public.data['stars'], 3)
+        self.assertEqual(public.data['stars_declared'], 3)
 
 
 @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')

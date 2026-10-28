@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from permissions.custom_permissions import PlatformMethodPermission
 
 from .models import BusinessCategory
-from .serializers import BusinessCategorySerializer
+from .serializers import BusinessCategorySerializer, wants_hidden_categories
 
 
 class IsPlatformCatalogWrite(PlatformMethodPermission):
@@ -34,17 +34,21 @@ class BusinessCategoryListView(generics.ListAPIView):
       - used=1 : uniquement les catégories déjà rattachées à au moins une entreprise active/vérifiée
       - parents_only=1 : uniquement les catégories racines (sans parent)
         (avec used=1 : inclut aussi les racines qui ont une sous-catégorie utilisée)
-      - modules=a,b : avec parents_only, force l'affichage des racines de ces
-        modules même sans entreprise rattachée. Un module avec sa propre vitrine
-        publique (Éducation) ne doit pas disparaître de l'accueil parce qu'aucun
-        établissement ne l'a encore rejoint.
+      - modules=a,b : restreint aux modules indiqués. Avec parents_only, force
+        aussi l'affichage des racines de ces modules même sans entreprise
+        rattachée (Éducation). Sans parents_only, ne fait que filtrer.
+    Côté client (inscription, annuaire) : uniquement is_visible.
+    Catalogue admin : ?include_hidden=1 (droit platform.catalog.update).
     """
     serializer_class = BusinessCategorySerializer
-    authentication_classes = []
     permission_classes = [AllowAny]
 
     def get_queryset(self):
         qs = BusinessCategory.objects.all().order_by('name')
+        if not wants_hidden_categories(self.request):
+            qs = qs.filter(is_visible=True).filter(
+                Q(parent__isnull=True) | Q(parent__is_visible=True)
+            )
         used = self.request.query_params.get('used', '').lower() in ('1', 'true', 'yes')
         parents_only = self.request.query_params.get('parents_only', '').lower() in ('1', 'true', 'yes')
         forced_modules = [
@@ -86,6 +90,10 @@ class BusinessCategoryListView(generics.ListAPIView):
                 return qs
 
             qs = qs.filter(Exists(linked)).distinct()
+            if forced_modules:
+                qs = qs.filter(
+                    Q(module__in=forced_modules) | Q(parent__module__in=forced_modules)
+                )
 
         if parents_only:
             qs = qs.filter(parent__isnull=True)

@@ -3,14 +3,15 @@ from django.conf import settings
 
 
 def content_security_policy() -> str:
-    images = "img-src 'self' data: blob: https://www.svgrepo.com https://tile.openstreetmap.org https://images.unsplash.com"
+    images = "img-src 'self' data: blob: https:"
     common = (
         "default-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
         f"{images}; "
         "font-src 'self' data:; "
         "object-src 'none'; "
-        "frame-src 'self' blob: https://www.openstreetmap.org https://www.google.com; "
+        "media-src 'self' data: blob: https:; "
+        "frame-src 'self' blob: https://www.openstreetmap.org https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com; "
         "base-uri 'self'; "
         "frame-ancestors 'none'; "
         "form-action 'self'"

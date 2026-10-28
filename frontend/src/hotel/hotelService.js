@@ -1,11 +1,21 @@
-import api from '../shared/api';
+import api, { invalidateApiCache } from '../shared/api';
 
 const base = 'hotel';
 
+function bustHotelCaches() {
+  invalidateApiCache('hotel/profile');
+  invalidateApiCache('hotel/public/hotels');
+  invalidateApiCache('hotel/platform/hotels');
+}
+
 const hotelService = {
   dashboard: () => api.get(`${base}/dashboard/`, { auth: true, noCache: true }),
-  profile: () => api.get(`${base}/profile/me/`, { auth: true }),
-  updateProfile: (data) => api.patch(`${base}/profile/me/`, data, { auth: true }),
+  profile: () => api.get(`${base}/profile/me/`, { auth: true, noCache: true }),
+  updateProfile: async (data) => {
+    const updated = await api.patch(`${base}/profile/me/`, data, { auth: true });
+    bustHotelCaches();
+    return updated;
+  },
   seedRoles: () => api.post(`${base}/profile/seed-roles/`, {}, { auth: true }),
 
   roomTypes: () => api.get(`${base}/room-types/`, { auth: true }),
@@ -127,10 +137,17 @@ const hotelService = {
     return `/api/v1/hotel/reports/?${qs}`;
   },
 
-  platformHotels: () => api.get(`${base}/platform/hotels/`, { auth: true }),
-  platformHotelStatus: (id, status) => api.post(`${base}/platform/hotels/${id}/status/`, { status }, { auth: true }),
-  platformHotelVerifyClassification: (id, data = {}) =>
-    api.post(`${base}/platform/hotels/${id}/verify-classification/`, data, { auth: true }),
+  platformHotels: () => api.get(`${base}/platform/hotels/`, { auth: true, noCache: true }),
+  platformHotelStatus: async (id, status) => {
+    const result = await api.post(`${base}/platform/hotels/${id}/status/`, { status }, { auth: true });
+    bustHotelCaches();
+    return result;
+  },
+  platformHotelVerifyClassification: async (id, data = {}) => {
+    const result = await api.post(`${base}/platform/hotels/${id}/verify-classification/`, data, { auth: true });
+    bustHotelCaches();
+    return result;
+  },
 
   publicHotels: (params = {}) => {
     const qs = new URLSearchParams(

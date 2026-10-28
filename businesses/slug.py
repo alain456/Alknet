@@ -38,8 +38,16 @@ def public_path_for_business(business):
         return f'/education/establishment/{business_id}'
     if module == 'hospital':
         return f'/hospitals/{business_id}'
+    if module == 'restaurant':
+        return f'/restaurants/{business_id}'
     if module == 'hotel':
-        return f'/hotels/{business_id}'
+        from hotel.lodging import is_lodging_business
+        if is_lodging_business(business):
+            return f'/hotels/{business_id}'
+        from business_categories.food_service import is_food_service_category
+        if is_food_service_category(category):
+            return f'/restaurants/{business_id}'
+        return f'/businesses/{business_id}/shop'
     if module == 'wholesale':
         return f'/businesses/{business_id}/catalog'
     if module == 'retail_pharmacy':

@@ -186,7 +186,7 @@ export default function BusinessSubscriptionPage() {
 
       <section className="rounded-xl border border-accent/25 p-6 space-y-4 bg-white dark:bg-gray-900">
         <div className="flex items-center gap-3">
-          <img src="/burundipay.png" alt="BurundiPay" className="h-12 w-auto object-contain" />
+          <img src="/burundipay.png?v=2" alt="BurundiPay" className="h-12 w-auto object-contain" />
           <div>
             <h2 className="font-semibold text-gray-900 dark:text-white">Payer avec BurundiPay</h2>
             <p className="text-[10px] text-accent font-medium">Riha, Ronka, Rungika amafaranga mu kanya isase</p>

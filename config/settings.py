@@ -101,6 +101,7 @@ INSTALLED_APPS = [
     'hospital',
     'education.apps.EducationConfig',
     'hotel.apps.HotelConfig',
+    'restaurant.apps.RestaurantConfig',
     'wholesale',
     'retail',
     'bookings',
@@ -280,6 +281,7 @@ REST_FRAMEWORK = {
         'user': os.environ.get('THROTTLE_USER', '600/min'),
         'auth_login': '20/min',
         'education_public': '30/min',
+        'services_public': os.environ.get('THROTTLE_SERVICES_PUBLIC', '30/min'),
     },
     'EXCEPTION_HANDLER': 'config.exceptions.api_exception_handler',
 }
@@ -318,7 +320,6 @@ BACKUP_ROOT = Path(os.environ.get('BACKUP_ROOT', str(BASE_DIR / 'backups')))
 BACKUP_RETENTION_DAYS = int(os.environ.get('BACKUP_RETENTION_DAYS', '14'))
 
 # --- BurundiPay (paiements instantanés banques + mobile money) ---
-# Compat : LUMICASH_* encore accepté en fallback pendant la transition.
 def _env_first(*keys, default=''):
     for key in keys:
         val = os.environ.get(key)
@@ -326,28 +327,21 @@ def _env_first(*keys, default=''):
             return str(val).strip()
     return default
 
-BURUNDIPAY_STUB = _env_first('BURUNDIPAY_STUB', 'LUMICASH_STUB', default='1') in ('1', 'true', 'True', 'yes')
+BURUNDIPAY_STUB = _env_first('BURUNDIPAY_STUB', default='1') in ('1', 'true', 'True', 'yes')
 BURUNDIPAY_MERCHANT_ACCOUNT = _env_first(
-    'BURUNDIPAY_MERCHANT_ACCOUNT', 'LUMICASH_MERCHANT_ACCOUNT', default='ISOKO_HUB_MERCHANT'
+    'BURUNDIPAY_MERCHANT_ACCOUNT', default='ISOKO_HUB_MERCHANT'
 )
-BURUNDIPAY_API_URL = _env_first('BURUNDIPAY_API_URL', 'LUMICASH_API_URL', default='')
-BURUNDIPAY_API_KEY = _env_first('BURUNDIPAY_API_KEY', 'LUMICASH_API_KEY', default='')
-BURUNDIPAY_WEBHOOK_SECRET = _env_first('BURUNDIPAY_WEBHOOK_SECRET', 'LUMICASH_WEBHOOK_SECRET', default='')
-BURUNDIPAY_CALLBACK_URL = _env_first('BURUNDIPAY_CALLBACK_URL', 'LUMICASH_CALLBACK_URL', default='')
+BURUNDIPAY_API_URL = _env_first('BURUNDIPAY_API_URL', default='')
+BURUNDIPAY_API_KEY = _env_first('BURUNDIPAY_API_KEY', default='')
+BURUNDIPAY_WEBHOOK_SECRET = _env_first('BURUNDIPAY_WEBHOOK_SECRET', default='')
+BURUNDIPAY_CALLBACK_URL = _env_first('BURUNDIPAY_CALLBACK_URL', default='')
 BURUNDIPAY_COLLECT_PATH = _env_first('BURUNDIPAY_COLLECT_PATH', default='/v1/collections')
 BURUNDIPAY_STATUS_PATH = _env_first('BURUNDIPAY_STATUS_PATH', default='/v1/collections/{id}')
 BURUNDIPAY_REFUND_PATH = _env_first('BURUNDIPAY_REFUND_PATH', default='/v1/refunds')
 BURUNDIPAY_HTTP_TIMEOUT = _env_first('BURUNDIPAY_HTTP_TIMEOUT', default='30')
-# Alias historiques pour code / imports legacy
-LUMICASH_STUB = BURUNDIPAY_STUB
-LUMICASH_MERCHANT_ACCOUNT = BURUNDIPAY_MERCHANT_ACCOUNT
-LUMICASH_API_URL = BURUNDIPAY_API_URL
-LUMICASH_API_KEY = BURUNDIPAY_API_KEY
-LUMICASH_WEBHOOK_SECRET = BURUNDIPAY_WEBHOOK_SECRET
-LUMICASH_CALLBACK_URL = BURUNDIPAY_CALLBACK_URL
 # Prod : stub interdit sauf override explicite
 if (not DEBUG) and BURUNDIPAY_STUB and _env_first(
-    'BURUNDIPAY_ALLOW_STUB_IN_PROD', 'LUMICASH_ALLOW_STUB_IN_PROD', default='0'
+    'BURUNDIPAY_ALLOW_STUB_IN_PROD', default='0'
 ) not in ('1', 'true', 'True', 'yes'):
     raise ImproperlyConfigured(
         'BURUNDIPAY_STUB=1 est interdit hors DEBUG. '

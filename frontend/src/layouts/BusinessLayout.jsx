@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
-  Building2, Users, Calendar, Settings,
+  Building2, Users, Calendar, Settings, Briefcase,
   LayoutDashboard, Menu, X, Bell, LogOut, FileText,
   Store, HeartPulse, Stethoscope, Clock, Shield, Sparkles, UserCheck, FolderPlus,
   Package, Warehouse, ShoppingCart, History, User, FlaskConical, Crown, AlertTriangle,
-  BedDouble, Wrench, CreditCard, Plus, MessageSquare, Wallet, BookOpen, GraduationCap
+  BedDouble, Wrench, CreditCard, Plus, MessageSquare, Wallet, BookOpen, GraduationCap, Utensils
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import SkipLink from '../shared/components/SkipLink';
@@ -188,16 +188,20 @@ export default function BusinessLayout() {
     if (location.pathname.startsWith('/wholesale-pharmacy')) return 'wholesale';
     if (location.pathname.startsWith('/hospital')) return 'hospital';
     if (location.pathname.startsWith('/hotel')) return 'hotel';
+    if (location.pathname.startsWith('/restaurant')) return 'restaurant';
     if (location.pathname.startsWith('/commerce')) return 'commerce';
+    if (location.pathname.startsWith('/provider')) return 'services';
     return 'business';
   })();
 
   const isHospital = categoryKey === 'hospital';
   const isHotel = categoryKey === 'hotel';
+  const isRestaurant = categoryKey === 'restaurant';
   const isWholesale = categoryKey === 'wholesale';
   const isRetailPharmacy = categoryKey === 'retail_pharmacy';
   const isCommerce = categoryKey === 'commerce';
   const isEducation = categoryKey === 'education';
+  const isServices = categoryKey === 'services';
 
   const hotelNavGroups = [
     {
@@ -485,7 +489,6 @@ export default function BusinessLayout() {
       title: 'Opérations',
       items: [
         { name: 'Réservations', icon: Calendar, path: '/business/bookings' },
-        { name: 'Services', icon: Building2, path: '/business/services' },
       ]
     },
     {
@@ -496,6 +499,62 @@ export default function BusinessLayout() {
         { name: 'Abonnement', icon: Crown, path: '/business/subscription' },
       ]
     }
+  ];
+
+  const providerNavGroups = [
+    {
+      title: 'Prestataire',
+      items: [
+        { name: 'Tableau de bord', icon: LayoutDashboard, path: '/provider/dashboard' },
+        { name: 'Ma fiche', icon: Store, path: '/provider/profile' },
+      ],
+    },
+    {
+      title: 'Offres',
+      items: [
+        { name: 'Services', icon: Briefcase, path: '/provider/offers' },
+        { name: 'Équipe', icon: Users, path: '/provider/team' },
+        { name: 'Justificatifs', icon: FileText, path: '/provider/documents' },
+      ],
+    },
+    {
+      title: 'Clients',
+      items: [
+        { name: 'Demandes', icon: MessageSquare, path: '/provider/inbox' },
+      ],
+    },
+    {
+      title: 'Système',
+      items: [
+        { name: "Journal d'Audit", icon: FileText, path: '/provider/audit' },
+        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
+        { name: 'Abonnement', icon: Crown, path: '/provider/subscription' },
+      ],
+    },
+  ];
+
+  const restaurantNavGroups = [
+    {
+      title: "Vue d'ensemble",
+      items: [
+        { name: 'Tableau de bord', icon: LayoutDashboard, path: '/restaurant/dashboard' },
+      ],
+    },
+    {
+      title: 'Établissement',
+      items: [
+        { name: 'Mon établissement', icon: Store, path: '/restaurant/company' },
+        { name: 'Menu', icon: Utensils, path: '/restaurant/menu' },
+        { name: 'Réservations', icon: Calendar, path: '/restaurant/bookings' },
+      ],
+    },
+    {
+      title: 'Système',
+      items: [
+        { name: 'Paramètres', icon: Settings, path: '/business/settings' },
+        { name: 'Abonnement', icon: Crown, path: '/business/subscription' },
+      ],
+    },
   ];
 
   const commerceNavGroups = [
@@ -537,9 +596,13 @@ export default function BusinessLayout() {
         ? '/hospital/subscription'
         : isHotel
           ? '/hotel/subscription'
-          : isCommerce
+          : isRestaurant
+            ? '/business/subscription'
+            : isCommerce
             ? '/commerce/subscription'
-            : '/business/subscription';
+            : isServices
+              ? '/provider/subscription'
+              : '/business/subscription';
 
   const subscriptionBlocked = Boolean(
     !isRetailClientPath && business?.subscription?.is_blocked
@@ -642,12 +705,16 @@ export default function BusinessLayout() {
             ? hospitalNavGroups
             : isHotel
               ? filterHotelNavForUser(hotelNavGroups)
-              : isCommerce
+              : isRestaurant
+                ? restaurantNavGroups
+                : isCommerce
                 ? commerceNavGroups
                 : isEducation
                   ? educationNavGroups
-                  : genericNavGroups;
-    if (isCommerce || isRetailPharmacy || isWholesale) {
+                  : isServices
+                    ? providerNavGroups
+                    : genericNavGroups;
+    if (isCommerce || isRetailPharmacy || isWholesale || isServices || isRestaurant) {
       groups = groups
         .map((group) => ({
           ...group,
@@ -680,11 +747,15 @@ export default function BusinessLayout() {
         ? 'Espace Hôpital'
         : isHotel
           ? 'Espace Hôtel'
-          : isCommerce
+          : isRestaurant
+            ? 'Espace Restauration'
+            : isCommerce
             ? 'Espace Commerce'
             : isEducation
               ? 'Espace Éducation'
-              : 'Espace Business';
+              : isServices
+                ? 'Espace Services'
+                : 'Espace Business';
 
   const homeLink = isRetailClientPath
     ? '/retail-pharmacy/client/dashboard'
@@ -696,11 +767,15 @@ export default function BusinessLayout() {
           ? '/hospital/dashboard'
           : isHotel
             ? '/hotel/dashboard'
-            : isCommerce
+            : isRestaurant
+              ? '/restaurant/dashboard'
+              : isCommerce
               ? '/commerce/dashboard'
               : isEducation
                 ? (feesOnlyEducation ? '/education/accounting' : '/education/dashboard')
-                : '/business';
+                : isServices
+                  ? '/provider/dashboard'
+                  : '/business';
 
   const closeSidebar = () => setIsSidebarOpen(false);
 
@@ -829,6 +904,7 @@ export default function BusinessLayout() {
                     '/retail-pharmacy/dashboard',
                     '/retail-pharmacy/client/dashboard',
                     '/hotel/reservations',
+                    '/restaurant/dashboard',
                     '/education/dashboard',
                   ];
                   const isActive = location.pathname === basePath

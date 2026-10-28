@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getHomePathForUser } from '../auth/roleAccess';
 import useSiteContent from '../shared/useSiteContent';
@@ -41,11 +41,26 @@ export default function PublicLayout() {
               {brand}
             </span>
           </Link>
-          <nav className="hidden md:flex gap-6 items-center">
-            <Link to="/" className="text-surface/90 hover:text-surface font-semibold text-sm sm:text-base transition">Accueil</Link>
-            <Link to="/businesses" className="text-surface/90 hover:text-surface font-semibold text-sm sm:text-base transition">Entreprises</Link>
-            <Link to="/services" className="text-surface/90 hover:text-surface font-semibold text-sm sm:text-base transition">Services</Link>
-            <Link to="/jobs" className="text-surface/90 hover:text-surface font-semibold text-sm sm:text-base transition">Emplois</Link>
+          <nav className="hidden md:flex gap-2 items-center">
+            {[
+              { to: '/', label: 'Accueil', end: true },
+              { to: '/businesses', label: 'Entreprises' },
+              { to: '/services', label: 'Services' },
+              // { to: '/jobs', label: 'Emplois' },
+            ].map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={Boolean(item.end)}
+                className={({ isActive }) => (
+                  `px-3 py-1.5 rounded-lg font-semibold text-sm sm:text-base transition ${
+                    isActive ? 'bg-accent text-ink' : 'text-surface/90 hover:text-surface'
+                  }`
+                )}
+              >
+                {item.label}
+              </NavLink>
+            ))}
             <div className="w-px h-5 bg-surface/30 mx-2" />
           </nav>
           <div className="flex gap-2.5 sm:gap-3 items-center">
@@ -65,7 +80,7 @@ export default function PublicLayout() {
                 </Link>
                 <button
                   onClick={logout}
-                  className="bg-ink hover:opacity-95 text-surface font-bold py-2 px-3.5 rounded-lg shadow-sm transition cursor-pointer text-sm sm:text-base"
+                  className="bg-[#132F45] hover:opacity-95 text-[#F5F5F5] font-bold py-2 px-3.5 rounded-lg shadow-sm transition cursor-pointer text-sm sm:text-base"
                 >
                   Déconnexion
                 </button>

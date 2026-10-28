@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Filter, CheckCircle2, Mail, Plus, X, Edit, Trash2, Power, Star, ShieldCheck, Utensils, FileSpreadsheet, ShieldAlert, AlertTriangle, Eye, Crown, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../shared/api';
@@ -12,14 +13,16 @@ import SectorAnalyticsWidget from './SectorAnalyticsWidget';
 import BusinessCSVImporter from './BusinessCSVImporter';
 import AdminModerationModal from './AdminModerationModal';
 import { normalizeWebsiteUrl } from '../shared/websiteUrl';
+import { isLodgingBusiness } from '../auth/roleAccess';
 
 export default function AdminBusinessesPage() {
+  const [searchParams] = useSearchParams();
   const [businesses, setBusinesses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('q') || '');
   
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,7 +46,7 @@ export default function AdminBusinessesPage() {
     try {
       const [busData, catData] = await Promise.all([
         api.get('businesses/admin/list/', { auth: true }),
-        api.get('business-categories/'),
+        api.get('business-categories/?include_hidden=1', { auth: true }),
       ]);
       setBusinesses(Array.isArray(busData) ? busData : (busData?.results || []));
       setCategories(Array.isArray(catData) ? catData : (catData?.results || []));
@@ -59,15 +62,16 @@ export default function AdminBusinessesPage() {
     fetchBusinessesAndCategories();
   }, [token]);
 
+  useEffect(() => {
+    setSearchTerm(searchParams.get('q') || '');
+  }, [searchParams]);
+
   const pendingModerationCount = businesses.filter(b => b.verification_status === 'PENDING').length;
 
   const openCreateModal = () => {
     setEditingBusiness(null);
     setFormError(null);
-    const defaultPrimary = categories.length > 0 ? categories[0].id : '';
-    setFormData(emptyBusinessRegistrationForm({
-      primary_category: defaultPrimary,
-    }));
+    setFormData(emptyBusinessRegistrationForm());
     setIsModalOpen(true);
   };
 
@@ -405,12 +409,12 @@ export default function AdminBusinessesPage() {
                               Garde 24/7
                             </span>
                           )}
-                          {attrs.stars_rating && (
+                          {attrs.stars_rating && !isLodgingBusiness(business) && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-gold-500/20 text-gold-700 dark:text-gold-300">
                               {attrs.stars_rating} ★ ({attrs.rooms_count || '?'} ch.)
                             </span>
                           )}
-                          {attrs.has_swimming_pool && (
+                          {attrs.has_swimming_pool && !isLodgingBusiness(business) && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200">
                               Piscine
                             </span>
@@ -420,7 +424,7 @@ export default function AdminBusinessesPage() {
                               <Utensils className="w-3 h-3" /> Cuisine {attrs.cuisine_type}
                             </span>
                           )}
-                          {!attrs.license_number && !attrs.stars_rating && !attrs.cuisine_type && !attrs.is_24_7 && (
+                          {!attrs.license_number && !(attrs.stars_rating && !isLodgingBusiness(business)) && !attrs.cuisine_type && !attrs.is_24_7 && (
                             <span className="text-[11px] text-ink-faint italic">Spécificités standard</span>
                           )}
                         </div>

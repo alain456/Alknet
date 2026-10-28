@@ -17,9 +17,6 @@ class BusinessLiteSerializer(serializers.ModelSerializer):
     has_logo = serializers.SerializerMethodField()
     logo = serializers.SerializerMethodField()
     subscription = serializers.SerializerMethodField()
-    burundipay_merchant_account = serializers.CharField(
-        source='lumicash_merchant_account', required=False, allow_blank=True
-    )
 
     class Meta:
         model = Business
@@ -27,7 +24,7 @@ class BusinessLiteSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'phone', 'email', 'website', 'address',
             'province', 'commune', 'zone', 'quartier', 'avenue',
             'latitude', 'longitude', 'proof_document',
-            'lumicash_merchant_account', 'burundipay_merchant_account', 'extra_attributes',
+            'burundipay_merchant_account', 'extra_attributes',
             'is_active', 'is_verified',
             'verification_status', 'primary_category', 'primary_category_name',
             'logo', 'has_logo', 'subscription',
@@ -51,9 +48,6 @@ class BusinessSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='primary_category.name', read_only=True, default="Non spécifiée")
     categories_detail = BusinessCategorySerializer(source='categories', many=True, read_only=True)
     full_address = serializers.ReadOnlyField()
-    burundipay_merchant_account = serializers.CharField(
-        source='lumicash_merchant_account', required=False, allow_blank=True
-    )
     category_ids = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False
     )
@@ -66,8 +60,6 @@ class BusinessSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['accepted_insurances'] = self._merged_accepted_insurances(instance)
-        # Alias public BurundiPay (colonne DB historique lumicash_merchant_account)
-        data['burundipay_merchant_account'] = instance.lumicash_merchant_account or ''
         cat = getattr(instance, 'primary_category', None)
         data['primary_category_slug'] = getattr(cat, 'slug', None) or ''
         data['primary_category_module'] = getattr(cat, 'module', None) or ''
@@ -272,6 +264,16 @@ class AdminBusinessSerializer(serializers.ModelSerializer):
         from accounts.email_identity import normalize_login_email, get_user_by_login_email
         User = get_user_model()
 
+        from business_categories.services_sector import resolve_registration_category
+        category, services_error = resolve_registration_category(
+            validated_data.get('primary_category'),
+        )
+        if services_error:
+            raise serializers.ValidationError({'primary_category': services_error})
+        if category is not None:
+            validated_data['primary_category'] = category
+            validated_data['category'] = category
+
         if owner_email:
             email = normalize_login_email(owner_email)
             user = get_user_by_login_email(email)
@@ -330,6 +332,14 @@ class AdminBusinessSerializer(serializers.ModelSerializer):
         last_name = validated_data.pop('last_name', None)
         owner_avatar = (validated_data.pop('_owner_avatar_input', None) or '').strip()
         raw = self.initial_data if isinstance(self.initial_data, dict) else {}
+        from business_categories.services_sector import resolve_registration_category
+        primary = validated_data.get('primary_category', instance.primary_category)
+        category, services_error = resolve_registration_category(primary)
+        if services_error:
+            raise serializers.ValidationError({'primary_category': services_error})
+        if category is not None:
+            validated_data['primary_category'] = category
+            validated_data['category'] = category
 
         instance = super().update(instance, validated_data)
         if category_ids is not None:

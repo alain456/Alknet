@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Store, ShieldCheck } from 'lucide-react';
@@ -24,14 +24,6 @@ export default function BusinessRegistrationPage() {
     },
   });
   const categories = categoriesQuery.data || [];
-
-  useEffect(() => {
-    const list = categoriesQuery.data;
-    if (!list?.length) return;
-    setFormData((prev) => (
-      prev.primary_category ? prev : { ...prev, primary_category: list[0].id }
-    ));
-  }, [categoriesQuery.data]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -76,6 +68,7 @@ export default function BusinessRegistrationPage() {
           <p className="text-base text-ink font-medium mb-6">
             Votre demande d&apos;inscription pour l&apos;entreprise <strong>{formData.name}</strong> a été soumise avec succès.
             Elle est actuellement <strong>en attente de validation</strong> par nos administrateurs.
+            Vous pourrez vous connecter à votre espace uniquement après cette approbation.
             {publicHost ? (
               <>
                 {' '}Après validation, elle sera accessible à l&apos;adresse <strong>{publicHost}</strong>.
